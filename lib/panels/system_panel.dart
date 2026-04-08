@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../models/aoj_models.dart';
@@ -12,6 +11,7 @@ class SystemPanel extends StatelessWidget {
   final String exportStatus;
   final Future<void> Function(String) onCreateEvent;
   final Future<void> Function() onExportEvent;
+  final Future<void> Function() onExportBookings;
   final Future<void> Function() onImportBookings;
   final Future<void> Function() onImportTickets;
   final Future<void> Function() onImportMembers;
@@ -28,6 +28,7 @@ class SystemPanel extends StatelessWidget {
     required this.exportStatus,
     required this.onCreateEvent,
     required this.onExportEvent,
+    required this.onExportBookings,
     required this.onImportBookings,
     required this.onImportTickets,
     required this.onImportMembers,
@@ -70,7 +71,12 @@ class SystemPanel extends StatelessWidget {
               const SizedBox(width: 10),
               ElevatedButton(
                 onPressed: onExportEvent,
-                child: const Text('EXPORT EVENT'),
+                child: const Text('EXPORT JSON'),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: onExportBookings,
+                child: const Text('EXPORT BOOKINGS CSV'),
               ),
             ],
           ),
