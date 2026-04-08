@@ -8,6 +8,7 @@ class PropWebView extends StatefulWidget {
   final ValueChanged<String>? onWebError;
 
   const PropWebView({
+    super.key,
     required this.url,
     this.onPageStarted,
     this.onPageFinished,
@@ -40,7 +41,7 @@ class PropWebViewState extends State<PropWebView> {
   }
 
   @override
-  void didUpdateWidget(covariant _PropWebView oldWidget) {
+  void didUpdateWidget(covariant PropWebView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
       controller.loadRequest(Uri.parse(widget.url));
@@ -57,6 +58,7 @@ class KeyboardSafeArea extends StatelessWidget {
   final Widget child;
 
   const KeyboardSafeArea({
+    super.key,
     required this.child,
   });
 
@@ -64,14 +66,16 @@ class KeyboardSafeArea extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedPadding(
       duration: const Duration(milliseconds: 150),
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: child,
     );
   }
 }
 
 class AOJDesktopBackground extends StatelessWidget {
-  const AOJDesktopBackground();
+  const AOJDesktopBackground({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -117,6 +121,7 @@ class AOJDesktopIcon extends StatelessWidget {
   final Color accent;
 
   const AOJDesktopIcon({
+    super.key,
     required this.icon,
     required this.accent,
   });
@@ -129,8 +134,6 @@ class AOJDesktopIcon extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
           colors: [
             accent.withOpacity(0.35),
             const Color(0xFF111713),
@@ -156,6 +159,7 @@ class WindowButton extends StatelessWidget {
   final VoidCallback onPressed;
 
   const WindowButton({
+    super.key,
     required this.icon,
     required this.color,
     required this.onPressed,
@@ -187,6 +191,7 @@ class HeroPanel extends StatelessWidget {
   final IconData icon;
 
   const HeroPanel({
+    super.key,
     required this.title,
     required this.subtitle,
     required this.accent,
@@ -220,6 +225,7 @@ class InfoCard extends StatelessWidget {
   final List<Widget> children;
 
   const InfoCard({
+    super.key,
     required this.title,
     required this.accent,
     required this.children,
@@ -259,35 +265,19 @@ class InfoLine extends StatelessWidget {
   final String label;
   final String value;
 
-  const InfoLine(this.label, this.value);
+  const InfoLine(this.label, this.value, {super.key});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 110,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11,
-                color: Color(0xFF98A197),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            child: Text(label),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
+          Expanded(child: Text(value)),
         ],
       ),
     );
@@ -299,20 +289,18 @@ class ActionLine extends StatelessWidget {
   final Future<void> Function() onTap;
 
   const ActionLine({
+    super.key,
     required this.label,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: ElevatedButton(
-        onPressed: onTap,
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(label),
-        ),
+    return ElevatedButton(
+      onPressed: onTap,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(label),
       ),
     );
   }
@@ -325,7 +313,7 @@ class GridPainter extends CustomPainter {
       ..color = const Color(0xFF7E8B63).withOpacity(0.06)
       ..strokeWidth = 1;
 
-    const gap = 28.0;
+    const double gap = 28.0;
 
     for (double x = 0; x < size.width; x += gap) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
@@ -338,3 +326,4 @@ class GridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
