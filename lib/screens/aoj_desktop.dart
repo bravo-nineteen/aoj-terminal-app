@@ -275,6 +275,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
       date: '',
       time: '',
       notes: '',
+      ticketCostPerPerson: '0',
       fieldMapBase64: null,
       bookings: [],
       tickets: [],
@@ -400,11 +401,13 @@ class _AOJDesktopState extends State<AOJDesktop> {
           id: DateTime.now().microsecondsSinceEpoch.toString(),
           firstName: '',
           lastName: '',
+          username: '',
           dateOfBirth: '',
           gender: '',
           telephone: '',
           email: '',
           membershipLevel: 'Regular',
+          rating: 0,
         ),
       );
       selectedMemberIndex = event.members.length - 1;
