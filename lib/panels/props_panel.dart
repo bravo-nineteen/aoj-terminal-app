@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/aoj_models.dart';
 import '../widgets/desktop_widgets.dart';
 import '../widgets/ui_components.dart';
+import '../widgets/prop_webview.dart';
 
 class PropsPanel extends StatelessWidget {
   final Color accent;
