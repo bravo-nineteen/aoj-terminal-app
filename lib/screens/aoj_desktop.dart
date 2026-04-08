@@ -2924,6 +2924,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     );
   }
 }
+
 class _PersistentEditField extends StatefulWidget {
   final String label;
   final String value;
