@@ -1,20 +1,29 @@
-
 import '../models/aoj_models.dart';
 import 'money_utils.dart';
 
 class BookingUtils {
   static double ticketsTotal(BookingGroup group) {
     return group.tickets
-        .where((t) => t.status != 'Cancelled')
-        .fold(0.0, (sum, t) => sum + MoneyUtils.parseMoney(t.price));
+        .where(ticketIsActive)
+        .fold<double>(
+          0.0,
+          (sum, ticket) =>
+              sum + (MoneyUtils.parseMoney(ticket.price) * ticketQuantity(ticket)),
+        );
   }
 
   static double salesTotal(BookingGroup group) {
-    return group.primary.sales.fold(0.0, (sum, s) => sum + MoneyUtils.parseMoney(s.price));
+    return group.primary.sales.fold<double>(
+      0.0,
+      (sum, sale) => sum + MoneyUtils.parseMoney(sale.price),
+    );
   }
 
   static double paymentsTotal(BookingGroup group) {
-    return group.primary.payments.fold(0.0, (sum, p) => sum + MoneyUtils.parseMoney(p.amount));
+    return group.primary.payments.fold<double>(
+      0.0,
+      (sum, payment) => sum + MoneyUtils.parseMoney(payment.amount),
+    );
   }
 
   static double grandTotal(BookingGroup group) {
@@ -42,12 +51,17 @@ class BookingUtils {
         ticketIds.addAll(row.ticketIds);
       }
 
-      final tickets = event.tickets.where((t) {
-        if (ticketIds.contains(t.id)) return true;
-        if (primary.bookingId.isNotEmpty && t.bookingId.isNotEmpty) {
-          if (primary.bookingId == t.bookingId) return true;
+      final tickets = event.tickets.where((ticket) {
+        if (ticketIds.contains(ticket.id)) return true;
+
+        if (primary.bookingId.isNotEmpty && ticket.bookingId.isNotEmpty) {
+          if (primary.bookingId.trim().toLowerCase() ==
+              ticket.bookingId.trim().toLowerCase()) {
+            return true;
+          }
         }
-        return t.bookingName.trim().toLowerCase() ==
+
+        return ticket.bookingName.trim().toLowerCase() ==
             primary.fullName.trim().toLowerCase();
       }).toList();
 
@@ -59,18 +73,23 @@ class BookingUtils {
       );
     }).toList();
 
-    result.sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
+    result.sort(
+      (a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
+    );
+
     return result;
   }
 
   static String bookingGroupKey(BookingRecord booking) {
     final bookingId = booking.bookingId.trim().toLowerCase();
     final email = booking.email.trim().toLowerCase();
+    final phone = booking.phone.trim().toLowerCase();
     final name = booking.fullName.trim().toLowerCase();
     final eventName = booking.event.trim().toLowerCase();
 
     if (bookingId.isNotEmpty) return 'booking:$eventName:$bookingId';
     if (email.isNotEmpty) return 'email:$eventName:$email';
+    if (phone.isNotEmpty) return 'phone:$eventName:$phone';
     return 'name:$eventName:$name';
   }
 
@@ -85,7 +104,10 @@ class BookingUtils {
         final ticketName = ticket.bookingName.trim().toLowerCase();
 
         if (ticket.bookingId.isNotEmpty && booking.bookingId.isNotEmpty) {
-          if (ticket.bookingId == booking.bookingId) return true;
+          if (ticket.bookingId.trim().toLowerCase() ==
+              booking.bookingId.trim().toLowerCase()) {
+            return true;
+          }
         }
 
         return bookingName == ticketName;
@@ -122,7 +144,8 @@ class BookingUtils {
 
   static int ticketQuantity(TicketRecord ticket) {
     final cleaned = ticket.spaces.replaceAll(RegExp(r'[^0-9\-]'), '');
-    return int.tryParse(cleaned) ?? 1;
+    final parsed = int.tryParse(cleaned) ?? 1;
+    return parsed <= 0 ? 1 : parsed;
   }
 
   static int groupPersonCount(BookingGroup group) {
@@ -132,58 +155,98 @@ class BookingUtils {
 
   static int groupRentalCount(BookingGroup group) {
     return group.tickets
-        .where((t) => ticketIsActive(t) && ticketIsRental(t))
-        .fold<int>(0, (sum, t) => sum + ticketQuantity(t));
+        .where((ticket) => ticketIsActive(ticket) && ticketIsRental(ticket))
+        .fold<int>(0, (sum, ticket) => sum + ticketQuantity(ticket));
+  }
+
+  static int groupTicketQuantityTotal(BookingGroup group) {
+    return group.tickets
+        .where(ticketIsActive)
+        .fold<int>(0, (sum, ticket) => sum + ticketQuantity(ticket));
   }
 
   static int eventBookedPersons(EventRecord event) {
     return groupedBookingsForEvent(event)
-        .fold<int>(0, (sum, g) => sum + groupPersonCount(g));
+        .fold<int>(0, (sum, group) => sum + groupPersonCount(group));
   }
 
   static double eventTicketValue(EventRecord event) {
     return groupedBookingsForEvent(event)
-        .fold<double>(0, (sum, g) => sum + ticketsTotal(g));
+        .fold<double>(0, (sum, group) => sum + ticketsTotal(group));
   }
 
   static double eventSalesValue(EventRecord event) {
     return groupedBookingsForEvent(event)
-        .fold<double>(0, (sum, g) => sum + salesTotal(g));
+        .fold<double>(0, (sum, group) => sum + salesTotal(group));
   }
 
   static int eventRentalCount(EventRecord event) {
     return groupedBookingsForEvent(event)
-        .fold<int>(0, (sum, g) => sum + groupRentalCount(g));
+        .fold<int>(0, (sum, group) => sum + groupRentalCount(group));
   }
 
   static List<BookingGroup> pickupGroups(EventRecord event) {
-    return groupedBookingsForEvent(event).where((g) => g.needsPickup).toList();
+    return groupedBookingsForEvent(event)
+        .where((group) => group.rows.any((row) => row.needsPickup))
+        .toList();
   }
 
   static List<BookingGroup> trainingGroups(EventRecord event) {
-    return groupedBookingsForEvent(event).where((g) => g.needsTraining).toList();
+    return groupedBookingsForEvent(event)
+        .where((group) => group.rows.any((row) => row.needsTraining))
+        .toList();
+  }
+
+  static List<String> pickupNames(EventRecord event) {
+    return pickupGroups(event)
+        .map((group) => group.displayName.trim())
+        .where((name) => name.isNotEmpty)
+        .toList();
+  }
+
+  static List<String> trainingNames(EventRecord event) {
+    return trainingGroups(event)
+        .map((group) => group.displayName.trim())
+        .where((name) => name.isNotEmpty)
+        .toList();
   }
 
   static List<String> guestListFromRaw(String raw) {
     return raw
         .split(RegExp(r'[\n;/]+'))
         .expand((part) => part.split(','))
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
+        .map((entry) => entry.trim())
+        .where((entry) => entry.isNotEmpty)
         .toList();
+  }
+
+  static double eventTicketCostTotal(EventRecord event) {
+    final ticketCostPerPerson = MoneyUtils.parseMoney(event.ticketCostPerPerson);
+    final bookedPersons = eventBookedPersons(event);
+    return ticketCostPerPerson * bookedPersons;
+  }
+
+  static double eventEstimatedProfit(EventRecord event) {
+    return eventTicketValue(event) - eventTicketCostTotal(event) + eventSalesValue(event);
   }
 
   static void recalculateAllTotals(EventRecord event) {
     final groups = groupedBookingsForEvent(event);
+
     for (final group in groups) {
-      final total = MoneyUtils.formatMoney(grandTotal(group));
-      final totalPaid = MoneyUtils.formatMoney(paymentsTotal(group));
-      final balanceValue = grandTotal(group) - paymentsTotal(group);
-      final nextStatus = paymentsTotal(group) <= 0
+      final grand = grandTotal(group);
+      final paid = paymentsTotal(group);
+      final remaining = grand - paid;
+
+      final total = MoneyUtils.formatMoney(grand);
+      final totalPaid = MoneyUtils.formatMoney(paid);
+
+      final nextStatus = paid <= 0
           ? 'Unpaid'
-          : balanceValue <= 0
+          : remaining <= 0
               ? 'Paid'
               : 'Part Paid';
+
       for (final row in group.rows) {
         row.total = total;
         row.totalPaid = totalPaid;
