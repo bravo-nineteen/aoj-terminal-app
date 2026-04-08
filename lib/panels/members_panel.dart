@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/aoj_models.dart';
 import '../widgets/desktop_widgets.dart';
 import '../widgets/persistent_edit_field.dart';
+import '../widgets/ui_components.dart';
 
 class MembersPanel extends StatefulWidget {
   final Color accent;

@@ -5,6 +5,7 @@ import '../utils/booking_utils.dart';
 import '../utils/money_utils.dart';
 import '../widgets/desktop_widgets.dart';
 import '../widgets/persistent_edit_field.dart';
+import '../widgets/ui_components.dart';
 
 class EventPanel extends StatefulWidget {
   final Color accent;
