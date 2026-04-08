@@ -1,76 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-
-class PropWebView extends StatefulWidget {
-  final String url;
-  final VoidCallback? onPageStarted;
-  final VoidCallback? onPageFinished;
-  final ValueChanged<String>? onWebError;
-
-  const PropWebView({
-    super.key,
-    required this.url,
-    this.onPageStarted,
-    this.onPageFinished,
-    this.onWebError,
-  });
-
-  @override
-  State<PropWebView> createState() => _PropWebViewState();
-}
-
-class _PropWebViewState extends State<PropWebView> {
-  late final WebViewController controller;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFF101511))
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (_) => widget.onPageStarted?.call(),
-          onPageFinished: (_) => widget.onPageFinished?.call(),
-          onWebResourceError: (error) {
-            widget.onWebError?.call('PROP PAGE ERROR');
-          },
-        ),
-      )
-      ..loadRequest(Uri.parse(widget.url));
-  }
-
-  @override
-  void didUpdateWidget(covariant PropWebView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.url != widget.url) {
-      controller.loadRequest(Uri.parse(widget.url));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return WebViewWidget(controller: controller);
-  }
-}
-
-class KeyboardSafeArea extends StatelessWidget {
-  final Widget child;
-
-  const KeyboardSafeArea({
-    super.key,
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 150),
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: child,
-    );
-  }
-}
 
 class AOJDesktopBackground extends StatelessWidget {
   const AOJDesktopBackground({super.key});
@@ -132,21 +60,12 @@ class AOJDesktopIcon extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
           colors: [
             accent.withOpacity(0.35),
             const Color(0xFF111713),
           ],
         ),
         border: Border.all(color: accent.withOpacity(0.75), width: 1.3),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withOpacity(0.16),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
       ),
       child: Icon(icon, size: 26, color: accent),
     );
@@ -182,228 +101,14 @@ class WindowButton extends StatelessWidget {
   }
 }
 
-class HeroPanel extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final Color accent;
-  final IconData icon;
+class KeyboardSafeArea extends StatelessWidget {
+  final Widget child;
 
-  const HeroPanel({
-    super.key,
-    required this.title,
-    required this.subtitle,
-    required this.accent,
-    required this.icon,
-  });
+  const KeyboardSafeArea({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, color: accent, size: 18),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFF98A197),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class InfoCard extends StatelessWidget {
-  final String title;
-  final Color accent;
-  final List<Widget> children;
-
-  const InfoCard({
-    super.key,
-    required this.title,
-    required this.accent,
-    required this.children,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: const Color(0xCC101511),
-        border: Border.all(color: accent.withOpacity(0.35)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title.toUpperCase(),
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.9,
-              color: accent,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ...children,
-        ],
-      ),
-    );
-  }
-}
-
-class InfoLine extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const InfoLine(this.label, this.value, {super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 110,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11,
-                color: Color(0xFF98A197),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class ActionLine extends StatelessWidget {
-  final String label;
-  final Future<void> Function() onTap;
-
-  const ActionLine({
-    super.key,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: ElevatedButton(
-        onPressed: () async {
-          await onTap();
-        },
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(label),
-        ),
-      ),
-    );
-  }
-}
-
-class PersistentEditField extends StatefulWidget {
-  final String label;
-  final String value;
-  final Future<void> Function(String) onChanged;
-  final int maxLines;
-  final TextInputType? keyboardType;
-
-  const PersistentEditField({
-    super.key,
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    this.maxLines = 1,
-    this.keyboardType,
-  });
-
-  @override
-  State<PersistentEditField> createState() => _PersistentEditFieldState();
-}
-
-class _PersistentEditFieldState extends State<PersistentEditField> {
-  late final TextEditingController _controller;
-  late final FocusNode _focusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.value);
-    _focusNode = FocusNode();
-  }
-
-  @override
-  void didUpdateWidget(covariant PersistentEditField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!_focusNode.hasFocus && oldWidget.value != widget.value) {
-      _controller.text = widget.value;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: TextFormField(
-        controller: _controller,
-        focusNode: _focusNode,
-        maxLines: widget.maxLines,
-        keyboardType: widget.keyboardType,
-        decoration: InputDecoration(
-          labelText: widget.label,
-          border: const OutlineInputBorder(),
-          isDense: true,
-        ),
-        onChanged: (v) async {
-          await widget.onChanged(v);
-        },
-      ),
-    );
+    return SafeArea(child: child);
   }
 }
 
@@ -414,7 +119,7 @@ class GridPainter extends CustomPainter {
       ..color = const Color(0xFF7E8B63).withOpacity(0.06)
       ..strokeWidth = 1;
 
-    const double gap = 28.0;
+    const gap = 28.0;
 
     for (double x = 0; x < size.width; x += gap) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
