@@ -380,6 +380,15 @@ class _AOJDesktopState extends State<AOJDesktop> {
       exportStatus = status;
     });
   }
+  
+  Future<void> _exportBookingsCsv() async {
+  final event = activeEvent;
+  if (event == null) return;
+  final status = await ExportService.exportBookingsCsv(event);
+  setState(() {
+    exportStatus = status;
+  });
+  }
 
   Future<void> _addManualMember() async {
     final event = activeEvent;
