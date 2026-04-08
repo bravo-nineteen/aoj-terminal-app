@@ -2889,7 +2889,42 @@ class _AOJDesktopState extends State<AOJDesktop> {
       onChanged: onChanged,
     );
   }
-  class _PersistentEditField extends StatefulWidget {
+  
+  Widget _dropdownField(
+    String label,
+    List<String> items,
+    String value,
+    Future<void> Function(String) onChanged,
+  ) {
+    final safeValue = items.contains(value) ? value : items.first;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DropdownButtonFormField<String>(
+        value: safeValue,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          isDense: true,
+        ),
+        items: items
+            .map(
+              (e) => DropdownMenuItem<String>(
+                value: e,
+                child: Text(e),
+              ),
+            )
+            .toList(),
+        onChanged: (v) {
+          if (v != null) {
+            onChanged(v);
+          }
+        },
+      ),
+    );
+  }
+}
+class _PersistentEditField extends StatefulWidget {
   final String label;
   final String value;
   final Future<void> Function(String) onChanged;
@@ -2947,40 +2982,6 @@ class _PersistentEditFieldState extends State<_PersistentEditField> {
         ),
         onChanged: (v) {
           widget.onChanged(v);
-        },
-      ),
-    );
-  }
-}
-  Widget _dropdownField(
-    String label,
-    List<String> items,
-    String value,
-    Future<void> Function(String) onChanged,
-  ) {
-    final safeValue = items.contains(value) ? value : items.first;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: DropdownButtonFormField<String>(
-        value: safeValue,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          isDense: true,
-        ),
-        items: items
-            .map(
-              (e) => DropdownMenuItem<String>(
-                value: e,
-                child: Text(e),
-              ),
-            )
-            .toList(),
-        onChanged: (v) {
-          if (v != null) {
-            onChanged(v);
-          }
         },
       ),
     );
