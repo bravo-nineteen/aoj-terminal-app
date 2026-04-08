@@ -16,10 +16,10 @@ class PropWebView extends StatefulWidget {
   });
 
   @override
-  State<PropWebView> createState() => PropWebViewState();
+  State<PropWebView> createState() => _PropWebViewState();
 }
 
-class PropWebViewState extends State<PropWebView> {
+class _PropWebViewState extends State<PropWebView> {
   late final WebViewController controller;
 
   @override
@@ -203,13 +203,27 @@ class HeroPanel extends StatelessWidget {
         Icon(icon, color: accent, size: 18),
         const SizedBox(width: 10),
         Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.8,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF98A197),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -313,7 +327,9 @@ class ActionLine extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: ElevatedButton(
-        onPressed: onTap,
+        onPressed: () async {
+          await onTap();
+        },
         child: Align(
           alignment: Alignment.centerLeft,
           child: Text(label),
@@ -383,8 +399,8 @@ class _PersistentEditFieldState extends State<PersistentEditField> {
           border: const OutlineInputBorder(),
           isDense: true,
         ),
-        onChanged: (v) {
-          widget.onChanged(v);
+        onChanged: (v) async {
+          await widget.onChanged(v);
         },
       ),
     );
