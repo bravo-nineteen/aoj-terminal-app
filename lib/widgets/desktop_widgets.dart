@@ -167,18 +167,16 @@ class WindowButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return GestureDetector(
       onTap: onPressed,
-      borderRadius: BorderRadius.circular(999),
       child: Container(
         width: 28,
         height: 28,
         decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: color.withOpacity(0.18),
-          border: Border.all(color: color.withOpacity(0.8)),
+          color: color.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(6),
         ),
-        child: Icon(icon, size: 16, color: color),
+        child: Icon(icon, size: 14, color: color),
       ),
     );
   }
