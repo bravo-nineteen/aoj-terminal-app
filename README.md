@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # aoj_terminal_app
 
 A new Flutter project.
@@ -14,3 +15,7 @@ A few resources to get you started if this is your first Flutter project:
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
+=======
+# aoj-terminal-app
+Event Management app
+>>>>>>> a9a59e9fb0a27d22c17b4b67701e9a2183cf6c1b
