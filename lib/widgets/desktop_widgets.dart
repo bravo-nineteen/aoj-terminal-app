@@ -120,3 +120,297 @@ class AOJDesktopIcon extends StatelessWidget {
 
   const AOJDesktopIcon({
     super.key,
+    required this.icon,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 54,
+      height: 54,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accent.withOpacity(0.35),
+            const Color(0xFF111713),
+          ],
+        ),
+        border: Border.all(color: accent.withOpacity(0.75), width: 1.3),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withOpacity(0.16),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Icon(icon, size: 26, color: accent),
+    );
+  }
+}
+
+class WindowButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onPressed;
+
+  const WindowButton({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color.withOpacity(0.18),
+          border: Border.all(color: color.withOpacity(0.8)),
+        ),
+        child: Icon(icon, size: 16, color: color),
+      ),
+    );
+  }
+}
+
+class HeroPanel extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Color accent;
+  final IconData icon;
+
+  const HeroPanel({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.accent,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: accent, size: 18),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class InfoCard extends StatelessWidget {
+  final String title;
+  final Color accent;
+  final List<Widget> children;
+
+  const InfoCard({
+    super.key,
+    required this.title,
+    required this.accent,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: const Color(0xCC101511),
+        border: Border.all(color: accent.withOpacity(0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.9,
+              color: accent,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class InfoLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const InfoLine(this.label, this.value, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Color(0xFF98A197),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ActionLine extends StatelessWidget {
+  final String label;
+  final Future<void> Function() onTap;
+
+  const ActionLine({
+    super.key,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: ElevatedButton(
+        onPressed: onTap,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(label),
+        ),
+      ),
+    );
+  }
+}
+
+class PersistentEditField extends StatefulWidget {
+  final String label;
+  final String value;
+  final Future<void> Function(String) onChanged;
+  final int maxLines;
+  final TextInputType? keyboardType;
+
+  const PersistentEditField({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.maxLines = 1,
+    this.keyboardType,
+  });
+
+  @override
+  State<PersistentEditField> createState() => _PersistentEditFieldState();
+}
+
+class _PersistentEditFieldState extends State<PersistentEditField> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+    _focusNode = FocusNode();
+  }
+
+  @override
+  void didUpdateWidget(covariant PersistentEditField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_focusNode.hasFocus && oldWidget.value != widget.value) {
+      _controller.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextFormField(
+        controller: _controller,
+        focusNode: _focusNode,
+        maxLines: widget.maxLines,
+        keyboardType: widget.keyboardType,
+        decoration: InputDecoration(
+          labelText: widget.label,
+          border: const OutlineInputBorder(),
+          isDense: true,
+        ),
+        onChanged: (v) {
+          widget.onChanged(v);
+        },
+      ),
+    );
+  }
+}
+
+class GridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF7E8B63).withOpacity(0.06)
+      ..strokeWidth = 1;
+
+    const double gap = 28.0;
+
+    for (double x = 0; x < size.width; x += gap) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+
+    for (double y = 0; y < size.height; y += gap) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
