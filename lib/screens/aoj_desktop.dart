@@ -1076,6 +1076,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
           exportStatus: exportStatus,
           onCreateEvent: _createEvent,
           onExportEvent: _exportActiveEventJson,
+          onExportBookings: _exportBookingsCsv,
           onImportBookings: _importBookingsCsv,
           onImportTickets: _importTicketsCsv,
           onImportMembers: _importMembersCsv,
