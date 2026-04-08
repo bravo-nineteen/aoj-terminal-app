@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../models/aoj_models.dart';
@@ -7,7 +6,7 @@ import '../utils/money_utils.dart';
 import '../widgets/desktop_widgets.dart';
 import '../widgets/persistent_edit_field.dart';
 
-class EventPanel extends StatelessWidget {
+class EventPanel extends StatefulWidget {
   final Color accent;
   final AppStateData appState;
   final EventRecord? event;
@@ -28,7 +27,192 @@ class EventPanel extends StatelessWidget {
   });
 
   @override
+  State<EventPanel> createState() => _EventPanelState();
+}
+
+class _EventPanelState extends State<EventPanel> {
+  bool _isEditing = false;
+
+  @override
+  void didUpdateWidget(covariant EventPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.event?.id != widget.event?.id) {
+      _isEditing = false;
+    }
+  }
+
+  Future<void> _saveAndRefresh() async {
+    await widget.onSave();
+    widget.onRefresh();
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  String _eventTicketCostPerPerson(EventRecord event) {
+    try {
+      final dynamic dynamicEvent = event;
+      final value = dynamicEvent.ticketCostPerPerson;
+      if (value == null) return '0';
+      return value.toString();
+    } catch (_) {
+      return '0';
+    }
+  }
+
+  Future<void> _setEventTicketCostPerPerson(EventRecord event, String value) async {
+    try {
+      final dynamic dynamicEvent = event;
+      dynamicEvent.ticketCostPerPerson = value.trim().isEmpty ? '0' : value.trim();
+      await _saveAndRefresh();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Add "ticketCostPerPerson" to EventRecord to save event ticket costs.'),
+        ),
+      );
+    }
+  }
+
+  double _parseMoney(String value) {
+    final cleaned = value.replaceAll(RegExp(r'[^0-9.\-]'), '');
+    return double.tryParse(cleaned) ?? 0;
+    }
+
+  double _ticketRevenue(EventRecord event) {
+    return BookingUtils.eventTicketValue(event);
+  }
+
+  double _salesRevenue(EventRecord event) {
+    return BookingUtils.eventSalesValue(event);
+  }
+
+  int _bookedPersons(EventRecord event) {
+    return BookingUtils.eventBookedPersons(event);
+  }
+
+  double _ticketCostPerPersonNumber(EventRecord event) {
+    return _parseMoney(_eventTicketCostPerPerson(event));
+  }
+
+  double _ticketCostTotal(EventRecord event) {
+    return _bookedPersons(event) * _ticketCostPerPersonNumber(event);
+  }
+
+  double _estimatedProfit(EventRecord event) {
+    return _ticketRevenue(event) - _ticketCostTotal(event) + _salesRevenue(event);
+  }
+
+  Widget _buildReadOnlyRow({
+    required String label,
+    required String value,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white.withOpacity(0.10)),
+          color: const Color(0x66121813),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label.toUpperCase(),
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+                color: Colors.white.withOpacity(0.65),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value.trim().isEmpty ? '—' : value,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRosterCard({
+    required String title,
+    required List<String> names,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: const Color(0xCC101511),
+        border: Border.all(color: widget.accent.withOpacity(0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: widget.accent,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: names.isEmpty
+                ? Center(
+                    child: Text(
+                      title == 'Pickup Roster' ? 'NO PICKUPS' : 'NO TRAINING REQUESTS',
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: names.length,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          names[index],
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final event = widget.event;
+
+    final pickupNames = event == null
+        ? <String>[]
+        : BookingUtils.pickupGroups(event)
+            .map((g) => g.displayName.trim())
+            .where((name) => name.isNotEmpty)
+            .toList();
+
+    final trainingNames = event == null
+        ? <String>[]
+        : BookingUtils.trainingGroups(event)
+            .map((g) => g.displayName.trim())
+            .where((name) => name.isNotEmpty)
+            .toList();
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -36,7 +220,7 @@ class EventPanel extends StatelessWidget {
           HeroPanel(
             title: 'MISSION BRIEF',
             subtitle: 'Active event selection, field information and logistics overview',
-            accent: accent,
+            accent: widget.accent,
             icon: Icons.map_outlined,
           ),
           const SizedBox(height: 14),
@@ -44,20 +228,39 @@ class EventPanel extends StatelessWidget {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: appState.activeEventId,
+                  value: widget.appState.activeEventId,
                   decoration: const InputDecoration(
                     labelText: 'Active Event',
                     border: OutlineInputBorder(),
                   ),
-                  items: appState.events
-                      .map((e) => DropdownMenuItem<String>(value: e.id, child: Text(e.name)))
+                  items: widget.appState.events
+                      .map(
+                        (e) => DropdownMenuItem<String>(
+                          value: e.id,
+                          child: Text(e.name),
+                        ),
+                      )
                       .toList(),
-                  onChanged: onSetActiveEvent,
+                  onChanged: widget.onSetActiveEvent,
                 ),
               ),
               const SizedBox(width: 10),
+              if (event != null)
+                IconButton(
+                  tooltip: _isEditing ? 'Finish editing' : 'Edit event',
+                  onPressed: () {
+                    setState(() {
+                      _isEditing = !_isEditing;
+                    });
+                  },
+                  icon: Icon(
+                    _isEditing ? Icons.check_circle_outline : Icons.edit_outlined,
+                    color: widget.accent,
+                  ),
+                ),
+              const SizedBox(width: 6),
               OutlinedButton.icon(
-                onPressed: event == null ? null : onDeleteEvent,
+                onPressed: event == null ? null : widget.onDeleteEvent,
                 icon: const Icon(Icons.delete_outline),
                 label: const Text('DELETE EVENT'),
               ),
@@ -65,7 +268,11 @@ class EventPanel extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           if (event == null)
-            const Expanded(child: Center(child: Text('NO ACTIVE EVENT')))
+            const Expanded(
+              child: Center(
+                child: Text('NO ACTIVE EVENT'),
+              ),
+            )
           else
             Expanded(
               child: Row(
@@ -74,51 +281,119 @@ class EventPanel extends StatelessWidget {
                     flex: 5,
                     child: ListView(
                       children: [
-                        PersistentEditField(
-                          label: 'Event Name',
-                          value: event!.name,
-                          onChanged: (v) async {
-                            event!.name = v;
-                            await onSave();
-                            onRefresh();
-                          },
-                        ),
-                        PersistentEditField(
-                          label: 'Venue',
-                          value: event!.venue,
-                          onChanged: (v) async {
-                            event!.venue = v;
-                            await onSave();
-                          },
-                        ),
-                        PersistentEditField(
-                          label: 'Date',
-                          value: event!.date,
-                          onChanged: (v) async {
-                            event!.date = v;
-                            await onSave();
-                          },
-                        ),
-                        PersistentEditField(
-                          label: 'Notes',
-                          value: event!.notes,
-                          maxLines: 5,
-                          onChanged: (v) async {
-                            event!.notes = v;
-                            await onSave();
-                          },
-                        ),
+                        if (_isEditing) ...[
+                          PersistentEditField(
+                            label: 'Event Name',
+                            value: event.name,
+                            onChanged: (v) async {
+                              event.name = v;
+                              await _saveAndRefresh();
+                            },
+                          ),
+                          PersistentEditField(
+                            label: 'Venue',
+                            value: event.venue,
+                            onChanged: (v) async {
+                              event.venue = v;
+                              await _saveAndRefresh();
+                            },
+                          ),
+                          PersistentEditField(
+                            label: 'Date',
+                            value: event.date,
+                            onChanged: (v) async {
+                              event.date = v;
+                              await _saveAndRefresh();
+                            },
+                          ),
+                          PersistentEditField(
+                            label: 'Time',
+                            value: event.time,
+                            onChanged: (v) async {
+                              event.time = v;
+                              await _saveAndRefresh();
+                            },
+                          ),
+                          PersistentEditField(
+                            label: 'Ticket Cost Per Person',
+                            value: _eventTicketCostPerPerson(event),
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            onChanged: (v) async {
+                              await _setEventTicketCostPerPerson(event, v);
+                            },
+                          ),
+                          PersistentEditField(
+                            label: 'Notes',
+                            value: event.notes,
+                            maxLines: 5,
+                            onChanged: (v) async {
+                              event.notes = v;
+                              await _saveAndRefresh();
+                            },
+                          ),
+                        ] else ...[
+                          _buildReadOnlyRow(
+                            label: 'Event Name',
+                            value: event.name,
+                          ),
+                          _buildReadOnlyRow(
+                            label: 'Venue',
+                            value: event.venue,
+                          ),
+                          _buildReadOnlyRow(
+                            label: 'Date',
+                            value: event.date,
+                          ),
+                          _buildReadOnlyRow(
+                            label: 'Time',
+                            value: event.time,
+                          ),
+                          _buildReadOnlyRow(
+                            label: 'Ticket Cost Per Person',
+                            value: '¥ ${MoneyUtils.formatMoney(_ticketCostPerPersonNumber(event))}',
+                          ),
+                          _buildReadOnlyRow(
+                            label: 'Notes',
+                            value: event.notes,
+                          ),
+                        ],
                         const SizedBox(height: 6),
                         InfoCard(
                           title: 'Event Totals',
-                          accent: accent,
+                          accent: widget.accent,
                           children: [
-                            InfoLine('Booked Persons', BookingUtils.eventBookedPersons(event!).toString()),
-                            InfoLine('Ticket Value', '¥ ${MoneyUtils.formatMoney(BookingUtils.eventTicketValue(event!))}'),
-                            InfoLine('Sales Value', '¥ ${MoneyUtils.formatMoney(BookingUtils.eventSalesValue(event!))}'),
-                            InfoLine('Rental Gun Sets', BookingUtils.eventRentalCount(event!).toString()),
-                            InfoLine('Pickup Bookings', BookingUtils.pickupGroups(event!).length.toString()),
-                            InfoLine('Training Requests', BookingUtils.trainingGroups(event!).length.toString()),
+                            InfoLine(
+                              'Booked Persons',
+                              _bookedPersons(event).toString(),
+                            ),
+                            InfoLine(
+                              'Ticket Value',
+                              '¥ ${MoneyUtils.formatMoney(_ticketRevenue(event))}',
+                            ),
+                            InfoLine(
+                              'Ticket Cost Total',
+                              '¥ ${MoneyUtils.formatMoney(_ticketCostTotal(event))}',
+                            ),
+                            InfoLine(
+                              'Sales Value',
+                              '¥ ${MoneyUtils.formatMoney(_salesRevenue(event))}',
+                            ),
+                            InfoLine(
+                              'Estimated Profit',
+                              '¥ ${MoneyUtils.formatMoney(_estimatedProfit(event))}',
+                            ),
+                            InfoLine(
+                              'Rental Gun Sets',
+                              BookingUtils.eventRentalCount(event).toString(),
+                            ),
+                            InfoLine(
+                              'Pickup Bookings',
+                              BookingUtils.pickupGroups(event).length.toString(),
+                            ),
+                            InfoLine(
+                              'Training Requests',
+                              BookingUtils.trainingGroups(event).length.toString(),
+                            ),
                           ],
                         ),
                       ],
@@ -127,70 +402,22 @@ class EventPanel extends StatelessWidget {
                   const SizedBox(width: 14),
                   Expanded(
                     flex: 5,
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        color: const Color(0xCC101511),
-                        border: Border.all(color: accent.withOpacity(0.35)),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Pickup Roster', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: accent)),
-                                const SizedBox(height: 8),
-                                Expanded(
-                                  child: BookingUtils.pickupGroups(event!).isEmpty
-                                      ? const Center(child: Text('NO PICKUPS'))
-                                      : ListView.builder(
-                                          itemCount: BookingUtils.pickupGroups(event!).length,
-                                          itemBuilder: (context, index) {
-                                            final group = BookingUtils.pickupGroups(event!)[index];
-                                            return Padding(
-                                              padding: const EdgeInsets.only(bottom: 8),
-                                              child: Text(
-                                                '${group.displayName}  ·  ${group.phone.isNotEmpty ? group.phone : group.email}',
-                                                style: const TextStyle(fontSize: 11),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                ),
-                              ],
-                            ),
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: _buildRosterCard(
+                            title: 'Pickup Roster',
+                            names: pickupNames,
                           ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Training Requests', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: accent)),
-                                const SizedBox(height: 8),
-                                Expanded(
-                                  child: BookingUtils.trainingGroups(event!).isEmpty
-                                      ? const Center(child: Text('NO TRAINING BOOKINGS'))
-                                      : ListView.builder(
-                                          itemCount: BookingUtils.trainingGroups(event!).length,
-                                          itemBuilder: (context, index) {
-                                            final group = BookingUtils.trainingGroups(event!)[index];
-                                            return Padding(
-                                              padding: const EdgeInsets.only(bottom: 8),
-                                              child: Text(
-                                                '${group.displayName}${group.languagePreference.isNotEmpty ? '  ·  ${group.languagePreference}' : ''}',
-                                                style: const TextStyle(fontSize: 11),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                ),
-                              ],
-                            ),
+                        ),
+                        const SizedBox(height: 14),
+                        Expanded(
+                          child: _buildRosterCard(
+                            title: 'Training Requests',
+                            names: trainingNames,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
