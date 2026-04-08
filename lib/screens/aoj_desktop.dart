@@ -1,15 +1,21 @@
-import 'dart:convert';
-import 'dart:io';
-import 'dart:math' as math;
-import 'dart:typed_data';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
+import 'dart:math' as math;
 
 import '../models/aoj_models.dart';
 import '../widgets/desktop_widgets.dart';
+import '../widgets/persistent_edit_field.dart';
+import '../panels/system_panel.dart';
+import '../panels/event_panel.dart';
+import '../panels/bookings_panel.dart';
+import '../panels/members_panel.dart';
+import '../panels/schedule_panel.dart';
+import '../panels/props_panel.dart';
+import '../panels/game_modes_panel.dart';
+import '../services/app_state_service.dart';
+import '../services/csv_import_service.dart';
+import '../services/export_service.dart';
+import '../utils/booking_utils.dart';
 
 class AOJDesktop extends StatefulWidget {
   const AOJDesktop({super.key});
@@ -164,24 +170,16 @@ class _AOJDesktopState extends State<AOJDesktop> {
     return event.members[selectedMemberIndex!];
   }
 
-  Future<File> _stateFile() async {
-    final dir = await getApplicationDocumentsDirectory();
-    return File('${dir.path}/aoj_app_state.json');
-  }
-
   Future<void> _loadLocalState() async {
     try {
-      final file = await _stateFile();
-      if (await file.exists()) {
-        final jsonText = await file.readAsString();
-        final map = jsonDecode(jsonText) as Map<String, dynamic>;
-        setState(() {
-          appState = AppStateData.fromJson(map);
-          selectedBookingIndex = 0;
-          selectedMemberIndex = activeEvent?.members.isNotEmpty == true ? 0 : null;
-          systemStatus = 'LOCAL DATA LOADED';
-        });
-      }
+      final loaded = await AppStateService.load();
+      if (loaded == null) return;
+      setState(() {
+        appState = loaded;
+        selectedBookingIndex = 0;
+        selectedMemberIndex = activeEvent?.members.isNotEmpty == true ? 0 : null;
+        systemStatus = 'LOCAL DATA LOADED';
+      });
     } catch (_) {
       setState(() {
         systemStatus = 'LOAD FAILED';
@@ -190,11 +188,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
   }
 
   Future<void> _saveLocalState() async {
-    final file = await _stateFile();
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(appState.toJson()),
-      flush: true,
-    );
+    await AppStateService.save(appState);
     if (mounted) {
       setState(() {
         systemStatus = 'AUTO-SAVED';
@@ -270,59 +264,6 @@ class _AOJDesktopState extends State<AOJDesktop> {
     });
   }
 
-  double _parseMoney(String value) {
-    final cleaned = value.replaceAll(RegExp(r'[^0-9.\-]'), '');
-    return double.tryParse(cleaned) ?? 0;
-  }
-
-  String _formatMoney(double value) {
-    if (value == value.roundToDouble()) {
-      return value.round().toString();
-    }
-    return value.toStringAsFixed(2);
-  }
-
-  double _ticketsTotal(BookingGroup group) {
-    return group.tickets
-        .where((t) => t.status != 'Cancelled')
-        .fold(0.0, (sum, t) => sum + _parseMoney(t.price));
-  }
-
-  double _salesTotal(BookingGroup group) {
-    return group.primary.sales.fold(0.0, (sum, s) => sum + _parseMoney(s.price));
-  }
-
-  double _paymentsTotal(BookingGroup group) {
-    return group.primary.payments.fold(0.0, (sum, p) => sum + _parseMoney(p.amount));
-  }
-
-  double _grandTotal(BookingGroup group) {
-    return _ticketsTotal(group) + _salesTotal(group);
-  }
-
-  double _balance(BookingGroup group) {
-    return _grandTotal(group) - _paymentsTotal(group);
-  }
-
-  void _recalculateAllTotals(EventRecord event) {
-    final groups = _groupedBookingsForEvent(event);
-    for (final group in groups) {
-      final total = _formatMoney(_grandTotal(group));
-      final totalPaid = _formatMoney(_paymentsTotal(group));
-      final balance = _grandTotal(group) - _paymentsTotal(group);
-      final nextStatus = _paymentsTotal(group) <= 0
-          ? 'Unpaid'
-          : balance <= 0
-              ? 'Paid'
-              : 'Part Paid';
-      for (final row in group.rows) {
-        row.total = total;
-        row.totalPaid = totalPaid;
-        row.paymentStatus = nextStatus;
-      }
-    }
-  }
-
   Future<void> _createEvent(String name) async {
     if (name.trim().isEmpty) return;
 
@@ -365,314 +306,77 @@ class _AOJDesktopState extends State<AOJDesktop> {
   Future<void> _importBookingsCsv() async {
     final event = activeEvent;
     if (event == null) return;
-
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final bytes = result.files.single.bytes;
-    if (bytes == null) return;
-
-    final rows = _parseCsv(utf8.decode(bytes));
-    if (rows.isEmpty) return;
-
-    final headerIndex = _findHeaderIndex(rows, const ['Name', 'Event']);
-    final headers = rows[headerIndex];
-    final imported = <BookingRecord>[];
-
-    for (final row in rows.skip(headerIndex + 1)) {
-      if (row.every((e) => e.trim().isEmpty)) continue;
-      final map = _rowToMap(headers, row);
-
-      final name = _firstNonEmpty([map['Name']]);
-      final firstName = _firstNonEmpty([map['First Name'], _splitFirstName(name)]);
-      final lastName = _firstNonEmpty([map['Last Name'], _splitLastName(name)]);
-      final rawImportedPaid = _firstNonEmpty([map['Total Paid']]);
-      final importedMethod = _firstNonEmpty([
-        map['AOJ Payment Method'],
-        map['Payment Method'],
-        'Cash',
-      ]);
-      final shouldImportPayment = _isImportedCardPayment(importedMethod) && _parseMoney(rawImportedPaid) > 0;
-      final importedPaid = shouldImportPayment ? rawImportedPaid : '';
-
-      final payments = <PaymentRecord>[];
-      if (shouldImportPayment) {
-        payments.add(
-          PaymentRecord(
-            id: '${DateTime.now().microsecondsSinceEpoch}${imported.length}',
-            amount: importedPaid,
-            method: importedMethod,
-            note: 'Imported payment',
-            date: _firstNonEmpty([map['Booking Date'], map['Date'], '']),
-          ),
-        );
-      }
-
-      imported.add(
-        BookingRecord(
-          id: DateTime.now().microsecondsSinceEpoch.toString() + imported.length.toString(),
-          bookingId: _firstNonEmpty([map['Booking ID'], map['ID']]),
-          bookingDate: _firstNonEmpty([map['Booking Date'], map['Date'], map['Created']]),
-          firstName: firstName,
-          lastName: lastName,
-          email: _firstNonEmpty([map['E-mail'], map['Email']]),
-          phone: _cleanImportedPhone(_firstNonEmpty([map['Phone'], map['Phone Number'], map['Telephone']])),
-          event: _firstNonEmpty([map['Event'], event.name]),
-          total: _firstNonEmpty([map['Total']]),
-          totalPaid: importedPaid,
-          transactionId: _firstNonEmpty([map['Transaction ID']]),
-          paymentMethod: _firstNonEmpty([
-            map['AOJ Payment Method'],
-            map['Payment Method'],
-            'Cash',
-          ]),
-          paymentStatus: _firstNonEmpty([
-            map['AOJ Manual Paid'],
-            map['Manual Payment Status'],
-            'Unpaid',
-          ]),
-          checkInStatus: _firstNonEmpty([
-            map['AOJ Check In'],
-            map['Checked In'],
-            'Not Checked In',
-          ]),
-          notes: _firstNonEmpty([
-            map['AOJ Notes'],
-            map['Internal Notes'],
-            map['Booking Comment'],
-          ]),
-          needsPickup: _looksTrue(_firstNonEmpty([
-            map['Do you need pickup from the nearest station?'],
-            map['Pickup'],
-          ])),
-          needsTraining: _looksTrue(_firstNonEmpty([
-            map['Do you need beginners training?'],
-            map['Training'],
-          ])),
-          guestNames: _firstNonEmpty([
-            map['Guest Name(s) & Gender'],
-            map['Guest Names'],
-            map['Guests'],
-          ]),
-          languagePreference: _firstNonEmpty([
-            map['Language Preference'],
-            map['Language'],
-          ]),
-          ticketIds: [],
-          sales: [],
-          payments: payments,
-        ),
-      );
-    }
-
+    final ok = await CsvImportService.importBookingsCsv(event);
+    if (!ok) return;
     setState(() {
-      event.bookings = imported;
-      _linkTicketsToBookings(event);
-      _recalculateAllTotals(event);
       selectedBookingIndex = 0;
       systemStatus = 'BOOKINGS IMPORTED';
     });
-
     await _saveLocalState();
   }
 
   Future<void> _importTicketsCsv() async {
     final event = activeEvent;
     if (event == null) return;
-
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final bytes = result.files.single.bytes;
-    if (bytes == null) return;
-
-    final rows = _parseCsv(utf8.decode(bytes));
-    if (rows.isEmpty) return;
-
-    final headerIndex = _findHeaderIndex(rows, const ['Name']);
-    final headers = rows[headerIndex];
-    final imported = <TicketRecord>[];
-
-    for (final row in rows.skip(headerIndex + 1)) {
-      if (row.every((e) => e.trim().isEmpty)) continue;
-      final map = _rowToMap(headers, row);
-
-      imported.add(
-        TicketRecord(
-          id: DateTime.now().microsecondsSinceEpoch.toString() + imported.length.toString(),
-          bookingId: _firstNonEmpty([map['Booking ID'], map['ID']]),
-          bookingName: _firstNonEmpty([map['Name']]),
-          ticketName: _firstNonEmpty([map['Ticket Name'], map['Ticket'], map['Item Name']]),
-          price: _firstNonEmpty([map['Ticket Total'], map['Ticket Price'], map['Price'], map['Amount']]),
-          spaces: _firstNonEmpty([map['Ticket Spaces'], map['Spaces'], '1']),
-          status: _firstNonEmpty([map['Status'], 'Active']),
-        ),
-      );
-    }
-
+    final ok = await CsvImportService.importTicketsCsv(event);
+    if (!ok) return;
     setState(() {
-      event.tickets = imported;
-      _linkTicketsToBookings(event);
-      _recalculateAllTotals(event);
       systemStatus = 'TICKETS IMPORTED';
     });
-
     await _saveLocalState();
   }
 
   Future<void> _importMembersCsv() async {
     final event = activeEvent;
     if (event == null) return;
-
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final bytes = result.files.single.bytes;
-    if (bytes == null) return;
-
-    final rows = _parseCsv(utf8.decode(bytes));
-    if (rows.isEmpty) return;
-    final headers = rows.first;
-    final imported = <MemberRecord>[];
-
-    for (final row in rows.skip(1)) {
-      if (row.every((e) => e.trim().isEmpty)) continue;
-      final map = _rowToMap(headers, row);
-      final name = _firstNonEmpty([map['Name']]);
-
-      imported.add(
-        MemberRecord(
-          id: DateTime.now().microsecondsSinceEpoch.toString() + imported.length.toString(),
-          firstName: _firstNonEmpty([map['First Name'], _splitFirstName(name)]),
-          lastName: _firstNonEmpty([map['Last Name'], _splitLastName(name)]),
-          dateOfBirth: _firstNonEmpty([map['Date of Birth'], map['DOB']]),
-          gender: _firstNonEmpty([map['Gender']]),
-          telephone: _firstNonEmpty([map['Telephone'], map['Phone']]),
-          email: _firstNonEmpty([map['Email'], map['E-mail']]),
-          membershipLevel: _firstNonEmpty([map['Membership Level'], 'Regular']),
-        ),
-      );
-    }
-
+    final ok = await CsvImportService.importMembersCsv(event);
+    if (!ok) return;
     setState(() {
-      event.members = imported;
-      selectedMemberIndex = imported.isNotEmpty ? 0 : null;
+      selectedMemberIndex = event.members.isNotEmpty ? 0 : null;
       systemStatus = 'MEMBERS IMPORTED';
     });
-
     await _saveLocalState();
   }
 
   Future<void> _importScheduleCsv() async {
     final event = activeEvent;
     if (event == null) return;
-
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final bytes = result.files.single.bytes;
-    if (bytes == null) return;
-
-    final rows = _parseCsv(utf8.decode(bytes));
-    if (rows.isEmpty) return;
-    final headers = rows.first;
-    final imported = <ScheduleRecord>[];
-
-    for (final row in rows.skip(1)) {
-      if (row.every((e) => e.trim().isEmpty)) continue;
-      imported.add(ScheduleRecord(data: _rowToMap(headers, row)));
-    }
-
+    final ok = await CsvImportService.importScheduleCsv(event);
+    if (!ok) return;
     setState(() {
-      event.schedule = imported;
       systemStatus = 'SCHEDULE IMPORTED';
     });
-
     await _saveLocalState();
   }
 
   Future<void> _importGameModesCsv() async {
     final event = activeEvent;
     if (event == null) return;
-
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final bytes = result.files.single.bytes;
-    if (bytes == null) return;
-
-    final rows = _parseCsv(utf8.decode(bytes));
-    if (rows.isEmpty) return;
-    final headers = rows.first;
-    final imported = <GameModeRecord>[];
-
-    for (final row in rows.skip(1)) {
-      if (row.every((e) => e.trim().isEmpty)) continue;
-      imported.add(GameModeRecord(data: _rowToMap(headers, row)));
-    }
-
+    final ok = await CsvImportService.importGameModesCsv(event);
+    if (!ok) return;
     setState(() {
-      event.gameModes = imported;
       systemStatus = 'GAME MODES IMPORTED';
     });
-
     await _saveLocalState();
   }
 
   Future<void> _importFieldMap() async {
     final event = activeEvent;
     if (event == null) return;
-
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-    final bytes = result.files.single.bytes;
-    if (bytes == null) return;
-
+    final ok = await CsvImportService.importFieldMap(event);
+    if (!ok) return;
     setState(() {
-      event.fieldMapBase64 = base64Encode(bytes);
       systemStatus = 'FIELD MAP IMPORTED';
     });
-
     await _saveLocalState();
   }
 
   Future<void> _exportActiveEventJson() async {
     final event = activeEvent;
     if (event == null) return;
-
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File('${dir.path}/${event.name.replaceAll(' ', '_')}_export.json');
-
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(event.toJson()),
-      flush: true,
-    );
-
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      text: 'AOJ event export: ${event.name}',
-    );
-
+    final status = await ExportService.exportActiveEventJson(event);
     setState(() {
-      exportStatus = 'EXPORTED ${event.name}';
+      exportStatus = status;
     });
   }
 
@@ -815,8 +519,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
       setState(() {
         event.tickets.add(ticket);
-        _linkTicketsToBookings(event);
-        _recalculateAllTotals(event);
+        BookingUtils.linkTicketsToBookings(event);
+        BookingUtils.recalculateAllTotals(event);
         systemStatus = 'TICKET ADDED';
       });
 
@@ -895,7 +599,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
       await _saveGroupedBooking(group);
       final event = activeEvent;
       if (event != null) {
-        _recalculateAllTotals(event);
+        BookingUtils.recalculateAllTotals(event);
         await _saveLocalState();
       }
       setState(() {
@@ -909,7 +613,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     await _saveGroupedBooking(group);
     final event = activeEvent;
     if (event != null) {
-      _recalculateAllTotals(event);
+      BookingUtils.recalculateAllTotals(event);
       await _saveLocalState();
     }
     setState(() {
@@ -928,7 +632,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     await _saveGroupedBooking(group);
     final event = activeEvent;
     if (event != null) {
-      _recalculateAllTotals(event);
+      BookingUtils.recalculateAllTotals(event);
       await _saveLocalState();
     }
     setState(() {
@@ -941,7 +645,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     await _saveGroupedBooking(group);
     final event = activeEvent;
     if (event != null) {
-      _recalculateAllTotals(event);
+      BookingUtils.recalculateAllTotals(event);
       await _saveLocalState();
     }
     setState(() {
@@ -949,48 +653,10 @@ class _AOJDesktopState extends State<AOJDesktop> {
     });
   }
 
-  List<BookingGroup> _groupedBookingsForEvent(EventRecord event) {
-    final Map<String, List<BookingRecord>> grouped = {};
-
-    for (final booking in event.bookings) {
-      final key = _bookingGroupKey(booking);
-      grouped.putIfAbsent(key, () => []).add(booking);
-    }
-
-    final result = grouped.entries.map((entry) {
-      final rows = entry.value;
-      final primary = rows.first;
-
-      final ticketIds = <String>{};
-      for (final row in rows) {
-        ticketIds.addAll(row.ticketIds);
-      }
-
-      final tickets = event.tickets.where((t) {
-        if (ticketIds.contains(t.id)) return true;
-        if (primary.bookingId.isNotEmpty && t.bookingId.isNotEmpty) {
-          if (primary.bookingId == t.bookingId) return true;
-        }
-        return t.bookingName.trim().toLowerCase() ==
-            primary.fullName.trim().toLowerCase();
-      }).toList();
-
-      return BookingGroup(
-        key: entry.key,
-        primary: primary,
-        rows: rows,
-        tickets: tickets,
-      );
-    }).toList();
-
-    result.sort((a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
-    return result;
-  }
-
   List<BookingGroup> _groupedBookingsForActiveEvent() {
     final event = activeEvent;
     if (event == null) return [];
-    final groups = _groupedBookingsForEvent(event);
+    final groups = BookingUtils.groupedBookingsForEvent(event);
 
     if (bookingSearch.trim().isEmpty) return groups;
     final q = bookingSearch.trim().toLowerCase();
@@ -1011,17 +677,6 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
     final q = gameModeSearch.trim().toLowerCase();
     return event.gameModes.where((g) => g.data.values.join(' ').toLowerCase().contains(q)).toList();
-  }
-
-  String _bookingGroupKey(BookingRecord booking) {
-    final bookingId = booking.bookingId.trim().toLowerCase();
-    final email = booking.email.trim().toLowerCase();
-    final name = booking.fullName.trim().toLowerCase();
-    final eventName = booking.event.trim().toLowerCase();
-
-    if (bookingId.isNotEmpty) return 'booking:$eventName:$bookingId';
-    if (email.isNotEmpty) return 'email:$eventName:$email';
-    return 'name:$eventName:$name';
   }
 
   Future<void> _deleteBookingGroup(BookingGroup group) async {
@@ -1072,105 +727,6 @@ class _AOJDesktopState extends State<AOJDesktop> {
     await _saveLocalState();
   }
 
-  void _linkTicketsToBookings(EventRecord event) {
-    for (final booking in event.bookings) {
-      booking.ticketIds.clear();
-    }
-
-    for (final ticket in event.tickets) {
-      final matches = event.bookings.where((booking) {
-        final bookingName = booking.fullName.trim().toLowerCase();
-        final ticketName = ticket.bookingName.trim().toLowerCase();
-
-        if (ticket.bookingId.isNotEmpty && booking.bookingId.isNotEmpty) {
-          if (ticket.bookingId == booking.bookingId) return true;
-        }
-
-        return bookingName == ticketName;
-      }).toList();
-
-      if (matches.isNotEmpty) {
-        matches.first.ticketIds.add(ticket.id);
-      }
-    }
-  }
-
-  bool _looksTrue(String? value) {
-    final normalized = (value ?? '').trim().toLowerCase();
-    return normalized == 'yes' ||
-        normalized == 'y' ||
-        normalized == 'true' ||
-        normalized == '1' ||
-        normalized == 'checked in' ||
-        normalized == 'paid';
-  }
-
-  bool _ticketIsActive(TicketRecord ticket) {
-    final status = ticket.status.trim().toLowerCase();
-    return status != 'cancelled' && status != 'refunded' && status != 'void';
-  }
-
-  bool _ticketIsRental(TicketRecord ticket) {
-    final name = ticket.ticketName.toLowerCase();
-    return name.contains('rental') ||
-        name.contains('gun set') ||
-        name.contains('full set') ||
-        name.contains('rental set');
-  }
-
-  int _ticketQuantity(TicketRecord ticket) {
-    final cleaned = ticket.spaces.replaceAll(RegExp(r'[^0-9\-]'), '');
-    return int.tryParse(cleaned) ?? 1;
-  }
-
-  int _groupPersonCount(BookingGroup group) {
-    final guestCount = _guestListFromRaw(group.guestNames).length;
-    return 1 + guestCount;
-  }
-
-  int _groupRentalCount(BookingGroup group) {
-    return group.tickets
-        .where((t) => _ticketIsActive(t) && _ticketIsRental(t))
-        .fold<int>(0, (sum, t) => sum + _ticketQuantity(t));
-  }
-
-  int _eventBookedPersons(EventRecord event) {
-    return _groupedBookingsForEvent(event)
-        .fold<int>(0, (sum, g) => sum + _groupPersonCount(g));
-  }
-
-  double _eventTicketValue(EventRecord event) {
-    return _groupedBookingsForEvent(event)
-        .fold<double>(0, (sum, g) => sum + _ticketsTotal(g));
-  }
-
-  double _eventSalesValue(EventRecord event) {
-    return _groupedBookingsForEvent(event)
-        .fold<double>(0, (sum, g) => sum + _salesTotal(g));
-  }
-
-  int _eventRentalCount(EventRecord event) {
-    return _groupedBookingsForEvent(event)
-        .fold<int>(0, (sum, g) => sum + _groupRentalCount(g));
-  }
-
-  List<BookingGroup> _pickupGroups(EventRecord event) {
-    return _groupedBookingsForEvent(event).where((g) => g.needsPickup).toList();
-  }
-
-  List<BookingGroup> _trainingGroups(EventRecord event) {
-    return _groupedBookingsForEvent(event).where((g) => g.needsTraining).toList();
-  }
-
-  List<String> _guestListFromRaw(String raw) {
-    return raw
-        .split(RegExp(r'[\n;/]+'))
-        .expand((part) => part.split(','))
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-  }
-
   Future<void> _toggleCheckInForGroup(BookingGroup group) async {
     final current = group.primary.checkInStatus.trim();
     group.primary.checkInStatus = current == 'Checked In' ? 'Not Checked In' : 'Checked In';
@@ -1217,130 +773,26 @@ class _AOJDesktopState extends State<AOJDesktop> {
     await _saveLocalState();
   }
 
-  Uint8List? _fieldMapBytes() {
-    final event = activeEvent;
-    if (event == null || event.fieldMapBase64 == null) return null;
-    try {
-      return base64Decode(event.fieldMapBase64!);
-    } catch (_) {
-      return null;
-    }
+  String _normalizedPropUrl() {
+    final raw = propIpController.text.trim();
+    if (raw.isEmpty) return 'http://192.168.4.1';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    return 'http://$raw';
   }
 
-  List<List<String>> _parseCsv(String input) {
-    final rows = <List<String>>[];
-    final row = <String>[];
-    final cell = StringBuffer();
-    bool inQuotes = false;
-
-    for (int i = 0; i < input.length; i++) {
-      final char = input[i];
-
-      if (char == '"') {
-        if (inQuotes && i + 1 < input.length && input[i + 1] == '"') {
-          cell.write('"');
-          i++;
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (char == ',' && !inQuotes) {
-        row.add(cell.toString());
-        cell.clear();
-      } else if ((char == '\n' || char == '\r') && !inQuotes) {
-        if (char == '\r' && i + 1 < input.length && input[i + 1] == '\n') {
-          i++;
-        }
-        row.add(cell.toString());
-        cell.clear();
-        rows.add(List<String>.from(row));
-        row.clear();
-      } else {
-        cell.write(char);
-      }
-    }
-
-    if (cell.isNotEmpty || row.isNotEmpty) {
-      row.add(cell.toString());
-      rows.add(List<String>.from(row));
-    }
-
-    return rows;
+  void _openPropControlPage() {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      showPropControlPage = true;
+      propControlStatus = 'PROP CONSOLE OPEN';
+    });
   }
 
-  int _findHeaderIndex(List<List<String>> rows, List<String> required) {
-    for (int i = 0; i < rows.length; i++) {
-      final lower = rows[i].map((e) => e.trim().toLowerCase()).toList();
-      final ok = required.every((r) => lower.contains(r.toLowerCase()));
-      if (ok) return i;
-    }
-    return 0;
-  }
-
-  Map<String, String> _rowToMap(List<String> headers, List<String> row) {
-    final map = <String, String>{};
-    for (int i = 0; i < headers.length; i++) {
-      map[headers[i]] = i < row.length ? row[i] : '';
-    }
-    return map;
-  }
-
-  String _firstNonEmpty(List<String?> values) {
-    for (final value in values) {
-      final v = value?.trim() ?? '';
-      if (v.isNotEmpty) return v;
-    }
-    return '';
-  }
-
-  String _cleanImportedPhone(String value) {
-    var cleaned = value.trim();
-    if (cleaned.startsWith("'")) {
-      cleaned = cleaned.substring(1);
-    }
-    return cleaned.trim();
-  }
-
-  bool _isImportedCardPayment(String method) {
-    final normalized = method.trim().toLowerCase();
-    return normalized.contains('credit');
-  }
-
-  String _splitFirstName(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    return parts.isNotEmpty ? parts.first : '';
-  }
-
-  String _splitLastName(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.length <= 1) return '';
-    return parts.sublist(1).join(' ');
-  }
-
-  Widget _summaryLine(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 130,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11,
-                color: Color(0xFF98A197),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value.isEmpty ? '-' : value,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
+  void _closePropControlPage() {
+    setState(() {
+      showPropControlPage = false;
+      propControlStatus = 'PROP CONSOLE OFFLINE';
+    });
   }
 
   @override
@@ -1606,1202 +1058,136 @@ class _AOJDesktopState extends State<AOJDesktop> {
   Widget _buildWindowBody(DesktopWindowData window) {
     switch (window.id) {
       case 'system':
-        return _buildSystemPanel(window);
+        return SystemPanel(
+          accent: window.accent,
+          appState: appState,
+          activeEvent: activeEvent,
+          systemStatus: systemStatus,
+          exportStatus: exportStatus,
+          onCreateEvent: _createEvent,
+          onExportEvent: _exportActiveEventJson,
+          onImportBookings: _importBookingsCsv,
+          onImportTickets: _importTicketsCsv,
+          onImportMembers: _importMembersCsv,
+          onImportSchedule: _importScheduleCsv,
+          onImportGameModes: _importGameModesCsv,
+          onImportFieldMap: _importFieldMap,
+        );
       case 'event':
-        return _buildEventPanel(window);
+        return EventPanel(
+          accent: window.accent,
+          appState: appState,
+          event: activeEvent,
+          onSetActiveEvent: _setActiveEvent,
+          onDeleteEvent: _deleteActiveEvent,
+          onSave: _saveLocalState,
+          onRefresh: () => setState(() {}),
+        );
       case 'bookings':
-        return _buildBookingsPanel(window);
+        return BookingsPanel(
+          accent: window.accent,
+          appState: appState,
+          event: activeEvent,
+          groups: _groupedBookingsForActiveEvent(),
+          selectedBookingIndex: selectedBookingIndex,
+          paymentMethods: paymentMethods,
+          paymentStatuses: paymentStatuses,
+          checkInStatuses: checkInStatuses,
+          onSetActiveEvent: (value) async {
+            await _setActiveEvent(value);
+            setState(() {
+              selectedBookingIndex = 0;
+            });
+          },
+          onSearchChanged: (v) {
+            setState(() {
+              bookingSearch = v;
+              selectedBookingIndex = 0;
+            });
+          },
+          onSelectBooking: (index) {
+            setState(() {
+              selectedBookingIndex = index;
+            });
+          },
+          onToggleCheckIn: _toggleCheckInForGroup,
+          onEditContact: _showEditContactDialog,
+          onDeleteGroup: _deleteBookingGroup,
+          onAddTicket: _showAddTicketDialog,
+          onAddPayment: _showAddPaymentDialog,
+          onDeletePayment: _deletePaymentFromGroup,
+          onAddSale: _addSaleToGroup,
+          onDeleteSale: _deleteSaleFromGroup,
+          onSaveGroup: _saveGroupedBooking,
+          onSave: _saveLocalState,
+          onRefresh: () => setState(() {}),
+        );
       case 'members':
-        return _buildMembersPanel(window);
+        return MembersPanel(
+          accent: window.accent,
+          event: activeEvent,
+          selectedMember: selectedMember,
+          selectedMemberIndex: selectedMemberIndex,
+          membershipLevels: membershipLevels,
+          onAddMember: _addManualMember,
+          onDeleteMember: _deleteSelectedMember,
+          onSelectMember: (index) {
+            setState(() {
+              selectedMemberIndex = index;
+            });
+          },
+          onSave: _saveLocalState,
+          onRefresh: () => setState(() {}),
+        );
       case 'schedule':
-        return _buildSchedulePanel(window);
+        return SchedulePanel(
+          accent: window.accent,
+          event: activeEvent,
+        );
       case 'props':
-        return _buildPropsPanel(window);
+        return PropsPanel(
+          accent: window.accent,
+          event: activeEvent,
+          propIpController: propIpController,
+          showPropControlPage: showPropControlPage,
+          propControlStatus: propControlStatus,
+          onOpenPropControlPage: _openPropControlPage,
+          onClosePropControlPage: _closePropControlPage,
+          normalizedPropUrl: _normalizedPropUrl,
+          onPageStarted: () {
+            if (!mounted) return;
+            setState(() {
+              propControlStatus = 'CONNECTING TO PROP';
+            });
+          },
+          onPageFinished: () {
+            if (!mounted) return;
+            setState(() {
+              propControlStatus = 'PROP CONSOLE LINKED';
+            });
+          },
+          onWebError: (message) {
+            if (!mounted) return;
+            setState(() {
+              propControlStatus = message;
+            });
+          },
+        );
       case 'game_modes':
-        return _buildGameModesPanel(window);
+        return GameModesPanel(
+          accent: window.accent,
+          event: activeEvent,
+          modes: _filteredGameModes(),
+          onSearchChanged: (v) {
+            setState(() {
+              gameModeSearch = v;
+            });
+          },
+          onImportGameModes: _importGameModesCsv,
+        );
       default:
         return const SizedBox.shrink();
     }
-  }
-
-  Widget _buildSystemPanel(DesktopWindowData window) {
-    final controller = TextEditingController();
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          HeroPanel(
-            title: 'AOJ CENTRAL COMMAND',
-            subtitle: 'Offline event management and import control',
-            accent: window.accent,
-            icon: Icons.shield_outlined,
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  decoration: const InputDecoration(
-                    labelText: 'Create New Event',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                onPressed: () => _createEvent(controller.text),
-                child: const Text('ADD EVENT'),
-              ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                onPressed: _exportActiveEventJson,
-                child: const Text('EXPORT EVENT'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: InfoCard(
-                    title: 'System Status',
-                    accent: window.accent,
-                    children: [
-                      InfoLine('State', systemStatus),
-                      InfoLine('Events', appState.events.length.toString()),
-                      InfoLine('Active', activeEvent?.name ?? 'None'),
-                      InfoLine('Export', exportStatus),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: InfoCard(
-                    title: 'Import Control',
-                    accent: window.accent,
-                    children: [
-                      ActionLine(label: 'Bookings CSV', onTap: _importBookingsCsv),
-                      ActionLine(label: 'Tickets CSV', onTap: _importTicketsCsv),
-                      ActionLine(label: 'Members CSV', onTap: _importMembersCsv),
-                      ActionLine(label: 'Schedule CSV', onTap: _importScheduleCsv),
-                      ActionLine(label: 'Game Modes CSV', onTap: _importGameModesCsv),
-                      ActionLine(label: 'Field Map Image', onTap: _importFieldMap),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEventPanel(DesktopWindowData window) {
-    final event = activeEvent;
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          HeroPanel(
-            title: 'MISSION BRIEF',
-            subtitle: 'Active event selection, field information and logistics overview',
-            accent: window.accent,
-            icon: Icons.map_outlined,
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: appState.activeEventId,
-                  decoration: const InputDecoration(
-                    labelText: 'Active Event',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: appState.events
-                      .map((e) => DropdownMenuItem<String>(value: e.id, child: Text(e.name)))
-                      .toList(),
-                  onChanged: _setActiveEvent,
-                ),
-              ),
-              const SizedBox(width: 10),
-              OutlinedButton.icon(
-                onPressed: event == null ? null : _deleteActiveEvent,
-                icon: const Icon(Icons.delete_outline),
-                label: const Text('DELETE EVENT'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          if (event == null)
-            const Expanded(child: Center(child: Text('NO ACTIVE EVENT')))
-          else
-            Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 5,
-                    child: ListView(
-                      children: [
-                        _editField('Event Name', event.name, (v) async {
-                          event.name = v;
-                          await _saveLocalState();
-                          setState(() {});
-                        }),
-                        _editField('Venue', event.venue, (v) async {
-                          event.venue = v;
-                          await _saveLocalState();
-                        }),
-                        _editField('Date', event.date, (v) async {
-                          event.date = v;
-                          await _saveLocalState();
-                        }),
-                        _editField('Notes', event.notes, (v) async {
-                          event.notes = v;
-                          await _saveLocalState();
-                        }, maxLines: 5),
-                        const SizedBox(height: 6),
-                        InfoCard(
-                          title: 'Event Totals',
-                          accent: window.accent,
-                          children: [
-                            InfoLine('Booked Persons', _eventBookedPersons(event).toString()),
-                            InfoLine('Ticket Value', '¥ ${_formatMoney(_eventTicketValue(event))}'),
-                            InfoLine('Sales Value', '¥ ${_formatMoney(_eventSalesValue(event))}'),
-                            InfoLine('Rental Gun Sets', _eventRentalCount(event).toString()),
-                            InfoLine('Pickup Bookings', _pickupGroups(event).length.toString()),
-                            InfoLine('Training Requests', _trainingGroups(event).length.toString()),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    flex: 5,
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        color: const Color(0xCC101511),
-                        border: Border.all(color: window.accent.withOpacity(0.35)),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Pickup Roster', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: window.accent)),
-                                const SizedBox(height: 8),
-                                Expanded(
-                                  child: _pickupGroups(event).isEmpty
-                                      ? const Center(child: Text('NO PICKUPS'))
-                                      : ListView.builder(
-                                          itemCount: _pickupGroups(event).length,
-                                          itemBuilder: (context, index) {
-                                            final group = _pickupGroups(event)[index];
-                                            return Padding(
-                                              padding: const EdgeInsets.only(bottom: 8),
-                                              child: Text(
-                                                '${group.displayName}  ·  ${group.phone.isNotEmpty ? group.phone : group.email}',
-                                                style: const TextStyle(fontSize: 11),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Training Requests', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: window.accent)),
-                                const SizedBox(height: 8),
-                                Expanded(
-                                  child: _trainingGroups(event).isEmpty
-                                      ? const Center(child: Text('NO TRAINING BOOKINGS'))
-                                      : ListView.builder(
-                                          itemCount: _trainingGroups(event).length,
-                                          itemBuilder: (context, index) {
-                                            final group = _trainingGroups(event)[index];
-                                            return Padding(
-                                              padding: const EdgeInsets.only(bottom: 8),
-                                              child: Text(
-                                                '${group.displayName}${group.languagePreference.isNotEmpty ? '  ·  ${group.languagePreference}' : ''}',
-                                                style: const TextStyle(fontSize: 11),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBookingsPanel(DesktopWindowData window) {
-    final event = activeEvent;
-    final groups = _groupedBookingsForActiveEvent();
-
-    BookingGroup? selectedGroup;
-    if (selectedBookingIndex != null &&
-        selectedBookingIndex! >= 0 &&
-        selectedBookingIndex! < groups.length) {
-      selectedGroup = groups[selectedBookingIndex!];
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          HeroPanel(
-            title: 'LOGISTICS / BOOKING DETAILS',
-            subtitle: 'One person per booking with logistics, tickets, payments and sales',
-            accent: window.accent,
-            icon: Icons.assignment_outlined,
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: appState.activeEventId,
-                  decoration: const InputDecoration(
-                    labelText: 'Event',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  items: appState.events
-                      .map((e) => DropdownMenuItem<String>(value: e.id, child: Text(e.name)))
-                      .toList(),
-                  onChanged: (value) async {
-                    await _setActiveEvent(value);
-                    setState(() {
-                      selectedBookingIndex = 0;
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  onChanged: (v) {
-                    setState(() {
-                      bookingSearch = v;
-                      selectedBookingIndex = 0;
-                    });
-                  },
-                  decoration: const InputDecoration(
-                    labelText: 'Search name / email / phone / booking ID / guest',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          if (event == null)
-            const Expanded(child: Center(child: Text('NO ACTIVE EVENT')))
-          else
-            Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 4,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        color: const Color(0xCC101511),
-                        border: Border.all(color: window.accent.withOpacity(0.35)),
-                      ),
-                      child: groups.isEmpty
-                          ? const Center(child: Text('NO BOOKINGS FOR THIS EVENT'))
-                          : ListView.separated(
-                              itemCount: groups.length,
-                              separatorBuilder: (_, __) => Divider(
-                                height: 1,
-                                color: Colors.white.withOpacity(0.06),
-                              ),
-                              itemBuilder: (context, index) {
-                                final group = groups[index];
-                                final active = index == selectedBookingIndex;
-
-                                return ListTile(
-                                  selected: active,
-                                  selectedTileColor: window.accent.withOpacity(0.16),
-                                  title: Text(
-                                    group.displayName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  subtitle: Text(
-                                    group.email.isNotEmpty ? group.email : group.phone,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  trailing: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text('¥ ${_formatMoney(_grandTotal(group))}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
-                                      Text('Balance ¥ ${_formatMoney(_balance(group))}', style: const TextStyle(fontSize: 10)),
-                                    ],
-                                  ),
-                                  onTap: () {
-                                    setState(() {
-                                      selectedBookingIndex = index;
-                                    });
-                                  },
-                                );
-                              },
-                            ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    flex: 6,
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        color: const Color(0xCC101511),
-                        border: Border.all(color: window.accent.withOpacity(0.35)),
-                      ),
-                      child: selectedGroup == null
-                          ? const Center(child: Text('SELECT A PERSON'))
-                          : ListView(
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        selectedGroup.displayName,
-                                        style: const TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ),
-                                    ElevatedButton.icon(
-                                      onPressed: () => _toggleCheckInForGroup(selectedGroup!),
-                                      icon: Icon(selectedGroup!.primary.checkInStatus == 'Checked In'
-                                          ? Icons.how_to_reg
-                                          : Icons.login),
-                                      label: Text(selectedGroup.primary.checkInStatus == 'Checked In'
-                                          ? 'UNDO CHECK-IN'
-                                          : 'CHECK IN'),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      onPressed: () => _showEditContactDialog(selectedGroup!),
-                                      icon: const Icon(Icons.edit_outlined),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    OutlinedButton.icon(
-                                      onPressed: () async {
-                                        await _deleteBookingGroup(selectedGroup!);
-                                      },
-                                      icon: const Icon(Icons.delete_outline),
-                                      label: const Text('DELETE'),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  selectedGroup.primary.email,
-                                  style: const TextStyle(fontSize: 12, color: Color(0xFFAFB7AD)),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  selectedGroup.primary.phone,
-                                  style: const TextStyle(fontSize: 12, color: Color(0xFFAFB7AD)),
-                                ),
-                                const SizedBox(height: 12),
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(14),
-                                    color: window.accent.withOpacity(0.10),
-                                    border: Border.all(color: window.accent.withOpacity(0.35)),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('LOGISTICS / BOOKING DETAILS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: window.accent)),
-                                      const SizedBox(height: 8),
-                                      _summaryLine('Pickup', selectedGroup.needsPickup ? 'YES' : 'NO'),
-                                      _summaryLine('Training', selectedGroup.needsTraining ? 'YES' : 'NO'),
-                                      _summaryLine('Guest Names', selectedGroup.guestNames.isEmpty ? 'None' : selectedGroup.guestNames),
-                                      _summaryLine('Language', selectedGroup.languagePreference.isEmpty ? '-' : selectedGroup.languagePreference),
-                                      _summaryLine('Rental Gun Sets', _groupRentalCount(selectedGroup).toString()),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                _summaryLine('Booking ID', selectedGroup.bookingId),
-                                _summaryLine('Transaction ID', selectedGroup.primary.transactionId),
-                                _summaryLine('Tickets Total', '¥ ${_formatMoney(_ticketsTotal(selectedGroup))}'),
-                                _summaryLine('Sales Total', '¥ ${_formatMoney(_salesTotal(selectedGroup))}'),
-                                _summaryLine('Grand Total', '¥ ${_formatMoney(_grandTotal(selectedGroup))}'),
-                                _summaryLine('Paid', '¥ ${_formatMoney(_paymentsTotal(selectedGroup))}'),
-                                _summaryLine('Balance', '¥ ${_formatMoney(_balance(selectedGroup))}'),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _dropdownField(
-                                        'Payment Status',
-                                        paymentStatuses,
-                                        selectedGroup.primary.paymentStatus.isEmpty
-                                            ? 'Unpaid'
-                                            : selectedGroup.primary.paymentStatus,
-                                        (v) async {
-                                          selectedGroup!.primary.paymentStatus = v;
-                                          await _saveGroupedBooking(selectedGroup);
-                                          setState(() {});
-                                        },
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: _dropdownField(
-                                        'Check In',
-                                        checkInStatuses,
-                                        selectedGroup.primary.checkInStatus.isEmpty
-                                            ? 'Not Checked In'
-                                            : selectedGroup.primary.checkInStatus,
-                                        (v) async {
-                                          selectedGroup!.primary.checkInStatus = v;
-                                          await _saveGroupedBooking(selectedGroup);
-                                          setState(() {});
-                                        },
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                _editField('Notes', selectedGroup.primary.notes, (v) async {
-                                  selectedGroup!.primary.notes = v;
-                                  await _saveGroupedBooking(selectedGroup);
-                                  setState(() {});
-                                }),
-                                const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    const Expanded(
-                                      child: Text(
-                                        'Tickets',
-                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                                      ),
-                                    ),
-                                    ElevatedButton(
-                                      onPressed: () => _showAddTicketDialog(selectedGroup!),
-                                      child: const Text('ADD TICKET'),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                ...selectedGroup.tickets.map((ticket) {
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12),
-                                      color: Colors.white.withOpacity(0.03),
-                                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                ticket.ticketName,
-                                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                                              ),
-                                              const SizedBox(height: 6),
-                                              Row(
-                                                children: [
-                                                  Text('${ticket.quantity} × ', style: const TextStyle(fontSize: 12)),
-                                                  SizedBox(
-                                                    width: 120,
-                                                    child: _editField('Price', ticket.price, (v) async {
-                                                      ticket.price = v;
-                                                      if (event != null) {
-                                                        _recalculateAllTotals(event);
-                                                      }
-                                                      await _saveLocalState();
-                                                      setState(() {});
-                                                    }),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        DropdownButton<String>(
-                                          value: ticket.status == 'Cancelled' ? 'Cancelled' : 'Active',
-                                          items: const [
-                                            DropdownMenuItem(value: 'Active', child: Text('Keep')),
-                                            DropdownMenuItem(value: 'Cancelled', child: Text('Cancel')),
-                                          ],
-                                          onChanged: (value) async {
-                                            if (value == null) return;
-                                            setState(() {
-                                              ticket.status = value;
-                                              if (event != null) {
-                                                _recalculateAllTotals(event);
-                                              }
-                                            });
-                                            await _saveLocalState();
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }),
-                                const SizedBox(height: 14),
-                                Row(
-                                  children: [
-                                    const Expanded(
-                                      child: Text(
-                                        'Payments',
-                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                                      ),
-                                    ),
-                                    ElevatedButton(
-                                      onPressed: () => _showAddPaymentDialog(selectedGroup!),
-                                      child: const Text('ADD PAYMENT'),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                ...selectedGroup.primary.payments.map((payment) {
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12),
-                                      color: Colors.white.withOpacity(0.03),
-                                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                '¥ ${payment.amount}  -  ${payment.method}',
-                                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                                              ),
-                                              if (payment.note.isNotEmpty)
-                                                Padding(
-                                                  padding: const EdgeInsets.only(top: 4),
-                                                  child: Text(
-                                                    payment.note,
-                                                    style: const TextStyle(
-                                                      fontSize: 11,
-                                                      color: Color(0xFFAFB7AD),
-                                                    ),
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                        ),
-                                        IconButton(
-                                          onPressed: () => _deletePaymentFromGroup(selectedGroup!, payment.id),
-                                          icon: const Icon(Icons.delete_outline),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }),
-                                const SizedBox(height: 14),
-                                Row(
-                                  children: [
-                                    const Expanded(
-                                      child: Text(
-                                        'Sales',
-                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                                      ),
-                                    ),
-                                    ElevatedButton(
-                                      onPressed: () => _addSaleToGroup(selectedGroup!),
-                                      child: const Text('ADD SALE'),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                ...selectedGroup.primary.sales.map((sale) {
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12),
-                                      color: Colors.white.withOpacity(0.03),
-                                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          child: _editField('Product', sale.product, (v) async {
-                                            sale.product = v;
-                                            await _saveGroupedBooking(selectedGroup!);
-                                          }),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        SizedBox(
-                                          width: 120,
-                                          child: _editField('Price', sale.price, (v) async {
-                                            sale.price = v;
-                                            if (event != null) {
-                                              _recalculateAllTotals(event);
-                                            }
-                                            await _saveGroupedBooking(selectedGroup!);
-                                            await _saveLocalState();
-                                            setState(() {});
-                                          }),
-                                        ),
-                                        IconButton(
-                                          onPressed: () => _deleteSaleFromGroup(selectedGroup!, sale.id),
-                                          icon: const Icon(Icons.delete_outline),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }),
-                              ],
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMembersPanel(DesktopWindowData window) {
-    final event = activeEvent;
-    final member = selectedMember;
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          HeroPanel(
-            title: 'PERSONNEL RECORDS',
-            subtitle: 'Member data, manual add, edit and delete',
-            accent: window.accent,
-            icon: Icons.groups_outlined,
-          ),
-          const SizedBox(height: 14),
-          if (event == null)
-            const Expanded(child: Center(child: Text('NO ACTIVE EVENT')))
-          else
-            Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 4,
-                    child: Column(
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: ElevatedButton(
-                            onPressed: _addManualMember,
-                            child: const Text('ADD MEMBER'),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Expanded(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(18),
-                              color: const Color(0xCC101511),
-                              border: Border.all(color: window.accent.withOpacity(0.35)),
-                            ),
-                            child: event.members.isEmpty
-                                ? const Center(child: Text('NO MEMBERS'))
-                                : ListView.builder(
-                                    itemCount: event.members.length,
-                                    itemBuilder: (context, index) {
-                                      final row = event.members[index];
-                                      final active = index == selectedMemberIndex;
-                                      return ListTile(
-                                        selected: active,
-                                        selectedTileColor: window.accent.withOpacity(0.16),
-                                        title: Text(
-                                          row.fullName.isEmpty ? 'Unnamed Member' : row.fullName,
-                                        ),
-                                        subtitle: Text(row.email),
-                                        trailing: Text(
-                                          row.membershipLevel,
-                                          style: const TextStyle(fontSize: 11),
-                                        ),
-                                        onTap: () {
-                                          setState(() {
-                                            selectedMemberIndex = index;
-                                          });
-                                        },
-                                      );
-                                    },
-                                  ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    flex: 6,
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        color: const Color(0xCC101511),
-                        border: Border.all(color: window.accent.withOpacity(0.35)),
-                      ),
-                      child: member == null
-                          ? const Center(child: Text('SELECT A MEMBER'))
-                          : ListView(
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        member.fullName.isEmpty ? 'Unnamed Member' : member.fullName,
-                                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-                                      ),
-                                    ),
-                                    OutlinedButton.icon(
-                                      onPressed: _deleteSelectedMember,
-                                      icon: const Icon(Icons.delete_outline),
-                                      label: const Text('DELETE'),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                _editField('First Name', member.firstName, (v) async {
-                                  member.firstName = v;
-                                  await _saveLocalState();
-                                  setState(() {});
-                                }),
-                                _editField('Last Name', member.lastName, (v) async {
-                                  member.lastName = v;
-                                  await _saveLocalState();
-                                  setState(() {});
-                                }),
-                                _editField('Date of Birth', member.dateOfBirth, (v) async {
-                                  member.dateOfBirth = v;
-                                  await _saveLocalState();
-                                }),
-                                _editField('Gender', member.gender, (v) async {
-                                  member.gender = v;
-                                  await _saveLocalState();
-                                }),
-                                _editField('Telephone', member.telephone, (v) async {
-                                  member.telephone = v;
-                                  await _saveLocalState();
-                                }),
-                                _editField('Email', member.email, (v) async {
-                                  member.email = v;
-                                  await _saveLocalState();
-                                }),
-                                _dropdownField(
-                                  'Membership Level',
-                                  membershipLevels,
-                                  member.membershipLevel.isEmpty ? 'Regular' : member.membershipLevel,
-                                  (v) async {
-                                    member.membershipLevel = v;
-                                    await _saveLocalState();
-                                    setState(() {});
-                                  },
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSchedulePanel(DesktopWindowData window) {
-    final event = activeEvent;
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          HeroPanel(
-            title: 'OPERATIONS TIMING',
-            subtitle: 'Imported schedule for active event',
-            accent: window.accent,
-            icon: Icons.access_time_outlined,
-          ),
-          const SizedBox(height: 14),
-          if (event == null)
-            const Expanded(child: Center(child: Text('NO ACTIVE EVENT')))
-          else
-            Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 6,
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        color: const Color(0xCC101511),
-                        border: Border.all(color: window.accent.withOpacity(0.35)),
-                      ),
-                      child: event.schedule.isEmpty
-                          ? const Center(child: Text('NO SCHEDULE IMPORTED'))
-                          : ListView.builder(
-                              itemCount: event.schedule.length,
-                              itemBuilder: (context, index) {
-                                final row = event.schedule[index];
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 8),
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    color: Colors.white.withOpacity(0.03),
-                                    border: Border.all(color: Colors.white.withOpacity(0.06)),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: row.data.entries.map((entry) {
-                                      return Padding(
-                                        padding: const EdgeInsets.only(bottom: 4),
-                                        child: Text(
-                                          '${entry.key}: ${entry.value}',
-                                          style: const TextStyle(fontSize: 11),
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ),
-                                );
-                              },
-                            ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    flex: 5,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        color: const Color(0xCC101511),
-                        border: Border.all(color: window.accent.withOpacity(0.35)),
-                      ),
-                      child: _fieldMapBytes() == null
-                          ? const Center(child: Text('NO FIELD MAP'))
-                          : ClipRRect(
-                              borderRadius: BorderRadius.circular(18),
-                              child: InteractiveViewer(
-                                child: Image.memory(_fieldMapBytes()!, fit: BoxFit.contain),
-                              ),
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  String _normalizedPropUrl() {
-    final raw = propIpController.text.trim();
-    if (raw.isEmpty) return 'http://192.168.4.1';
-    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
-    return 'http://$raw';
-  }
-
-  void _openPropControlPage() {
-    FocusScope.of(context).unfocus();
-    setState(() {
-      showPropControlPage = true;
-      propControlStatus = 'PROP CONSOLE OPEN';
-    });
-  }
-
-  void _closePropControlPage() {
-    setState(() {
-      showPropControlPage = false;
-      propControlStatus = 'PROP CONSOLE OFFLINE';
-    });
-  }
-
-  Widget _buildPropsPanel(DesktopWindowData window) {
-    final event = activeEvent;
-    if (event == null) {
-      return const Center(child: Text('NO ACTIVE EVENT'));
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          HeroPanel(
-            title: 'FIELD ASSETS',
-            subtitle: 'Connect to prop Wi-Fi and open on-device control at 192.168.4.1',
-            accent: window.accent,
-            icon: Icons.precision_manufacturing_outlined,
-          ),
-          const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 4,
-                child: InfoCard(
-                  title: 'Prop Console',
-                  accent: window.accent,
-                  children: [
-                    InfoLine('Field Map', event.fieldMapBase64 == null ? 'NOT LOADED' : 'LOADED'),
-                    InfoLine('Notes', event.notes.isEmpty ? 'NONE' : 'SEE EVENT INFO'),
-                    InfoLine('Console', propControlStatus),
-                    const InfoLine('Wi-Fi', 'JOIN PROP NETWORK FIRST'),
-                    TextField(
-                      controller: propIpController,
-                      decoration: const InputDecoration(
-                        labelText: 'Prop IP / URL',
-                        hintText: '192.168.4.1',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _openPropControlPage,
-                            icon: const Icon(Icons.wifi_find),
-                            label: const Text('OPEN PROP PAGE'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: showPropControlPage ? _closePropControlPage : null,
-                            icon: const Icon(Icons.link_off),
-                            label: const Text('CLOSE PAGE'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: Colors.white.withOpacity(0.03),
-                        border: Border.all(color: Colors.white.withOpacity(0.08)),
-                      ),
-                      child: const Text(
-                        'This does not switch Wi-Fi automatically. Connect the tablet to the prop Wi-Fi first, then open the prop page here.',
-                        style: TextStyle(fontSize: 11, color: Color(0xFFAFB7AD), height: 1.4),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                flex: 6,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    color: const Color(0xCC101511),
-                    border: Border.all(color: window.accent.withOpacity(0.35)),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: showPropControlPage
-                        ? PropWebView(
-                            url: _normalizedPropUrl(),
-                            onPageStarted: () {
-                              if (!mounted) return;
-                              setState(() {
-                                propControlStatus = 'CONNECTING TO PROP';
-                              });
-                            },
-                            onPageFinished: () {
-                              if (!mounted) return;
-                              setState(() {
-                                propControlStatus = 'PROP CONSOLE LINKED';
-                              });
-                            },
-                            onWebError: (message) {
-                              if (!mounted) return;
-                              setState(() {
-                                propControlStatus = message;
-                              });
-                            },
-                          )
-                        : Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
-                                  Icon(Icons.router_outlined, size: 52, color: Color(0xFF7E8B63)),
-                                  SizedBox(height: 12),
-                                  Text(
-                                    'PROP PAGE STANDBY',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                                  ),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    'Connect to the prop Wi-Fi network, then open 192.168.4.1 here to change prop settings.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 12, color: Color(0xFFAFB7AD), height: 1.5),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  Widget _buildGameModesPanel(DesktopWindowData window) {
-    final event = activeEvent;
-    final modes = _filteredGameModes();
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          HeroPanel(
-            title: 'GAME MODES',
-            subtitle: 'Imported game mode library with search',
-            accent: window.accent,
-            icon: Icons.sports_esports_outlined,
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  onChanged: (v) {
-                    setState(() {
-                      gameModeSearch = v;
-                    });
-                  },
-                  decoration: const InputDecoration(
-                    labelText: 'Search game modes',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                onPressed: _importGameModesCsv,
-                child: const Text('IMPORT GAME MODES'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          if (event == null)
-            const Expanded(child: Center(child: Text('NO ACTIVE EVENT')))
-          else if (event.gameModes.isEmpty)
-            const Expanded(child: Center(child: Text('NO GAME MODES IMPORTED')))
-          else
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
-                  color: const Color(0xCC101511),
-                  border: Border.all(color: window.accent.withOpacity(0.35)),
-                ),
-                child: ListView.builder(
-                  itemCount: modes.length,
-                  itemBuilder: (context, index) {
-                    final mode = modes[index];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: Colors.white.withOpacity(0.03),
-                        border: Border.all(color: Colors.white.withOpacity(0.06)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            mode.title,
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
-                          ),
-                          if (mode.description.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              mode.description,
-                              style: const TextStyle(fontSize: 11, color: Color(0xFFAFB7AD)),
-                            ),
-                          ],
-                          const SizedBox(height: 8),
-                          ...mode.data.entries.map(
-                            (entry) => Padding(
-                              padding: const EdgeInsets.only(bottom: 3),
-                              child: Text('${entry.key}: ${entry.value}', style: const TextStyle(fontSize: 11)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
   }
 
   Widget _buildOpenTabsBar(List<DesktopWindowData> openTabs) {
@@ -2872,118 +1258,6 @@ class _AOJDesktopState extends State<AOJDesktop> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _editField(
-    String label,
-    String value,
-    Future<void> Function(String) onChanged, {
-    int maxLines = 1,
-  }) {
-    return _PersistentEditField(
-      label: label,
-      value: value,
-      maxLines: maxLines,
-      onChanged: onChanged,
-    );
-  }
-  
-  Widget _dropdownField(
-    String label,
-    List<String> items,
-    String value,
-    Future<void> Function(String) onChanged,
-  ) {
-    final safeValue = items.contains(value) ? value : items.first;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: DropdownButtonFormField<String>(
-        value: safeValue,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          isDense: true,
-        ),
-        items: items
-            .map(
-              (e) => DropdownMenuItem<String>(
-                value: e,
-                child: Text(e),
-              ),
-            )
-            .toList(),
-        onChanged: (v) {
-          if (v != null) {
-            onChanged(v);
-          }
-        },
-      ),
-    );
-  }
-}
-
-class _PersistentEditField extends StatefulWidget {
-  final String label;
-  final String value;
-  final Future<void> Function(String) onChanged;
-  final int maxLines;
-
-  const _PersistentEditField({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    this.maxLines = 1,
-  });
-
-  @override
-  State<_PersistentEditField> createState() => _PersistentEditFieldState();
-}
-
-class _PersistentEditFieldState extends State<_PersistentEditField> {
-  late final TextEditingController _controller;
-  late final FocusNode _focus;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.value);
-    _focus = FocusNode();
-  }
-
-  @override
-  void didUpdateWidget(covariant _PersistentEditField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!_focus.hasFocus && oldWidget.value != widget.value) {
-      _controller.text = widget.value;
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: TextFormField(
-        controller: _controller,
-        focusNode: _focus,
-        maxLines: widget.maxLines,
-        decoration: InputDecoration(
-          labelText: widget.label,
-          border: const OutlineInputBorder(),
-          isDense: true,
-        ),
-        onChanged: (v) {
-          widget.onChanged(v);
-        },
       ),
     );
   }
