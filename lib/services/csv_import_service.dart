@@ -1,268 +1,285 @@
-
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:csv/csv.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../models/aoj_models.dart';
-import '../utils/booking_utils.dart';
-import '../utils/csv_parser.dart';
 
 class CsvImportService {
-  static Future<bool> importBookingsCsv(EventRecord event) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return false;
-    final bytes = result.files.single.bytes;
-    if (bytes == null) return false;
+  static Future<bool> importMembersCsv(EventRecord event) async {
+    final csvText = await _pickCsvText();
+    if (csvText == null || csvText.trim().isEmpty) return false;
 
-    final rows = CsvParser.parse(utf8.decode(bytes));
+    final rows = const CsvToListConverter(
+      shouldParseNumbers: false,
+      eol: '\n',
+    ).convert(csvText);
+
     if (rows.isEmpty) return false;
 
-    final headerIndex = CsvParser.findHeaderIndex(rows, const ['Name', 'Event']);
-    final headers = rows[headerIndex];
-    final imported = <BookingRecord>[];
+    final header = rows.first.map((e) => _cleanCell(e)).toList();
+    final dataRows = rows.skip(1);
 
-    for (final row in rows.skip(headerIndex + 1)) {
-      if (row.every((e) => e.trim().isEmpty)) continue;
-      final map = CsvParser.rowToMap(headers, row);
+    final firstNameIndex = _findColumnIndex(header, [
+      'First Name',
+      'FirstName',
+      'Given Name',
+      'GivenName',
+    ]);
+    final lastNameIndex = _findColumnIndex(header, [
+      'Last Name',
+      'LastName',
+      'Surname',
+      'Family Name',
+      'FamilyName',
+    ]);
+    final dobIndex = _findColumnIndex(header, [
+      'Date of Birth',
+      'DOB',
+      'Birth Date',
+      'Birthday',
+    ]);
+    final genderIndex = _findColumnIndex(header, [
+      'Gender',
+      'Sex',
+    ]);
+    final telephoneIndex = _findColumnIndex(header, [
+      'Telephone No',
+      'Telephone',
+      'Phone',
+      'Phone Number',
+      'Mobile',
+      'Tel',
+    ]);
+    final emailIndex = _findColumnIndex(header, [
+      'Email',
+      'Email Address',
+      'E-mail',
+      'Mail',
+    ]);
+    final membershipLevelIndex = _findColumnIndex(header, [
+      'Membership Level',
+      'Membership',
+      'Level',
+      'Member Type',
+      'Type',
+    ]);
 
-      final name = CsvParser.firstNonEmpty([map['Name']]);
-      final firstName = CsvParser.firstNonEmpty([map['First Name'], CsvParser.splitFirstName(name)]);
-      final lastName = CsvParser.firstNonEmpty([map['Last Name'], CsvParser.splitLastName(name)]);
-      final rawImportedPaid = CsvParser.firstNonEmpty([map['Total Paid']]);
-      final importedMethod = CsvParser.firstNonEmpty([
-        map['AOJ Payment Method'],
-        map['Payment Method'],
-        'Cash',
-      ]);
-      final shouldImportPayment =
-          CsvParser.isImportedCardPayment(importedMethod) && _parseMoney(rawImportedPaid) > 0;
-      final importedPaid = shouldImportPayment ? rawImportedPaid : '';
+    if (firstNameIndex == -1 &&
+        lastNameIndex == -1 &&
+        telephoneIndex == -1 &&
+        emailIndex == -1) {
+      return false;
+    }
 
-      final payments = <PaymentRecord>[];
-      if (shouldImportPayment) {
-        payments.add(
-          PaymentRecord(
-            id: '${DateTime.now().microsecondsSinceEpoch}${imported.length}',
-            amount: importedPaid,
-            method: importedMethod,
-            note: 'Imported payment',
-            date: CsvParser.firstNonEmpty([map['Booking Date'], map['Date'], '']),
-          ),
-        );
-      }
+    final List<MemberRecord> importedMembers = [];
+    final Set<String> seenKeys = {};
 
-      imported.add(
-        BookingRecord(
-          id: DateTime.now().microsecondsSinceEpoch.toString() + imported.length.toString(),
-          bookingId: CsvParser.firstNonEmpty([map['Booking ID'], map['ID']]),
-          bookingDate: CsvParser.firstNonEmpty([map['Booking Date'], map['Date'], map['Created']]),
+    for (final row in dataRows) {
+      if (row.isEmpty) continue;
+
+      final firstName = _cellAt(row, firstNameIndex);
+      final lastName = _cellAt(row, lastNameIndex);
+      final dateOfBirth = _cellAt(row, dobIndex);
+      final gender = _normalizeGender(_cellAt(row, genderIndex));
+      final telephone = _cellAt(row, telephoneIndex);
+      final email = _cellAt(row, emailIndex);
+      final membershipLevel = _normalizeMembershipLevel(
+        _cellAt(row, membershipLevelIndex),
+      );
+
+      final looksEmpty = [
+        firstName,
+        lastName,
+        dateOfBirth,
+        gender,
+        telephone,
+        email,
+      ].every((v) => v.trim().isEmpty);
+
+      if (looksEmpty) continue;
+
+      final dedupeKey = [
+        firstName.trim().toLowerCase(),
+        lastName.trim().toLowerCase(),
+        telephone.replaceAll(' ', '').trim().toLowerCase(),
+        email.trim().toLowerCase(),
+      ].join('|');
+
+      if (seenKeys.contains(dedupeKey)) continue;
+      seenKeys.add(dedupeKey);
+
+      importedMembers.add(
+        MemberRecord(
+          id: _makeId('member', importedMembers.length),
           firstName: firstName,
           lastName: lastName,
-          email: CsvParser.firstNonEmpty([map['E-mail'], map['Email']]),
-          phone: CsvParser.cleanImportedPhone(
-            CsvParser.firstNonEmpty([map['Phone'], map['Phone Number'], map['Telephone']]),
-          ),
-          event: CsvParser.firstNonEmpty([map['Event'], event.name]),
-          total: CsvParser.firstNonEmpty([map['Total']]),
-          totalPaid: importedPaid,
-          transactionId: CsvParser.firstNonEmpty([map['Transaction ID']]),
-          paymentMethod: CsvParser.firstNonEmpty([
-            map['AOJ Payment Method'],
-            map['Payment Method'],
-            'Cash',
-          ]),
-          paymentStatus: CsvParser.firstNonEmpty([
-            map['AOJ Manual Paid'],
-            map['Manual Payment Status'],
-            'Unpaid',
-          ]),
-          checkInStatus: CsvParser.firstNonEmpty([
-            map['AOJ Check In'],
-            map['Checked In'],
-            'Not Checked In',
-          ]),
-          notes: CsvParser.firstNonEmpty([
-            map['AOJ Notes'],
-            map['Internal Notes'],
-            map['Booking Comment'],
-          ]),
-          needsPickup: BookingUtils.looksTrue(CsvParser.firstNonEmpty([
-            map['Do you need pickup from the nearest station?'],
-            map['Pickup'],
-          ])),
-          needsTraining: BookingUtils.looksTrue(CsvParser.firstNonEmpty([
-            map['Do you need beginners training?'],
-            map['Training'],
-          ])),
-          guestNames: CsvParser.firstNonEmpty([
-            map['Guest Name(s) & Gender'],
-            map['Guest Names'],
-            map['Guests'],
-          ]),
-          languagePreference: CsvParser.firstNonEmpty([
-            map['Language Preference'],
-            map['Language'],
-          ]),
-          ticketIds: [],
-          sales: [],
-          payments: payments,
+          dateOfBirth: dateOfBirth,
+          gender: gender,
+          telephone: telephone,
+          email: email,
+          membershipLevel: membershipLevel,
         ),
       );
     }
 
-    event.bookings = imported;
-    BookingUtils.linkTicketsToBookings(event);
-    BookingUtils.recalculateAllTotals(event);
-    return true;
-  }
+    event.members
+      ..clear()
+      ..addAll(importedMembers);
 
-  static Future<bool> importTicketsCsv(EventRecord event) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return false;
-    final bytes = result.files.single.bytes;
-    if (bytes == null) return false;
-
-    final rows = CsvParser.parse(utf8.decode(bytes));
-    if (rows.isEmpty) return false;
-
-    final headerIndex = CsvParser.findHeaderIndex(rows, const ['Name']);
-    final headers = rows[headerIndex];
-    final imported = <TicketRecord>[];
-
-    for (final row in rows.skip(headerIndex + 1)) {
-      if (row.every((e) => e.trim().isEmpty)) continue;
-      final map = CsvParser.rowToMap(headers, row);
-
-      imported.add(
-        TicketRecord(
-          id: DateTime.now().microsecondsSinceEpoch.toString() + imported.length.toString(),
-          bookingId: CsvParser.firstNonEmpty([map['Booking ID'], map['ID']]),
-          bookingName: CsvParser.firstNonEmpty([map['Name']]),
-          ticketName: CsvParser.firstNonEmpty([map['Ticket Name'], map['Ticket'], map['Item Name']]),
-          price: CsvParser.firstNonEmpty(
-            [map['Ticket Total'], map['Ticket Price'], map['Price'], map['Amount']],
-          ),
-          spaces: CsvParser.firstNonEmpty([map['Ticket Spaces'], map['Spaces'], '1']),
-          status: CsvParser.firstNonEmpty([map['Status'], 'Active']),
-        ),
-      );
-    }
-
-    event.tickets = imported;
-    BookingUtils.linkTicketsToBookings(event);
-    BookingUtils.recalculateAllTotals(event);
-    return true;
-  }
-
-  static Future<bool> importMembersCsv(EventRecord event) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return false;
-    final bytes = result.files.single.bytes;
-    if (bytes == null) return false;
-
-    final rows = CsvParser.parse(utf8.decode(bytes));
-    if (rows.isEmpty) return false;
-    final headers = rows.first;
-    final imported = <MemberRecord>[];
-
-    for (final row in rows.skip(1)) {
-      if (row.every((e) => e.trim().isEmpty)) continue;
-      final map = CsvParser.rowToMap(headers, row);
-      final name = CsvParser.firstNonEmpty([map['Name']]);
-
-      imported.add(
-        MemberRecord(
-          id: DateTime.now().microsecondsSinceEpoch.toString() + imported.length.toString(),
-          firstName: CsvParser.firstNonEmpty([map['First Name'], CsvParser.splitFirstName(name)]),
-          lastName: CsvParser.firstNonEmpty([map['Last Name'], CsvParser.splitLastName(name)]),
-          dateOfBirth: CsvParser.firstNonEmpty([map['Date of Birth'], map['DOB']]),
-          gender: CsvParser.firstNonEmpty([map['Gender']]),
-          telephone: CsvParser.firstNonEmpty([map['Telephone'], map['Phone']]),
-          email: CsvParser.firstNonEmpty([map['Email'], map['E-mail']]),
-          membershipLevel: CsvParser.firstNonEmpty([map['Membership Level'], 'Regular']),
-        ),
-      );
-    }
-
-    event.members = imported;
     return true;
   }
 
   static Future<bool> importScheduleCsv(EventRecord event) async {
+    final csvText = await _pickCsvText();
+    if (csvText == null || csvText.trim().isEmpty) return false;
+
+    final rows = const CsvToListConverter(
+      shouldParseNumbers: false,
+      eol: '\n',
+    ).convert(csvText);
+
+    if (rows.isEmpty) return false;
+
+    final header = rows.first.map((e) => _cleanCell(e)).toList();
+    final dataRows = rows.skip(1);
+
+    final timeIndex = _findColumnIndex(header, [
+      'Time',
+      'Start Time',
+      'Start',
+    ]);
+    final activityIndex = _findColumnIndex(header, [
+      'Activity',
+      'Task',
+      'Event',
+      'Title',
+      'Name',
+    ]);
+    final locationIndex = _findColumnIndex(header, [
+      'Location',
+      'Place',
+      'Area',
+      'Venue',
+    ]);
+    final notesIndex = _findColumnIndex(header, [
+      'Notes',
+      'Note',
+      'Remarks',
+      'Comment',
+      'Comments',
+    ]);
+
+    if (timeIndex == -1 && activityIndex == -1) {
+      return false;
+    }
+
+    final List<ScheduleRecord> importedSchedule = [];
+
+    for (final row in dataRows) {
+      if (row.isEmpty) continue;
+
+      final time = _cellAt(row, timeIndex);
+      final activity = _cellAt(row, activityIndex);
+      final location = _cellAt(row, locationIndex);
+      final notes = _cellAt(row, notesIndex);
+
+      final looksEmpty = [
+        time,
+        activity,
+        location,
+        notes,
+      ].every((v) => v.trim().isEmpty);
+
+      if (looksEmpty) continue;
+
+      importedSchedule.add(
+        ScheduleRecord(
+          id: _makeId('schedule', importedSchedule.length),
+          time: time,
+          activity: activity,
+          location: location,
+          notes: notes,
+        ),
+      );
+    }
+
+    event.schedule
+      ..clear()
+      ..addAll(importedSchedule);
+
+    return true;
+  }
+
+  static Future<String?> _pickCsvText() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
       withData: true,
     );
-    if (result == null || result.files.isEmpty) return false;
-    final bytes = result.files.single.bytes;
-    if (bytes == null) return false;
 
-    final rows = CsvParser.parse(utf8.decode(bytes));
-    if (rows.isEmpty) return false;
-    final headers = rows.first;
-    final imported = <ScheduleRecord>[];
+    if (result == null || result.files.isEmpty) return null;
 
-    for (final row in rows.skip(1)) {
-      if (row.every((e) => e.trim().isEmpty)) continue;
-      imported.add(ScheduleRecord(data: CsvParser.rowToMap(headers, row)));
+    final bytes = result.files.first.bytes;
+    if (bytes == null || bytes.isEmpty) return null;
+
+    return _decodeCsvBytes(bytes);
+  }
+
+  static String _decodeCsvBytes(Uint8List bytes) {
+    String text = utf8.decode(bytes, allowMalformed: true);
+
+    if (text.isNotEmpty && text.codeUnitAt(0) == 0xFEFF) {
+      text = text.substring(1);
     }
 
-    event.schedule = imported;
-    return true;
+    return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
   }
 
-  static Future<bool> importGameModesCsv(EventRecord event) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['csv'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return false;
-    final bytes = result.files.single.bytes;
-    if (bytes == null) return false;
+  static int _findColumnIndex(List<String> header, List<String> candidates) {
+    for (final candidate in candidates) {
+      final normalizedCandidate = candidate.trim().toLowerCase();
 
-    final rows = CsvParser.parse(utf8.decode(bytes));
-    if (rows.isEmpty) return false;
-    final headers = rows.first;
-    final imported = <GameModeRecord>[];
+      final index = header.indexWhere(
+        (h) => h.trim().toLowerCase() == normalizedCandidate,
+      );
 
-    for (final row in rows.skip(1)) {
-      if (row.every((e) => e.trim().isEmpty)) continue;
-      imported.add(GameModeRecord(data: CsvParser.rowToMap(headers, row)));
+      if (index != -1) return index;
     }
 
-    event.gameModes = imported;
-    return true;
+    return -1;
   }
 
-  static Future<bool> importFieldMap(EventRecord event) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return false;
-    final bytes = result.files.single.bytes;
-    if (bytes == null) return false;
-
-    event.fieldMapBase64 = base64Encode(bytes);
-    return true;
+  static String _cellAt(List<dynamic> row, int index) {
+    if (index < 0 || index >= row.length) return '';
+    return _cleanCell(row[index]);
   }
 
-  static double _parseMoney(String value) {
-    final cleaned = value.replaceAll(RegExp(r'[^0-9.\-]'), '');
-    return double.tryParse(cleaned) ?? 0;
+  static String _cleanCell(dynamic value) {
+    if (value == null) return '';
+    return value.toString().replaceAll('\ufeff', '').trim();
+  }
+
+  static String _normalizeMembershipLevel(String raw) {
+    final value = raw.trim().toLowerCase();
+
+    if (value.contains('admin')) return 'Admin';
+    if (value.contains('support')) return 'Support';
+    if (value.contains('elite')) return 'Elite';
+    return 'Regular';
+  }
+
+  static String _normalizeGender(String raw) {
+    final value = raw.trim().toLowerCase();
+
+    if (value == 'm' || value == 'male') return 'Male';
+    if (value == 'f' || value == 'female') return 'Female';
+
+    return raw.trim();
+  }
+
+  static String _makeId(String prefix, int index) {
+    return '${prefix}_${DateTime.now().microsecondsSinceEpoch}_$index';
   }
 }
