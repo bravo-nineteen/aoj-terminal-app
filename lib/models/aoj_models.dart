@@ -77,6 +77,7 @@ class EventRecord {
   String date;
   String time;
   String notes;
+  String ticketCostPerPerson;
   String? fieldMapBase64;
   List<BookingRecord> bookings;
   List<TicketRecord> tickets;
@@ -91,6 +92,7 @@ class EventRecord {
     required this.date,
     required this.time,
     required this.notes,
+    required this.ticketCostPerPerson,
     required this.fieldMapBase64,
     required this.bookings,
     required this.tickets,
@@ -106,6 +108,7 @@ class EventRecord {
         'date': date,
         'time': time,
         'notes': notes,
+        'ticketCostPerPerson': ticketCostPerPerson,
         'fieldMapBase64': fieldMapBase64,
         'bookings': bookings.map((e) => e.toJson()).toList(),
         'tickets': tickets.map((e) => e.toJson()).toList(),
@@ -122,6 +125,7 @@ class EventRecord {
       date: json['date']?.toString() ?? '',
       time: json['time']?.toString() ?? '',
       notes: json['notes']?.toString() ?? '',
+      ticketCostPerPerson: json['ticketCostPerPerson']?.toString() ?? '0',
       fieldMapBase64: json['fieldMapBase64']?.toString(),
       bookings: (json['bookings'] as List<dynamic>? ?? [])
           .map((e) => BookingRecord.fromJson(Map<String, dynamic>.from(e)))
@@ -325,7 +329,6 @@ class SaleRecord {
   }
 }
 
-
 class PaymentRecord {
   String id;
   String amount;
@@ -364,21 +367,25 @@ class MemberRecord {
   String id;
   String firstName;
   String lastName;
+  String username;
   String dateOfBirth;
   String gender;
   String telephone;
   String email;
   String membershipLevel;
+  int rating;
 
   MemberRecord({
     required this.id,
     required this.firstName,
     required this.lastName,
+    required this.username,
     required this.dateOfBirth,
     required this.gender,
     required this.telephone,
     required this.email,
     required this.membershipLevel,
+    this.rating = 0,
   });
 
   String get fullName => '${firstName.trim()} ${lastName.trim()}'.trim();
@@ -387,11 +394,13 @@ class MemberRecord {
         'id': id,
         'firstName': firstName,
         'lastName': lastName,
+        'username': username,
         'dateOfBirth': dateOfBirth,
         'gender': gender,
         'telephone': telephone,
         'email': email,
         'membershipLevel': membershipLevel,
+        'rating': rating,
       };
 
   factory MemberRecord.fromJson(Map<String, dynamic> json) {
@@ -399,27 +408,66 @@ class MemberRecord {
       id: json['id']?.toString() ?? '',
       firstName: json['firstName']?.toString() ?? '',
       lastName: json['lastName']?.toString() ?? '',
+      username: json['username']?.toString() ?? '',
       dateOfBirth: json['dateOfBirth']?.toString() ?? '',
       gender: json['gender']?.toString() ?? '',
       telephone: json['telephone']?.toString() ?? '',
       email: json['email']?.toString() ?? '',
       membershipLevel: json['membershipLevel']?.toString() ?? 'Regular',
+      rating: _parseInt(json['rating'], fallback: 0),
     );
   }
 }
 
 class ScheduleRecord {
-  Map<String, String> data;
+  String id;
+  String time;
+  String activity;
+  String location;
+  String notes;
 
   ScheduleRecord({
-    required this.data,
+    required this.id,
+    required this.time,
+    required this.activity,
+    required this.location,
+    required this.notes,
   });
 
-  Map<String, dynamic> toJson() => {'data': data};
+  Map<String, String> get data => {
+        'ID': id,
+        'Time': time,
+        'Activity': activity,
+        'Location': location,
+        'Notes': notes,
+      };
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'time': time,
+        'activity': activity,
+        'location': location,
+        'notes': notes,
+      };
 
   factory ScheduleRecord.fromJson(Map<String, dynamic> json) {
+    if (json.containsKey('data')) {
+      final data = Map<String, String>.from(json['data'] as Map? ?? {});
+      return ScheduleRecord(
+        id: data['ID']?.toString() ?? '',
+        time: data['Time']?.toString() ?? '',
+        activity: data['Activity']?.toString() ?? '',
+        location: data['Location']?.toString() ?? '',
+        notes: data['Notes']?.toString() ?? '',
+      );
+    }
+
     return ScheduleRecord(
-      data: Map<String, String>.from(json['data'] as Map? ?? {}),
+      id: json['id']?.toString() ?? '',
+      time: json['time']?.toString() ?? '',
+      activity: json['activity']?.toString() ?? '',
+      location: json['location']?.toString() ?? '',
+      notes: json['notes']?.toString() ?? '',
     );
   }
 }
@@ -482,6 +530,7 @@ class BookingGroup {
   String get phone => primary.phone.trim();
   bool get needsPickup => rows.any((r) => r.needsPickup);
   bool get needsTraining => rows.any((r) => r.needsTraining);
+
   String get guestNames {
     final values = <String>{};
     for (final row in rows) {
@@ -495,9 +544,17 @@ class BookingGroup {
 
   String get languagePreference {
     for (final row in rows) {
-      if (row.languagePreference.trim().isNotEmpty) return row.languagePreference.trim();
+      if (row.languagePreference.trim().isNotEmpty) {
+        return row.languagePreference.trim();
+      }
     }
     return '';
   }
 }
 
+int _parseInt(dynamic value, {int fallback = 0}) {
+  if (value == null) return fallback;
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value.toString()) ?? fallback;
+}
