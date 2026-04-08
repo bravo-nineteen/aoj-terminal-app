@@ -12,15 +12,21 @@ class CsvImportService {
     final csvText = await _pickCsvText();
     if (csvText == null || csvText.trim().isEmpty) return false;
 
-    final rows = const CsvToListConverter(
-      shouldParseNumbers: false,
-      eol: '\n',
-    ).convert(csvText);
-
+    final rows = _parseCsvRows(csvText);
     if (rows.isEmpty) return false;
 
-    final header = rows.first.map((e) => _cleanCell(e)).toList();
-    final dataRows = rows.skip(1);
+    final headerRowIndex = _findHeaderRowIndex(rows, const [
+      'Name',
+      'Event',
+      'Status',
+      'Total',
+      'Booking Date',
+      'Booking ID',
+    ]);
+    if (headerRowIndex == -1) return false;
+
+    final header = rows[headerRowIndex].map((e) => _cleanCell(e)).toList();
+    final dataRows = rows.skip(headerRowIndex + 1);
 
     final bookingIdIndex = _findColumnIndex(header, [
       'Booking ID',
@@ -49,6 +55,7 @@ class CsvImportService {
       'Email',
       'Email Address',
       'E-mail',
+      'E-mail Address',
     ]);
     final phoneIndex = _findColumnIndex(header, [
       'Phone',
@@ -67,6 +74,7 @@ class CsvImportService {
       'Total Paid',
       'Paid',
       'Amount Paid',
+      'AOJ Manual Paid',
     ]);
     final transactionIdIndex = _findColumnIndex(header, [
       'Transaction ID',
@@ -74,44 +82,57 @@ class CsvImportService {
       'Payment ID',
     ]);
     final paymentMethodIndex = _findColumnIndex(header, [
+      'AOJ Payment Method',
       'Payment Method',
       'Method',
+      'Gateway Used',
     ]);
     final paymentStatusIndex = _findColumnIndex(header, [
+      'AOJ Manual Paid',
       'Payment Status',
       'Status',
     ]);
     final checkInStatusIndex = _findColumnIndex(header, [
+      'AOJ Check In',
       'Check In Status',
       'Check-In Status',
       'Check In',
     ]);
     final notesIndex = _findColumnIndex(header, [
+      'AOJ Notes',
+      'Booking Comment',
       'Notes',
       'Note',
       'Remarks',
       'Comment',
+      'Comments',
     ]);
     final pickupIndex = _findColumnIndex(header, [
+      'Do you need pickup from the nearest station?',
       'Pickup',
       'Need Pickup',
       'Needs Pickup',
     ]);
     final trainingIndex = _findColumnIndex(header, [
+      'Do you need beginners training?',
       'Beginners Training',
       'Training',
       'Need Training',
       'Needs Training',
     ]);
     final guestNamesIndex = _findColumnIndex(header, [
+      'Guest Name(s) & Gender',
       'Guest Names',
       'Guests',
       'Guest Name',
     ]);
     final languageIndex = _findColumnIndex(header, [
-      'Language',
       'Language Preference',
+      'Language',
       'Language Pref',
+    ]);
+    final eventNameIndex = _findColumnIndex(header, [
+      'Event',
     ]);
 
     final List<BookingRecord> imported = [];
@@ -123,36 +144,40 @@ class CsvImportService {
       final lastName = _cellAt(row, lastNameIndex);
       final email = _cellAt(row, emailIndex);
       final phone = _cellAt(row, phoneIndex);
+      final bookingId = _cellAt(row, bookingIdIndex);
 
       final looksEmpty = [
         firstName,
         lastName,
         email,
         phone,
+        bookingId,
       ].every((v) => v.trim().isEmpty);
 
       if (looksEmpty) continue;
 
+      final rawPaymentStatus = _cellAt(row, paymentStatusIndex);
+      final rawCheckInStatus = _cellAt(row, checkInStatusIndex);
+
       imported.add(
         BookingRecord(
           id: _makeId('booking_row', imported.length),
-          bookingId: _cellAt(row, bookingIdIndex),
+          bookingId: bookingId,
           bookingDate: _cellAt(row, bookingDateIndex),
           firstName: firstName,
           lastName: lastName,
           email: email,
           phone: phone,
-          event: event.name,
-          total: _cellAt(row, totalIndex),
-          totalPaid: _cellAt(row, totalPaidIndex),
+          event: _cellAt(row, eventNameIndex).isEmpty
+              ? event.name
+              : _cellAt(row, eventNameIndex),
+          total: _normalizeMoney(_cellAt(row, totalIndex)),
+          totalPaid: _normalizeMoney(_cellAt(row, totalPaidIndex)),
           transactionId: _cellAt(row, transactionIdIndex),
           paymentMethod: _cellAt(row, paymentMethodIndex),
-          paymentStatus: _cellAt(row, paymentStatusIndex).isEmpty
-              ? 'Unpaid'
-              : _cellAt(row, paymentStatusIndex),
-          checkInStatus: _cellAt(row, checkInStatusIndex).isEmpty
-              ? 'Not Checked In'
-              : _cellAt(row, checkInStatusIndex),
+          paymentStatus: rawPaymentStatus.isEmpty ? 'Unpaid' : rawPaymentStatus,
+          checkInStatus:
+              rawCheckInStatus.isEmpty ? 'Not Checked In' : rawCheckInStatus,
           notes: _cellAt(row, notesIndex),
           needsPickup: _looksTrue(_cellAt(row, pickupIndex)),
           needsTraining: _looksTrue(_cellAt(row, trainingIndex)),
@@ -179,15 +204,20 @@ class CsvImportService {
     final csvText = await _pickCsvText();
     if (csvText == null || csvText.trim().isEmpty) return false;
 
-    final rows = const CsvToListConverter(
-      shouldParseNumbers: false,
-      eol: '\n',
-    ).convert(csvText);
-
+    final rows = _parseCsvRows(csvText);
     if (rows.isEmpty) return false;
 
-    final header = rows.first.map((e) => _cleanCell(e)).toList();
-    final dataRows = rows.skip(1);
+    final headerRowIndex = _findHeaderRowIndex(rows, const [
+      'Name',
+      'Ticket Name',
+      'Status',
+      'Ticket Price',
+      'Ticket Spaces',
+    ]);
+    if (headerRowIndex == -1) return false;
+
+    final header = rows[headerRowIndex].map((e) => _cleanCell(e)).toList();
+    final dataRows = rows.skip(headerRowIndex + 1);
 
     final bookingIdIndex = _findColumnIndex(header, [
       'Booking ID',
@@ -195,8 +225,8 @@ class CsvImportService {
       'Order ID',
     ]);
     final bookingNameIndex = _findColumnIndex(header, [
-      'Booking Name',
       'Name',
+      'Booking Name',
       'Customer Name',
       'Full Name',
     ]);
@@ -207,11 +237,13 @@ class CsvImportService {
       'Item',
     ]);
     final priceIndex = _findColumnIndex(header, [
+      'Ticket Price',
       'Price',
       'Amount',
       'Cost',
     ]);
     final spacesIndex = _findColumnIndex(header, [
+      'Ticket Spaces',
       'Spaces',
       'Quantity',
       'Qty',
@@ -237,9 +269,15 @@ class CsvImportService {
           bookingId: _cellAt(row, bookingIdIndex),
           bookingName: bookingName,
           ticketName: ticketName.isEmpty ? 'Ticket' : ticketName,
-          price: _cellAt(row, priceIndex).isEmpty ? '0' : _cellAt(row, priceIndex),
-          spaces: _cellAt(row, spacesIndex).isEmpty ? '1' : _cellAt(row, spacesIndex),
-          status: _cellAt(row, statusIndex).isEmpty ? 'Active' : _cellAt(row, statusIndex),
+          price: _normalizeMoney(_cellAt(row, priceIndex)).isEmpty
+              ? '0'
+              : _normalizeMoney(_cellAt(row, priceIndex)),
+          spaces: _cellAt(row, spacesIndex).isEmpty
+              ? '1'
+              : _cellAt(row, spacesIndex),
+          status: _cellAt(row, statusIndex).isEmpty
+              ? 'Active'
+              : _cellAt(row, statusIndex),
         ),
       );
     }
@@ -258,15 +296,20 @@ class CsvImportService {
     final csvText = await _pickCsvText();
     if (csvText == null || csvText.trim().isEmpty) return false;
 
-    final rows = const CsvToListConverter(
-      shouldParseNumbers: false,
-      eol: '\n',
-    ).convert(csvText);
-
+    final rows = _parseCsvRows(csvText);
     if (rows.isEmpty) return false;
 
-    final header = rows.first.map((e) => _cleanCell(e)).toList();
-    final dataRows = rows.skip(1);
+    final headerRowIndex = _findHeaderRowIndex(rows, const [
+      'First Name',
+      'Last Name',
+      'Telephone No',
+      'Email',
+      'Membership Level',
+    ]);
+    if (headerRowIndex == -1) return false;
+
+    final header = rows[headerRowIndex].map((e) => _cleanCell(e)).toList();
+    final dataRows = rows.skip(headerRowIndex + 1);
 
     final firstNameIndex = _findColumnIndex(header, [
       'First Name',
@@ -319,8 +362,8 @@ class CsvImportService {
       'Type',
     ]);
     final ratingIndex = _findColumnIndex(header, [
-      'Rating',
       'Rank',
+      'Rating',
       'Score',
     ]);
 
@@ -347,7 +390,7 @@ class CsvImportService {
       final membershipLevel = _normalizeMembershipLevel(
         _cellAt(row, membershipLevelIndex),
       );
-      final rating = _parseInt(_cellAt(row, ratingIndex));
+      final rating = _parseRating(_cellAt(row, ratingIndex));
 
       final looksEmpty = [
         firstName,
@@ -397,15 +440,17 @@ class CsvImportService {
     final csvText = await _pickCsvText();
     if (csvText == null || csvText.trim().isEmpty) return false;
 
-    final rows = const CsvToListConverter(
-      shouldParseNumbers: false,
-      eol: '\n',
-    ).convert(csvText);
-
+    final rows = _parseCsvRows(csvText);
     if (rows.isEmpty) return false;
 
-    final header = rows.first.map((e) => _cleanCell(e)).toList();
-    final dataRows = rows.skip(1);
+    final headerRowIndex = _findHeaderRowIndex(rows, const [
+      'Time',
+      'Activity',
+    ]);
+    if (headerRowIndex == -1) return false;
+
+    final header = rows[headerRowIndex].map((e) => _cleanCell(e)).toList();
+    final dataRows = rows.skip(headerRowIndex + 1);
 
     final timeIndex = _findColumnIndex(header, [
       'Time',
@@ -478,15 +523,16 @@ class CsvImportService {
     final csvText = await _pickCsvText();
     if (csvText == null || csvText.trim().isEmpty) return false;
 
-    final rows = const CsvToListConverter(
-      shouldParseNumbers: false,
-      eol: '\n',
-    ).convert(csvText);
-
+    final rows = _parseCsvRows(csvText);
     if (rows.isEmpty) return false;
 
-    final header = rows.first.map((e) => _cleanCell(e)).toList();
-    final dataRows = rows.skip(1);
+    final headerRowIndex = rows.indexWhere(
+      (row) => row.any((cell) => _cleanCell(cell).isNotEmpty),
+    );
+    if (headerRowIndex == -1) return false;
+
+    final header = rows[headerRowIndex].map((e) => _cleanCell(e)).toList();
+    final dataRows = rows.skip(headerRowIndex + 1);
 
     final List<GameModeRecord> imported = [];
 
@@ -541,6 +587,35 @@ class CsvImportService {
     return _decodeCsvBytes(bytes);
   }
 
+  static List<List<dynamic>> _parseCsvRows(String csvText) {
+    return const CsvToListConverter(
+      shouldParseNumbers: false,
+      eol: '\n',
+    ).convert(csvText);
+  }
+
+  static int _findHeaderRowIndex(
+    List<List<dynamic>> rows,
+    List<String> requiredColumns,
+  ) {
+    for (int i = 0; i < rows.length; i++) {
+      final header = rows[i].map((e) => _cleanCell(e)).toList();
+      int matches = 0;
+
+      for (final column in requiredColumns) {
+        if (_findColumnIndex(header, [column]) != -1) {
+          matches++;
+        }
+      }
+
+      if (matches >= 2) {
+        return i;
+      }
+    }
+
+    return -1;
+  }
+
   static String _decodeCsvBytes(Uint8List bytes) {
     String text = utf8.decode(bytes, allowMalformed: true);
 
@@ -553,16 +628,31 @@ class CsvImportService {
 
   static int _findColumnIndex(List<String> header, List<String> candidates) {
     for (final candidate in candidates) {
-      final normalizedCandidate = candidate.trim().toLowerCase();
+      final normalizedCandidate = _normalizeHeader(candidate);
 
       final index = header.indexWhere(
-        (h) => h.trim().toLowerCase() == normalizedCandidate,
+        (h) => _normalizeHeader(h) == normalizedCandidate,
       );
 
       if (index != -1) return index;
     }
 
     return -1;
+  }
+
+  static String _normalizeHeader(String value) {
+    return value
+        .replaceAll('\ufeff', '')
+        .replaceAll(':', '')
+        .replaceAll('?', '')
+        .replaceAll('(', '')
+        .replaceAll(')', '')
+        .replaceAll('&', 'and')
+        .replaceAll('-', ' ')
+        .replaceAll('_', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .toLowerCase();
   }
 
   static String _cellAt(List<dynamic> row, int index) {
@@ -575,12 +665,21 @@ class CsvImportService {
     return value.toString().replaceAll('\ufeff', '').trim();
   }
 
+  static String _normalizeMoney(String raw) {
+    return raw
+        .replaceAll('\u00a5', '')
+        .replaceAll('¥', '')
+        .replaceAll(',', '')
+        .trim();
+  }
+
   static String _normalizeMembershipLevel(String raw) {
     final value = raw.trim().toLowerCase();
 
     if (value.contains('admin')) return 'Admin';
     if (value.contains('support')) return 'Support';
     if (value.contains('elite')) return 'Elite';
+    if (value.contains('inactive')) return 'Inactive';
     return 'Regular';
   }
 
@@ -599,11 +698,24 @@ class CsvImportService {
     return value == 'yes' ||
         value == 'y' ||
         value == 'true' ||
-        value == '1';
+        value == '1' ||
+        value == 'paid' ||
+        value == 'checked in';
   }
 
   static int _parseInt(String raw) {
     return int.tryParse(raw.trim()) ?? 0;
+  }
+
+  static int _parseRating(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return 0;
+
+    if (trimmed.contains('★')) {
+      return '★'.allMatches(trimmed).length;
+    }
+
+    return _parseInt(trimmed);
   }
 
   static String _makeId(String prefix, int index) {
