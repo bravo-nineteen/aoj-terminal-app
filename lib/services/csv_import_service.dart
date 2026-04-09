@@ -2,18 +2,296 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:csv/csv.dart';
+import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../models/aoj_models.dart';
 import '../utils/booking_utils.dart';
 
+class WorkbookImportResult {
+  final bool success;
+  final int bookingsImported;
+  final int ticketsImported;
+  final int membersImported;
+  final int scheduleImported;
+  final int gameModesImported;
+  final List<String> missingSheets;
+  final List<String> importedSheets;
+  final List<String> notes;
+
+  const WorkbookImportResult({
+    required this.success,
+    required this.bookingsImported,
+    required this.ticketsImported,
+    required this.membersImported,
+    required this.scheduleImported,
+    required this.gameModesImported,
+    required this.missingSheets,
+    required this.importedSheets,
+    required this.notes,
+  });
+
+  int get totalImported =>
+      bookingsImported +
+      ticketsImported +
+      membersImported +
+      scheduleImported +
+      gameModesImported;
+}
+
 class CsvImportService {
+  static Future<WorkbookImportResult> importWorkbookXlsx(
+    EventRecord event,
+  ) async {
+    final bytes = await _pickFileBytes(['xlsx']);
+    if (bytes == null || bytes.isEmpty) {
+      return const WorkbookImportResult(
+        success: false,
+        bookingsImported: 0,
+        ticketsImported: 0,
+        membersImported: 0,
+        scheduleImported: 0,
+        gameModesImported: 0,
+        missingSheets: [],
+        importedSheets: [],
+        notes: ['No workbook selected or workbook was empty.'],
+      );
+    }
+
+    final excel = Excel.decodeBytes(bytes);
+
+    final missingSheets = <String>[];
+    final importedSheets = <String>[];
+    final notes = <String>[];
+
+    int bookingsImported = 0;
+    int ticketsImported = 0;
+    int membersImported = 0;
+    int scheduleImported = 0;
+    int gameModesImported = 0;
+
+    final bookingsRows = _sheetRowsByCandidateNames(excel, const [
+      'Bookings',
+      'Booking',
+      'bookings',
+      'booking',
+    ]);
+    if (bookingsRows != null && bookingsRows.isNotEmpty) {
+      final imported = _parseBookingsRows(bookingsRows, event.name);
+      event.bookings
+        ..clear()
+        ..addAll(imported);
+      bookingsImported = imported.length;
+      importedSheets.add('Bookings');
+      notes.add('Bookings sheet imported.');
+    } else {
+      missingSheets.add('Bookings');
+    }
+
+    final ticketsRows = _sheetRowsByCandidateNames(excel, const [
+      'Tickets',
+      'Ticket',
+      'tickets',
+      'ticket',
+    ]);
+    if (ticketsRows != null && ticketsRows.isNotEmpty) {
+      final imported = _parseTicketsRows(ticketsRows);
+      event.tickets
+        ..clear()
+        ..addAll(imported);
+      ticketsImported = imported.length;
+      importedSheets.add('Tickets');
+      notes.add('Tickets sheet imported.');
+    } else {
+      missingSheets.add('Tickets');
+    }
+
+    final membersRows = _sheetRowsByCandidateNames(excel, const [
+      'Members',
+      'Member',
+      'members',
+      'member',
+    ]);
+    if (membersRows != null && membersRows.isNotEmpty) {
+      final imported = _parseMembersRows(membersRows);
+      event.members
+        ..clear()
+        ..addAll(imported);
+      membersImported = imported.length;
+      importedSheets.add('Members');
+      notes.add('Members sheet imported.');
+    } else {
+      missingSheets.add('Members');
+    }
+
+    final scheduleRows = _sheetRowsByCandidateNames(excel, const [
+      'Schedule',
+      'Run Sheet',
+      'Timeline',
+      'schedule',
+      'runsheet',
+      'timeline',
+    ]);
+    if (scheduleRows != null && scheduleRows.isNotEmpty) {
+      final imported = _parseScheduleRows(scheduleRows);
+      event.schedule
+        ..clear()
+        ..addAll(imported);
+      scheduleImported = imported.length;
+      importedSheets.add('Schedule');
+      notes.add('Schedule sheet imported.');
+    } else {
+      missingSheets.add('Schedule');
+    }
+
+    final gameModesRows = _sheetRowsByCandidateNames(excel, const [
+      'GameModes',
+      'Game Modes',
+      'Modes',
+      'game modes',
+      'gamemodes',
+      'modes',
+    ]);
+    if (gameModesRows != null && gameModesRows.isNotEmpty) {
+      final imported = _parseGameModesRows(gameModesRows);
+      event.gameModes
+        ..clear()
+        ..addAll(imported);
+      gameModesImported = imported.length;
+      importedSheets.add('GameModes');
+      notes.add('GameModes sheet imported.');
+    } else {
+      missingSheets.add('GameModes');
+    }
+
+    BookingUtils.linkTicketsToBookings(event);
+    BookingUtils.recalculateAllTotals(event);
+
+    final success = importedSheets.isNotEmpty;
+
+    if (!success) {
+      notes.add('No supported sheets were found in the workbook.');
+    }
+
+    return WorkbookImportResult(
+      success: success,
+      bookingsImported: bookingsImported,
+      ticketsImported: ticketsImported,
+      membersImported: membersImported,
+      scheduleImported: scheduleImported,
+      gameModesImported: gameModesImported,
+      missingSheets: missingSheets,
+      importedSheets: importedSheets,
+      notes: notes,
+    );
+  }
+
   static Future<bool> importBookingsCsv(EventRecord event) async {
     final csvText = await _pickCsvText();
     if (csvText == null || csvText.trim().isEmpty) return false;
 
     final rows = _parseCsvRows(csvText);
     if (rows.isEmpty) return false;
+
+    final imported = _parseBookingsRows(rows, event.name);
+
+    event.bookings
+      ..clear()
+      ..addAll(imported);
+
+    BookingUtils.linkTicketsToBookings(event);
+    BookingUtils.recalculateAllTotals(event);
+
+    return imported.isNotEmpty;
+  }
+
+  static Future<bool> importTicketsCsv(EventRecord event) async {
+    final csvText = await _pickCsvText();
+    if (csvText == null || csvText.trim().isEmpty) return false;
+
+    final rows = _parseCsvRows(csvText);
+    if (rows.isEmpty) return false;
+
+    final imported = _parseTicketsRows(rows);
+
+    event.tickets
+      ..clear()
+      ..addAll(imported);
+
+    BookingUtils.linkTicketsToBookings(event);
+    BookingUtils.recalculateAllTotals(event);
+
+    return imported.isNotEmpty;
+  }
+
+  static Future<bool> importMembersCsv(EventRecord event) async {
+    final csvText = await _pickCsvText();
+    if (csvText == null || csvText.trim().isEmpty) return false;
+
+    final rows = _parseCsvRows(csvText);
+    if (rows.isEmpty) return false;
+
+    final imported = _parseMembersRows(rows);
+
+    event.members
+      ..clear()
+      ..addAll(imported);
+
+    return imported.isNotEmpty;
+  }
+
+  static Future<bool> importScheduleCsv(EventRecord event) async {
+    final csvText = await _pickCsvText();
+    if (csvText == null || csvText.trim().isEmpty) return false;
+
+    final rows = _parseCsvRows(csvText);
+    if (rows.isEmpty) return false;
+
+    final imported = _parseScheduleRows(rows);
+
+    event.schedule
+      ..clear()
+      ..addAll(imported);
+
+    return imported.isNotEmpty;
+  }
+
+  static Future<bool> importGameModesCsv(EventRecord event) async {
+    final csvText = await _pickCsvText();
+    if (csvText == null || csvText.trim().isEmpty) return false;
+
+    final rows = _parseCsvRows(csvText);
+    if (rows.isEmpty) return false;
+
+    final imported = _parseGameModesRows(rows);
+
+    event.gameModes
+      ..clear()
+      ..addAll(imported);
+
+    return imported.isNotEmpty;
+  }
+
+  static Future<bool> importFieldMap(EventRecord event) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return false;
+
+    final bytes = result.files.first.bytes;
+    if (bytes == null || bytes.isEmpty) return false;
+
+    event.fieldMapBase64 = base64Encode(bytes);
+    return true;
+  }
+
+  static List<BookingRecord> _parseBookingsRows(
+    List<List<dynamic>> rows,
+    String fallbackEventName,
+  ) {
+    if (rows.isEmpty) return [];
 
     final headerRowIndex = _findHeaderRowIndex(rows, const [
       'Name',
@@ -23,7 +301,7 @@ class CsvImportService {
       'Booking Date',
       'Booking ID',
     ]);
-    if (headerRowIndex == -1) return false;
+    if (headerRowIndex == -1) return [];
 
     final header = rows[headerRowIndex].map((e) => _cleanCell(e)).toList();
     final dataRows = rows.skip(headerRowIndex + 1);
@@ -44,6 +322,7 @@ class CsvImportService {
       'First Name',
       'FirstName',
       'Given Name',
+      'Name',
     ]);
     final lastNameIndex = _findColumnIndex(header, [
       'Last Name',
@@ -88,9 +367,9 @@ class CsvImportService {
       'Gateway Used',
     ]);
     final paymentStatusIndex = _findColumnIndex(header, [
-      'AOJ Manual Paid',
       'Payment Status',
       'Status',
+      'AOJ Manual Paid',
     ]);
     final checkInStatusIndex = _findColumnIndex(header, [
       'AOJ Check In',
@@ -156,8 +435,25 @@ class CsvImportService {
 
       if (looksEmpty) continue;
 
+      final rawTotal = _normalizeMoney(_cellAt(row, totalIndex));
+      final rawTotalPaid = _normalizeMoney(_cellAt(row, totalPaidIndex));
+      final rawPaymentMethod = _cellAt(row, paymentMethodIndex);
       final rawPaymentStatus = _cellAt(row, paymentStatusIndex);
       final rawCheckInStatus = _cellAt(row, checkInStatusIndex);
+
+      final resolvedPaymentStatus = _resolvePaymentStatus(
+        paymentMethod: rawPaymentMethod,
+        paymentStatus: rawPaymentStatus,
+        total: rawTotal,
+        totalPaid: rawTotalPaid,
+      );
+
+      final resolvedTotalPaid = _resolveTotalPaid(
+        paymentMethod: rawPaymentMethod,
+        paymentStatus: rawPaymentStatus,
+        total: rawTotal,
+        totalPaid: rawTotalPaid,
+      );
 
       imported.add(
         BookingRecord(
@@ -169,13 +465,13 @@ class CsvImportService {
           email: email,
           phone: phone,
           event: _cellAt(row, eventNameIndex).isEmpty
-              ? event.name
+              ? fallbackEventName
               : _cellAt(row, eventNameIndex),
-          total: _normalizeMoney(_cellAt(row, totalIndex)),
-          totalPaid: _normalizeMoney(_cellAt(row, totalPaidIndex)),
+          total: rawTotal,
+          totalPaid: resolvedTotalPaid,
           transactionId: _cellAt(row, transactionIdIndex),
-          paymentMethod: _cellAt(row, paymentMethodIndex),
-          paymentStatus: rawPaymentStatus.isEmpty ? 'Unpaid' : rawPaymentStatus,
+          paymentMethod: rawPaymentMethod,
+          paymentStatus: resolvedPaymentStatus,
           checkInStatus:
               rawCheckInStatus.isEmpty ? 'Not Checked In' : rawCheckInStatus,
           notes: _cellAt(row, notesIndex),
@@ -190,22 +486,11 @@ class CsvImportService {
       );
     }
 
-    event.bookings
-      ..clear()
-      ..addAll(imported);
-
-    BookingUtils.linkTicketsToBookings(event);
-    BookingUtils.recalculateAllTotals(event);
-
-    return true;
+    return imported;
   }
 
-  static Future<bool> importTicketsCsv(EventRecord event) async {
-    final csvText = await _pickCsvText();
-    if (csvText == null || csvText.trim().isEmpty) return false;
-
-    final rows = _parseCsvRows(csvText);
-    if (rows.isEmpty) return false;
+  static List<TicketRecord> _parseTicketsRows(List<List<dynamic>> rows) {
+    if (rows.isEmpty) return [];
 
     final headerRowIndex = _findHeaderRowIndex(rows, const [
       'Name',
@@ -214,7 +499,7 @@ class CsvImportService {
       'Ticket Price',
       'Ticket Spaces',
     ]);
-    if (headerRowIndex == -1) return false;
+    if (headerRowIndex == -1) return [];
 
     final header = rows[headerRowIndex].map((e) => _cleanCell(e)).toList();
     final dataRows = rows.skip(headerRowIndex + 1);
@@ -263,15 +548,15 @@ class CsvImportService {
 
       if (ticketName.isEmpty && bookingName.isEmpty) continue;
 
+      final cleanedPrice = _normalizeMoney(_cellAt(row, priceIndex));
+
       imported.add(
         TicketRecord(
           id: _makeId('ticket', imported.length),
           bookingId: _cellAt(row, bookingIdIndex),
           bookingName: bookingName,
           ticketName: ticketName.isEmpty ? 'Ticket' : ticketName,
-          price: _normalizeMoney(_cellAt(row, priceIndex)).isEmpty
-              ? '0'
-              : _normalizeMoney(_cellAt(row, priceIndex)),
+          price: cleanedPrice.isEmpty ? '0' : cleanedPrice,
           spaces: _cellAt(row, spacesIndex).isEmpty
               ? '1'
               : _cellAt(row, spacesIndex),
@@ -282,22 +567,11 @@ class CsvImportService {
       );
     }
 
-    event.tickets
-      ..clear()
-      ..addAll(imported);
-
-    BookingUtils.linkTicketsToBookings(event);
-    BookingUtils.recalculateAllTotals(event);
-
-    return true;
+    return imported;
   }
 
-  static Future<bool> importMembersCsv(EventRecord event) async {
-    final csvText = await _pickCsvText();
-    if (csvText == null || csvText.trim().isEmpty) return false;
-
-    final rows = _parseCsvRows(csvText);
-    if (rows.isEmpty) return false;
+  static List<MemberRecord> _parseMembersRows(List<List<dynamic>> rows) {
+    if (rows.isEmpty) return [];
 
     final headerRowIndex = _findHeaderRowIndex(rows, const [
       'First Name',
@@ -306,7 +580,7 @@ class CsvImportService {
       'Email',
       'Membership Level',
     ]);
-    if (headerRowIndex == -1) return false;
+    if (headerRowIndex == -1) return [];
 
     final header = rows[headerRowIndex].map((e) => _cleanCell(e)).toList();
     final dataRows = rows.skip(headerRowIndex + 1);
@@ -371,7 +645,7 @@ class CsvImportService {
         lastNameIndex == -1 &&
         telephoneIndex == -1 &&
         emailIndex == -1) {
-      return false;
+      return [];
     }
 
     final List<MemberRecord> importedMembers = [];
@@ -429,25 +703,17 @@ class CsvImportService {
       );
     }
 
-    event.members
-      ..clear()
-      ..addAll(importedMembers);
-
-    return true;
+    return importedMembers;
   }
 
-  static Future<bool> importScheduleCsv(EventRecord event) async {
-    final csvText = await _pickCsvText();
-    if (csvText == null || csvText.trim().isEmpty) return false;
-
-    final rows = _parseCsvRows(csvText);
-    if (rows.isEmpty) return false;
+  static List<ScheduleRecord> _parseScheduleRows(List<List<dynamic>> rows) {
+    if (rows.isEmpty) return [];
 
     final headerRowIndex = _findHeaderRowIndex(rows, const [
       'Time',
       'Activity',
     ]);
-    if (headerRowIndex == -1) return false;
+    if (headerRowIndex == -1) return [];
 
     final header = rows[headerRowIndex].map((e) => _cleanCell(e)).toList();
     final dataRows = rows.skip(headerRowIndex + 1);
@@ -479,7 +745,7 @@ class CsvImportService {
     ]);
 
     if (timeIndex == -1 && activityIndex == -1) {
-      return false;
+      return [];
     }
 
     final List<ScheduleRecord> importedSchedule = [];
@@ -512,24 +778,16 @@ class CsvImportService {
       );
     }
 
-    event.schedule
-      ..clear()
-      ..addAll(importedSchedule);
-
-    return true;
+    return importedSchedule;
   }
 
-  static Future<bool> importGameModesCsv(EventRecord event) async {
-    final csvText = await _pickCsvText();
-    if (csvText == null || csvText.trim().isEmpty) return false;
-
-    final rows = _parseCsvRows(csvText);
-    if (rows.isEmpty) return false;
+  static List<GameModeRecord> _parseGameModesRows(List<List<dynamic>> rows) {
+    if (rows.isEmpty) return [];
 
     final headerRowIndex = rows.indexWhere(
       (row) => row.any((cell) => _cleanCell(cell).isNotEmpty),
     );
-    if (headerRowIndex == -1) return false;
+    if (headerRowIndex == -1) return [];
 
     final header = rows[headerRowIndex].map((e) => _cleanCell(e)).toList();
     final dataRows = rows.skip(headerRowIndex + 1);
@@ -550,32 +808,58 @@ class CsvImportService {
       imported.add(GameModeRecord(data: map));
     }
 
-    event.gameModes
-      ..clear()
-      ..addAll(imported);
-
-    return true;
+    return imported;
   }
 
-  static Future<bool> importFieldMap(EventRecord event) async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      withData: true,
-    );
+  static List<List<dynamic>>? _sheetRowsByCandidateNames(
+    Excel workbook,
+    List<String> candidateNames,
+  ) {
+    for (final candidate in candidateNames) {
+      final sheet = workbook.tables[candidate];
+      if (sheet != null) {
+        return _worksheetToRows(sheet);
+      }
+    }
 
-    if (result == null || result.files.isEmpty) return false;
+    for (final entry in workbook.tables.entries) {
+      final normalizedSheetName = _normalizeHeader(entry.key);
+      for (final candidate in candidateNames) {
+        if (normalizedSheetName == _normalizeHeader(candidate)) {
+          return _worksheetToRows(entry.value);
+        }
+      }
+    }
 
-    final bytes = result.files.first.bytes;
-    if (bytes == null || bytes.isEmpty) return false;
+    return null;
+  }
 
-    event.fieldMapBase64 = base64Encode(bytes);
-    return true;
+  static List<List<dynamic>> _worksheetToRows(Sheet sheet) {
+    final rows = <List<dynamic>>[];
+
+    for (final row in sheet.rows) {
+      rows.add(
+        row.map((cell) {
+          if (cell == null) return '';
+          final value = cell.value;
+          return value?.toString() ?? '';
+        }).toList(),
+      );
+    }
+
+    return rows;
   }
 
   static Future<String?> _pickCsvText() async {
+    final bytes = await _pickFileBytes(['csv']);
+    if (bytes == null || bytes.isEmpty) return null;
+    return _decodeCsvBytes(bytes);
+  }
+
+  static Future<Uint8List?> _pickFileBytes(List<String> extensions) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['csv'],
+      allowedExtensions: extensions,
       withData: true,
     );
 
@@ -584,7 +868,7 @@ class CsvImportService {
     final bytes = result.files.first.bytes;
     if (bytes == null || bytes.isEmpty) return null;
 
-    return _decodeCsvBytes(bytes);
+    return bytes;
   }
 
   static List<List<dynamic>> _parseCsvRows(String csvText) {
@@ -617,6 +901,18 @@ class CsvImportService {
   }
 
   static String _decodeCsvBytes(Uint8List bytes) {
+    final latin1Text = latin1.decode(bytes, allowInvalid: true);
+    if (latin1Text.contains('Â¥') ||
+        latin1Text.contains('ï¿¥') ||
+        latin1Text.contains('â‚¬') ||
+        latin1Text.contains('ï»¿')) {
+      return latin1Text
+          .replaceAll('\r\n', '\n')
+          .replaceAll('\r', '\n')
+          .replaceAll('\ufeff', '')
+          .replaceAll('ï»¿', '');
+    }
+
     String text = utf8.decode(bytes, allowMalformed: true);
 
     if (text.isNotEmpty && text.codeUnitAt(0) == 0xFEFF) {
@@ -669,8 +965,82 @@ class CsvImportService {
     return raw
         .replaceAll('\u00a5', '')
         .replaceAll('¥', '')
+        .replaceAll('￥', '')
+        .replaceAll('Â¥', '')
+        .replaceAll('ï¿¥', '')
+        .replaceAll(r'$', '')
+        .replaceAll('£', '')
+        .replaceAll('€', '')
         .replaceAll(',', '')
+        .replaceAll(RegExp(r'[^\d.\-]'), '')
         .trim();
+  }
+
+  static String _resolvePaymentStatus({
+    required String paymentMethod,
+    required String paymentStatus,
+    required String total,
+    required String totalPaid,
+  }) {
+    if (_isCardPayment(paymentMethod)) {
+      return 'Paid';
+    }
+
+    if (_looksPaid(paymentStatus)) {
+      return 'Paid';
+    }
+
+    final totalValue = double.tryParse(total) ?? 0;
+    final totalPaidValue = double.tryParse(totalPaid) ?? 0;
+
+    if (totalValue > 0 && totalPaidValue >= totalValue) {
+      return 'Paid';
+    }
+
+    if (totalPaidValue > 0) {
+      return 'Partially Paid';
+    }
+
+    return 'Unpaid';
+  }
+
+  static String _resolveTotalPaid({
+    required String paymentMethod,
+    required String paymentStatus,
+    required String total,
+    required String totalPaid,
+  }) {
+    if (_isCardPayment(paymentMethod)) {
+      return total;
+    }
+
+    if (_looksPaid(paymentStatus) && totalPaid.isEmpty) {
+      return total;
+    }
+
+    return totalPaid;
+  }
+
+  static bool _isCardPayment(String raw) {
+    final value = raw.trim().toLowerCase();
+    return value.contains('credit') ||
+        value.contains('card') ||
+        value.contains('stripe') ||
+        value.contains('visa') ||
+        value.contains('mastercard') ||
+        value.contains('amex') ||
+        value.contains('クレジット');
+  }
+
+  static bool _looksPaid(String raw) {
+    final value = raw.trim().toLowerCase();
+    return value == 'paid' ||
+        value == 'yes' ||
+        value == 'y' ||
+        value == 'true' ||
+        value == '1' ||
+        value == 'complete' ||
+        value == 'completed';
   }
 
   static String _normalizeMembershipLevel(String raw) {
