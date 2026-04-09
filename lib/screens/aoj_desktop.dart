@@ -33,6 +33,13 @@ class _AOJDesktopState extends State<AOJDesktop> {
       subtitle: 'Command node',
     ),
     DesktopAppItem(
+      id: 'accounts',
+      title: 'Account Management',
+      icon: Icons.account_balance_wallet_outlined,
+      accent: Color(0xFF6F8A5E),
+      subtitle: 'Finance and deductions',
+    ),
+    DesktopAppItem(
       id: 'event',
       title: 'Event Information',
       icon: Icons.map_outlined,
