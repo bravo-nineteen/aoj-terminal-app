@@ -4,7 +4,7 @@ import '../models/aoj_models.dart';
 import '../widgets/desktop_widgets.dart';
 import '../widgets/ui_components.dart';
 
-class SystemPanel extends StatelessWidget {
+class SystemPanel extends StatefulWidget {
   final Color accent;
   final AppStateData appState;
   final EventRecord? activeEvent;
@@ -13,6 +13,7 @@ class SystemPanel extends StatelessWidget {
   final Future<void> Function(String) onCreateEvent;
   final Future<void> Function() onExportEvent;
   final Future<void> Function() onExportBookings;
+  final Future<void> Function() onImportWorkbook;
   final Future<void> Function() onImportBookings;
   final Future<void> Function() onImportTickets;
   final Future<void> Function() onImportMembers;
@@ -30,6 +31,7 @@ class SystemPanel extends StatelessWidget {
     required this.onCreateEvent,
     required this.onExportEvent,
     required this.onExportBookings,
+    required this.onImportWorkbook,
     required this.onImportBookings,
     required this.onImportTickets,
     required this.onImportMembers,
@@ -39,8 +41,38 @@ class SystemPanel extends StatelessWidget {
   });
 
   @override
+  State<SystemPanel> createState() => _SystemPanelState();
+}
+
+class _SystemPanelState extends State<SystemPanel> {
+  late final TextEditingController _eventController;
+
+  @override
+  void initState() {
+    super.initState();
+    _eventController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _eventController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleCreateEvent() async {
+    final name = _eventController.text.trim();
+    if (name.isEmpty) return;
+
+    await widget.onCreateEvent(name);
+
+    if (mounted) {
+      _eventController.clear();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final controller = TextEditingController();
+    final hasActiveEvent = widget.activeEvent != null;
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -49,7 +81,7 @@ class SystemPanel extends StatelessWidget {
           HeroPanel(
             title: 'AOJ CENTRAL COMMAND',
             subtitle: 'Offline event management and import control',
-            accent: accent,
+            accent: widget.accent,
             icon: Icons.shield_outlined,
           ),
           const SizedBox(height: 14),
@@ -57,26 +89,27 @@ class SystemPanel extends StatelessWidget {
             children: [
               Expanded(
                 child: TextField(
-                  controller: controller,
+                  controller: _eventController,
                   decoration: const InputDecoration(
                     labelText: 'Create New Event',
                     border: OutlineInputBorder(),
                   ),
+                  onSubmitted: (_) => _handleCreateEvent(),
                 ),
               ),
               const SizedBox(width: 10),
               ElevatedButton(
-                onPressed: () => onCreateEvent(controller.text),
+                onPressed: _handleCreateEvent,
                 child: const Text('ADD EVENT'),
               ),
               const SizedBox(width: 10),
               ElevatedButton(
-                onPressed: onExportEvent,
+                onPressed: hasActiveEvent ? widget.onExportEvent : null,
                 child: const Text('EXPORT JSON'),
               ),
               const SizedBox(width: 10),
               ElevatedButton(
-                onPressed: onExportBookings,
+                onPressed: hasActiveEvent ? widget.onExportBookings : null,
                 child: const Text('EXPORT BOOKINGS CSV'),
               ),
             ],
@@ -88,12 +121,12 @@ class SystemPanel extends StatelessWidget {
                 Expanded(
                   child: InfoCard(
                     title: 'System Status',
-                    accent: accent,
+                    accent: widget.accent,
                     children: [
-                      InfoLine('State', systemStatus),
-                      InfoLine('Events', appState.events.length.toString()),
-                      InfoLine('Active', activeEvent?.name ?? 'None'),
-                      InfoLine('Export', exportStatus),
+                      InfoLine('State', widget.systemStatus),
+                      InfoLine('Events', widget.appState.events.length.toString()),
+                      InfoLine('Active', widget.activeEvent?.name ?? 'None'),
+                      InfoLine('Export', widget.exportStatus),
                     ],
                   ),
                 ),
@@ -101,14 +134,36 @@ class SystemPanel extends StatelessWidget {
                 Expanded(
                   child: InfoCard(
                     title: 'Import Control',
-                    accent: accent,
+                    accent: widget.accent,
                     children: [
-                      ActionLine(label: 'Bookings CSV', onTap: onImportBookings),
-                      ActionLine(label: 'Tickets CSV', onTap: onImportTickets),
-                      ActionLine(label: 'Members CSV', onTap: onImportMembers),
-                      ActionLine(label: 'Schedule CSV', onTap: onImportSchedule),
-                      ActionLine(label: 'Game Modes CSV', onTap: onImportGameModes),
-                      ActionLine(label: 'Field Map Image', onTap: onImportFieldMap),
+                      ActionLine(
+                        label: 'Workbook (.xlsx)',
+                        onTap: hasActiveEvent ? widget.onImportWorkbook : null,
+                      ),
+                      ActionLine(
+                        label: 'Bookings CSV',
+                        onTap: hasActiveEvent ? widget.onImportBookings : null,
+                      ),
+                      ActionLine(
+                        label: 'Tickets CSV',
+                        onTap: hasActiveEvent ? widget.onImportTickets : null,
+                      ),
+                      ActionLine(
+                        label: 'Members CSV',
+                        onTap: hasActiveEvent ? widget.onImportMembers : null,
+                      ),
+                      ActionLine(
+                        label: 'Schedule CSV',
+                        onTap: hasActiveEvent ? widget.onImportSchedule : null,
+                      ),
+                      ActionLine(
+                        label: 'Game Modes CSV',
+                        onTap: hasActiveEvent ? widget.onImportGameModes : null,
+                      ),
+                      ActionLine(
+                        label: 'Field Map Image',
+                        onTap: hasActiveEvent ? widget.onImportFieldMap : null,
+                      ),
                     ],
                   ),
                 ),
