@@ -9,12 +9,16 @@ class AccountingPanel extends StatelessWidget {
   final Color accent;
   final EventRecord? event;
   final Future<void> Function() onExportFullCsv;
+  final Future<void> Function() onAddExpense;
+  final Future<void> Function(String expenseId) onDeleteExpense;
 
   const AccountingPanel({
     super.key,
     required this.accent,
     required this.event,
     required this.onExportFullCsv,
+    required this.onAddExpense,
+    required this.onDeleteExpense,
   });
 
   @override
@@ -46,13 +50,14 @@ class AccountingPanel extends StatelessWidget {
     final deductionLines = <_LedgerLine>[];
 
     int checkedInCount = 0;
-    int bookingCount = groups.length;
+    final int bookingCount = groups.length;
 
     double ticketsTotal = 0;
     double salesTotal = 0;
     double grandTotal = 0;
     double paymentsRecorded = 0;
     double cardFees = 0;
+    double manualExpensesTotal = 0;
 
     for (final group in groups) {
       if (group.primary.checkInStatus.trim() == 'Checked In') {
@@ -70,10 +75,12 @@ class AccountingPanel extends StatelessWidget {
 
         incomeLines.add(
           _LedgerLine(
+            id: payment.id,
             title: group.displayName,
             subtitle:
                 'PAYMENT • ${payment.method}${payment.note.isEmpty ? '' : ' • ${payment.note}'}',
             amount: amount,
+            isDeletable: false,
           ),
         );
 
@@ -82,9 +89,11 @@ class AccountingPanel extends StatelessWidget {
           cardFees += fee;
           deductionLines.add(
             _LedgerLine(
+              id: 'card_fee_${payment.id}',
               title: group.displayName,
               subtitle: 'CARD FEE 4% • ${payment.method}',
               amount: fee,
+              isDeletable: false,
             ),
           );
         }
@@ -96,16 +105,36 @@ class AccountingPanel extends StatelessWidget {
 
         incomeLines.add(
           _LedgerLine(
+            id: sale.id,
             title: group.displayName,
             subtitle:
                 'SALE • ${sale.product.isEmpty ? 'Unnamed item' : sale.product}',
             amount: amount,
+            isDeletable: false,
           ),
         );
       }
     }
 
-    final netAfterFees = paymentsRecorded - cardFees;
+    for (final expense in event!.expenses) {
+      final amount = _toDouble(expense.amount);
+      if (amount <= 0) continue;
+
+      manualExpensesTotal += amount;
+      deductionLines.add(
+        _LedgerLine(
+          id: expense.id,
+          title: expense.item.isEmpty ? 'Expense' : expense.item,
+          subtitle:
+              'MANUAL EXPENSE • ${expense.category.isEmpty ? 'General' : expense.category}${expense.note.isEmpty ? '' : ' • ${expense.note}'}',
+          amount: amount,
+          isDeletable: true,
+        ),
+      );
+    }
+
+    final totalDeductions = cardFees + manualExpensesTotal;
+    final netAfterAllDeductions = paymentsRecorded - totalDeductions;
     final outstandingBalance = grandTotal - paymentsRecorded;
 
     return Padding(
@@ -131,6 +160,7 @@ class AccountingPanel extends StatelessWidget {
                           accent: accent,
                           emptyText: 'NO INCOME LINES',
                           lines: incomeLines,
+                          onDeleteLine: null,
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -140,6 +170,15 @@ class AccountingPanel extends StatelessWidget {
                           accent: accent,
                           emptyText: 'NO DEDUCTIONS',
                           lines: deductionLines,
+                          onDeleteLine: (line) async {
+                            if (!line.isDeletable) return;
+                            await onDeleteExpense(line.id);
+                          },
+                          headerAction: ElevatedButton.icon(
+                            onPressed: onAddExpense,
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text('ADD EXPENSE'),
+                          ),
                         ),
                       ),
                     ],
@@ -198,12 +237,24 @@ class AccountingPanel extends StatelessWidget {
                             value: '¥ ${MoneyUtils.formatMoney(cardFees)}',
                           ),
                           _SummaryStat(
-                            label: 'Net After Fees',
-                            value: '¥ ${MoneyUtils.formatMoney(netAfterFees)}',
+                            label: 'Manual Expenses',
+                            value:
+                                '¥ ${MoneyUtils.formatMoney(manualExpensesTotal)}',
+                          ),
+                          _SummaryStat(
+                            label: 'Total Deductions',
+                            value:
+                                '¥ ${MoneyUtils.formatMoney(totalDeductions)}',
+                          ),
+                          _SummaryStat(
+                            label: 'Net After Deductions',
+                            value:
+                                '¥ ${MoneyUtils.formatMoney(netAfterAllDeductions)}',
                           ),
                           _SummaryStat(
                             label: 'Outstanding Balance',
-                            value: '¥ ${MoneyUtils.formatMoney(outstandingBalance)}',
+                            value:
+                                '¥ ${MoneyUtils.formatMoney(outstandingBalance)}',
                           ),
                         ],
                       ),
@@ -249,12 +300,16 @@ class _LedgerCard extends StatelessWidget {
   final Color accent;
   final List<_LedgerLine> lines;
   final String emptyText;
+  final Widget? headerAction;
+  final Future<void> Function(_LedgerLine line)? onDeleteLine;
 
   const _LedgerCard({
     required this.title,
     required this.accent,
     required this.lines,
     required this.emptyText,
+    required this.onDeleteLine,
+    this.headerAction,
   });
 
   @override
@@ -278,13 +333,20 @@ class _LedgerCard extends StatelessWidget {
                 bottom: BorderSide(color: accent.withOpacity(0.25)),
               ),
             ),
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: accent,
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: accent,
+                    ),
+                  ),
+                ),
+                if (headerAction != null) headerAction!,
+              ],
             ),
           ),
           Expanded(
@@ -320,12 +382,25 @@ class _LedgerCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 11),
                         ),
-                        trailing: Text(
-                          '¥ ${MoneyUtils.formatMoney(line.amount)}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '¥ ${MoneyUtils.formatMoney(line.amount)}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            if (line.isDeletable && onDeleteLine != null) ...[
+                              const SizedBox(width: 6),
+                              IconButton(
+                                onPressed: () => onDeleteLine!(line),
+                                icon: const Icon(Icons.delete_outline, size: 18),
+                                tooltip: 'Delete expense',
+                              ),
+                            ],
+                          ],
                         ),
                       );
                     },
@@ -349,7 +424,7 @@ class _SummaryStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 220,
+      width: 240,
       child: Row(
         children: [
           Expanded(
@@ -376,13 +451,17 @@ class _SummaryStat extends StatelessWidget {
 }
 
 class _LedgerLine {
+  final String id;
   final String title;
   final String subtitle;
   final double amount;
+  final bool isDeletable;
 
   const _LedgerLine({
+    required this.id,
     required this.title,
     required this.subtitle,
     required this.amount,
+    required this.isDeletable,
   });
 }
