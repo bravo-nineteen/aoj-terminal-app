@@ -411,6 +411,16 @@ class _AOJDesktopState extends State<AOJDesktop> {
     });
   }
 
+  Future<void> _exportActiveEventFullCsv() async {
+    final event = activeEvent;
+    if (event == null) return;
+    final status = await ExportService.exportActiveEventFullCsv(event);
+    setState(() {
+      exportStatus = status;
+      systemStatus = status;
+    });
+  }
+
   Future<void> _exportBookingsCsv() async {
     final event = activeEvent;
     if (event == null) return;
@@ -674,20 +684,64 @@ class _AOJDesktopState extends State<AOJDesktop> {
     });
   }
 
-  Future<void> _addSaleToGroup(BookingGroup group) async {
+  Future<void> _showAddSaleDialog(BookingGroup group) async {
+    final productController = TextEditingController();
+    final priceController = TextEditingController(text: '0');
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Add Sale'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: productController,
+                decoration: const InputDecoration(labelText: 'Product'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: priceController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Price'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != true) return;
+
     group.primary.sales.add(
       SaleRecord(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
-        product: '',
-        price: '0',
+        product: productController.text.trim(),
+        price: priceController.text.trim().isEmpty
+            ? '0'
+            : priceController.text.trim(),
       ),
     );
+
     await _saveGroupedBooking(group);
     final event = activeEvent;
     if (event != null) {
       BookingUtils.recalculateAllTotals(event);
       await _saveLocalState();
     }
+
     setState(() {
       systemStatus = 'SALE ADDED';
     });
@@ -1205,11 +1259,17 @@ class _AOJDesktopState extends State<AOJDesktop> {
           onAddTicket: _showAddTicketDialog,
           onAddPayment: _showAddPaymentDialog,
           onDeletePayment: _deletePaymentFromGroup,
-          onAddSale: _addSaleToGroup,
+          onAddSale: _showAddSaleDialog,
           onDeleteSale: _deleteSaleFromGroup,
           onSaveGroup: _saveGroupedBooking,
           onSave: _saveLocalState,
           onRefresh: () => setState(() {}),
+        );
+      case 'accounts':
+        return AccountingPanel(
+          accent: window.accent,
+          event: activeEvent,
+          onExportFullCsv: _exportActiveEventFullCsv,
         );
       case 'members':
         return MembersPanel(
