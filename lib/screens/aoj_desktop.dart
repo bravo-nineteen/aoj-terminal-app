@@ -1,10 +1,8 @@
-
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
 import '../models/aoj_models.dart';
 import '../widgets/desktop_widgets.dart';
-import '../widgets/persistent_edit_field.dart';
 import '../panels/system_panel.dart';
 import '../panels/event_panel.dart';
 import '../panels/bookings_panel.dart';
@@ -16,7 +14,6 @@ import '../services/app_state_service.dart';
 import '../services/csv_import_service.dart';
 import '../services/export_service.dart';
 import '../utils/booking_utils.dart';
-import '../widgets/prop_webview.dart';
 
 class AOJDesktop extends StatefulWidget {
   const AOJDesktop({super.key});
@@ -90,7 +87,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
   String gameModeSearch = '';
   String systemStatus = 'READY';
   String exportStatus = 'NO EXPORT YET';
-  final TextEditingController propIpController = TextEditingController(text: '192.168.4.1');
+  final TextEditingController propIpController =
+      TextEditingController(text: '192.168.4.1');
   bool showPropControlPage = false;
   String propControlStatus = 'PROP CONSOLE OFFLINE';
 
@@ -165,7 +163,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
   MemberRecord? get selectedMember {
     final event = activeEvent;
     if (event == null || selectedMemberIndex == null) return null;
-    if (selectedMemberIndex! < 0 || selectedMemberIndex! >= event.members.length) {
+    if (selectedMemberIndex! < 0 ||
+        selectedMemberIndex! >= event.members.length) {
       return null;
     }
     return event.members[selectedMemberIndex!];
@@ -305,6 +304,28 @@ class _AOJDesktopState extends State<AOJDesktop> {
     await _saveLocalState();
   }
 
+  Future<void> _importWorkbookXlsx() async {
+    final event = activeEvent;
+    if (event == null) return;
+
+    final result = await CsvImportService.importWorkbookXlsx(event);
+    if (!result.success) {
+      setState(() {
+        systemStatus = 'WORKBOOK IMPORT FAILED';
+      });
+      return;
+    }
+
+    setState(() {
+      selectedBookingIndex = event.bookings.isNotEmpty ? 0 : null;
+      selectedMemberIndex = event.members.isNotEmpty ? 0 : null;
+      systemStatus =
+          'WORKBOOK IMPORTED: ${result.totalImported} ITEMS / ${result.importedSheets.join(", ")}';
+    });
+
+    await _saveLocalState();
+  }
+
   Future<void> _importBookingsCsv() async {
     final event = activeEvent;
     if (event == null) return;
@@ -381,14 +402,14 @@ class _AOJDesktopState extends State<AOJDesktop> {
       exportStatus = status;
     });
   }
-  
+
   Future<void> _exportBookingsCsv() async {
-  final event = activeEvent;
-  if (event == null) return;
-  final status = await ExportService.exportBookingsCsv(event);
-  setState(() {
-    exportStatus = status;
-  });
+    final event = activeEvent;
+    if (event == null) return;
+    final status = await ExportService.exportBookingsCsv(event);
+    setState(() {
+      exportStatus = status;
+    });
   }
 
   Future<void> _addManualMember() async {
@@ -497,7 +518,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
               const SizedBox(height: 10),
               TextField(
                 controller: priceController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(labelText: 'Price'),
               ),
             ],
@@ -524,8 +546,12 @@ class _AOJDesktopState extends State<AOJDesktop> {
         id: DateTime.now().microsecondsSinceEpoch.toString(),
         bookingId: group.primary.bookingId,
         bookingName: group.primary.fullName,
-        ticketName: nameController.text.trim().isEmpty ? 'New Ticket' : nameController.text.trim(),
-        price: priceController.text.trim().isEmpty ? '0' : priceController.text.trim(),
+        ticketName: nameController.text.trim().isEmpty
+            ? 'New Ticket'
+            : nameController.text.trim(),
+        price: priceController.text.trim().isEmpty
+            ? '0'
+            : priceController.text.trim(),
         spaces: '1',
         status: 'Active',
       );
@@ -558,7 +584,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
                 children: [
                   TextField(
                     controller: amountController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                     decoration: const InputDecoration(labelText: 'Amount'),
                   ),
                   const SizedBox(height: 10),
@@ -603,7 +630,9 @@ class _AOJDesktopState extends State<AOJDesktop> {
       group.primary.payments.add(
         PaymentRecord(
           id: DateTime.now().microsecondsSinceEpoch.toString(),
-          amount: amountController.text.trim().isEmpty ? '0' : amountController.text.trim(),
+          amount: amountController.text.trim().isEmpty
+              ? '0'
+              : amountController.text.trim(),
           method: method,
           note: noteController.text.trim(),
           date: DateTime.now().toIso8601String(),
@@ -621,7 +650,10 @@ class _AOJDesktopState extends State<AOJDesktop> {
     }
   }
 
-  Future<void> _deletePaymentFromGroup(BookingGroup group, String paymentId) async {
+  Future<void> _deletePaymentFromGroup(
+    BookingGroup group,
+    String paymentId,
+  ) async {
     group.primary.payments.removeWhere((p) => p.id == paymentId);
     await _saveGroupedBooking(group);
     final event = activeEvent;
@@ -689,7 +721,9 @@ class _AOJDesktopState extends State<AOJDesktop> {
     if (gameModeSearch.trim().isEmpty) return event.gameModes;
 
     final q = gameModeSearch.trim().toLowerCase();
-    return event.gameModes.where((g) => g.data.values.join(' ').toLowerCase().contains(q)).toList();
+    return event.gameModes
+        .where((g) => g.data.values.join(' ').toLowerCase().contains(q))
+        .toList();
   }
 
   Future<void> _deleteBookingGroup(BookingGroup group) async {
@@ -733,7 +767,15 @@ class _AOJDesktopState extends State<AOJDesktop> {
           .map((s) => SaleRecord(id: s.id, product: s.product, price: s.price))
           .toList();
       row.payments = group.primary.payments
-          .map((p) => PaymentRecord(id: p.id, amount: p.amount, method: p.method, note: p.note, date: p.date))
+          .map(
+            (p) => PaymentRecord(
+              id: p.id,
+              amount: p.amount,
+              method: p.method,
+              note: p.note,
+              date: p.date,
+            ),
+          )
           .toList();
     }
 
@@ -742,10 +784,13 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
   Future<void> _toggleCheckInForGroup(BookingGroup group) async {
     final current = group.primary.checkInStatus.trim();
-    group.primary.checkInStatus = current == 'Checked In' ? 'Not Checked In' : 'Checked In';
+    group.primary.checkInStatus =
+        current == 'Checked In' ? 'Not Checked In' : 'Checked In';
     await _saveGroupedBooking(group);
     setState(() {
-      systemStatus = group.primary.checkInStatus == 'Checked In' ? 'CHECKED IN' : 'CHECK-IN CLEARED';
+      systemStatus = group.primary.checkInStatus == 'Checked In'
+          ? 'CHECKED IN'
+          : 'CHECK-IN CLEARED';
     });
   }
 
@@ -758,7 +803,9 @@ class _AOJDesktopState extends State<AOJDesktop> {
       builder: (context) {
         return AlertDialog(
           title: const Text('Delete Event'),
-          content: Text('Delete ${event.name}? This removes bookings, tickets, members, schedule and game modes for this event.'),
+          content: Text(
+            'Delete ${event.name}? This removes bookings, tickets, members, schedule and game modes for this event.',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -777,7 +824,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
     setState(() {
       appState.events.removeWhere((e) => e.id == event.id);
-      appState.activeEventId = appState.events.isNotEmpty ? appState.events.first.id : null;
+      appState.activeEventId =
+          appState.events.isNotEmpty ? appState.events.first.id : null;
       selectedBookingIndex = 0;
       selectedMemberIndex = activeEvent?.members.isNotEmpty == true ? 0 : null;
       systemStatus = 'EVENT DELETED';
@@ -810,8 +858,9 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
   @override
   Widget build(BuildContext context) {
-    final visibleWindows = windows.values.where((w) => w.isOpen && !w.isMinimized).toList()
-      ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
+    final visibleWindows =
+        windows.values.where((w) => w.isOpen && !w.isMinimized).toList()
+          ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
 
     final openTabs = windows.values.where((w) => w.isOpen).toList()
       ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
@@ -869,7 +918,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
         final columnApps = apps.sublist(start, end);
 
         return Padding(
-          padding: EdgeInsets.only(right: columnIndex == columnCount - 1 ? 0 : 18),
+          padding:
+              EdgeInsets.only(right: columnIndex == columnCount - 1 ? 0 : 18),
           child: SizedBox(
             width: 94,
             child: Column(
@@ -887,12 +937,19 @@ class _AOJDesktopState extends State<AOJDesktop> {
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
                       width: 94,
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                        horizontal: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: selected ? const Color(0x66161F18) : const Color(0x33101812),
+                        color: selected
+                            ? const Color(0x66161F18)
+                            : const Color(0x33101812),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: selected ? app.accent.withOpacity(0.75) : Colors.white.withOpacity(0.08),
+                          color: selected
+                              ? app.accent.withOpacity(0.75)
+                              : Colors.white.withOpacity(0.08),
                           width: 1.2,
                         ),
                         boxShadow: [
@@ -956,7 +1013,10 @@ class _AOJDesktopState extends State<AOJDesktop> {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: window.accent.withOpacity(0.65), width: 1.3),
+            border: Border.all(
+              color: window.accent.withOpacity(0.65),
+              width: 1.3,
+            ),
             gradient: const LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
@@ -995,10 +1055,12 @@ class _AOJDesktopState extends State<AOJDesktop> {
                   child: GestureDetector(
                     onPanUpdate: (details) {
                       setState(() {
-                        final double newWidth =
-                            math.max(520.0, window.size.width + details.delta.dx).toDouble();
-                        final double newHeight =
-                            math.max(340.0, window.size.height + details.delta.dy).toDouble();
+                        final double newWidth = math
+                            .max(520.0, window.size.width + details.delta.dx)
+                            .toDouble();
+                        final double newHeight = math
+                            .max(340.0, window.size.height + details.delta.dy)
+                            .toDouble();
                         window.size = Size(newWidth, newHeight);
                         window.restoreSize = window.size;
                       });
@@ -1009,7 +1071,9 @@ class _AOJDesktopState extends State<AOJDesktop> {
                       decoration: BoxDecoration(
                         color: window.accent.withOpacity(0.22),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: window.accent.withOpacity(0.7)),
+                        border: Border.all(
+                          color: window.accent.withOpacity(0.7),
+                        ),
                       ),
                       child: const Icon(Icons.open_in_full, size: 12),
                     ),
@@ -1030,7 +1094,9 @@ class _AOJDesktopState extends State<AOJDesktop> {
         gradient: LinearGradient(
           colors: [window.accent.withOpacity(0.35), const Color(0xFF162019)],
         ),
-        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.08))),
+        border: Border(
+          bottom: BorderSide(color: Colors.white.withOpacity(0.08)),
+        ),
       ),
       child: Row(
         children: [
@@ -1080,6 +1146,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
           onCreateEvent: _createEvent,
           onExportEvent: _exportActiveEventJson,
           onExportBookings: _exportBookingsCsv,
+          onImportWorkbook: _importWorkbookXlsx,
           onImportBookings: _importBookingsCsv,
           onImportTickets: _importTicketsCsv,
           onImportMembers: _importMembersCsv,
@@ -1223,11 +1290,18 @@ class _AOJDesktopState extends State<AOJDesktop> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.shield_outlined, size: 18, color: Color(0xFF7E8B63)),
+                const Icon(
+                  Icons.shield_outlined,
+                  size: 18,
+                  color: Color(0xFF7E8B63),
+                ),
                 const SizedBox(width: 8),
                 Text(
                   activeEvent?.name ?? 'NO ACTIVE EVENT',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ],
             ),
@@ -1248,9 +1322,13 @@ class _AOJDesktopState extends State<AOJDesktop> {
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
-                      color: active ? tab.accent.withOpacity(0.20) : const Color(0xFF121813),
+                      color: active
+                          ? tab.accent.withOpacity(0.20)
+                          : const Color(0xFF121813),
                       border: Border.all(
-                        color: active ? tab.accent.withOpacity(0.85) : Colors.white.withOpacity(0.08),
+                        color: active
+                            ? tab.accent.withOpacity(0.85)
+                            : Colors.white.withOpacity(0.08),
                       ),
                     ),
                     child: Row(
@@ -1261,7 +1339,10 @@ class _AOJDesktopState extends State<AOJDesktop> {
                           child: Text(
                             tab.title,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ],
