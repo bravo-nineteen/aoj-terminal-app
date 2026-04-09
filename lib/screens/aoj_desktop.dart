@@ -14,6 +14,7 @@ import '../services/app_state_service.dart';
 import '../services/csv_import_service.dart';
 import '../services/export_service.dart';
 import '../utils/booking_utils.dart';
+import '../panels/accounting_panel.dart';
 
 class AOJDesktop extends StatefulWidget {
   const AOJDesktop({super.key});
