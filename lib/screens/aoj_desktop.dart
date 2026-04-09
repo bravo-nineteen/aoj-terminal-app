@@ -195,6 +195,93 @@ class _AOJDesktopState extends State<AOJDesktop> {
     }
   }
 
+  Future<void> _showAddExpenseDialog() async {
+    final event = activeEvent;
+    if (event == null) return;
+
+    final itemController = TextEditingController();
+    final amountController = TextEditingController(text: '0');
+    final noteController = TextEditingController();
+    final categoryController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Add Expense'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: itemController,
+                decoration: const InputDecoration(labelText: 'Item'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: amountController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Amount'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: categoryController,
+                decoration: const InputDecoration(labelText: 'Category'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: noteController,
+                decoration: const InputDecoration(labelText: 'Note'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != true) return;
+
+    setState(() {
+      event.expenses.add(
+        ExpenseRecord(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          item: itemController.text.trim(),
+          amount: amountController.text.trim().isEmpty
+              ? '0'
+              : amountController.text.trim(),
+          note: noteController.text.trim(),
+          date: DateTime.now().toIso8601String(),
+          category: categoryController.text.trim(),
+        ),
+      );
+      systemStatus = 'EXPENSE ADDED';
+    });
+
+    await _saveLocalState();
+  }
+
+  Future<void> _deleteExpenseFromActiveEvent(String expenseId) async {
+    final event = activeEvent;
+    if (event == null) return;
+
+    setState(() {
+      event.expenses.removeWhere((e) => e.id == expenseId);
+      systemStatus = 'EXPENSE DELETED';
+    });
+
+    await _saveLocalState();
+  }
+
   Future<void> _saveLocalState() async {
     await AppStateService.save(appState);
     if (mounted) {
@@ -289,6 +376,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
       members: [],
       schedule: [],
       gameModes: [],
+      expenses: [],
     );
 
     setState(() {
@@ -1270,6 +1358,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
           accent: window.accent,
           event: activeEvent,
           onExportFullCsv: _exportActiveEventFullCsv,
+          onAddExpense: _showAddExpenseDialog,
+          onDeleteExpense: _deleteExpenseFromActiveEvent,
         );
       case 'members':
         return MembersPanel(
