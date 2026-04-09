@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class DesktopAppItem {
-  final String id;
+  id;
   final String title;
   final IconData icon;
   final Color accent;
@@ -18,7 +18,7 @@ class DesktopAppItem {
 
 class DesktopWindowData {
   final String id;
-  final String title;
+  String title;
   final IconData icon;
   final Color accent;
   bool isOpen;
@@ -550,7 +550,7 @@ class GameModeRecord {
 }
 
 class BookingGroup {
-  final String key;
+  key;
   final BookingRecord primary;
   final List<BookingRecord> rows;
   final List<TicketRecord> tickets;
