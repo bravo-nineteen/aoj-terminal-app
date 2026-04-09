@@ -59,10 +59,10 @@ class AccountingPanel extends StatelessWidget {
         checkedInCount++;
       }
 
-      ticketsTotal += _toDouble(BookingUtils.ticketsTotal(group).toString());
-      salesTotal += _toDouble(BookingUtils.salesTotal(group).toString());
-      grandTotal += _toDouble(BookingUtils.grandTotal(group).toString());
-      paymentsRecorded += _toDouble(BookingUtils.paymentsTotal(group).toString());
+      ticketsTotal += BookingUtils.ticketsTotal(group);
+      salesTotal += BookingUtils.salesTotal(group);
+      grandTotal += BookingUtils.grandTotal(group);
+      paymentsRecorded += BookingUtils.paymentsTotal(group);
 
       for (final payment in group.primary.payments) {
         final amount = _toDouble(payment.amount);
@@ -71,7 +71,8 @@ class AccountingPanel extends StatelessWidget {
         incomeLines.add(
           _LedgerLine(
             title: group.displayName,
-            subtitle: 'PAYMENT • ${payment.method}${payment.note.isEmpty ? '' : ' • ${payment.note}'}',
+            subtitle:
+                'PAYMENT • ${payment.method}${payment.note.isEmpty ? '' : ' • ${payment.note}'}',
             amount: amount,
           ),
         );
@@ -96,7 +97,8 @@ class AccountingPanel extends StatelessWidget {
         incomeLines.add(
           _LedgerLine(
             title: group.displayName,
-            subtitle: 'SALE • ${sale.product.isEmpty ? 'Unnamed item' : sale.product}',
+            subtitle:
+                'SALE • ${sale.product.isEmpty ? 'Unnamed item' : sale.product}',
             amount: amount,
           ),
         );
@@ -177,31 +179,31 @@ class AccountingPanel extends StatelessWidget {
                           ),
                           _SummaryStat(
                             label: 'Ticket Value',
-                            value: '¥ ${MoneyUtils.formatMoney(ticketsTotal.toStringAsFixed(0))}',
+                            value: '¥ ${MoneyUtils.formatMoney(ticketsTotal)}',
                           ),
                           _SummaryStat(
                             label: 'Sales Value',
-                            value: '¥ ${MoneyUtils.formatMoney(salesTotal.toStringAsFixed(0))}',
+                            value: '¥ ${MoneyUtils.formatMoney(salesTotal)}',
                           ),
                           _SummaryStat(
                             label: 'Gross Event Value',
-                            value: '¥ ${MoneyUtils.formatMoney(grandTotal.toStringAsFixed(0))}',
+                            value: '¥ ${MoneyUtils.formatMoney(grandTotal)}',
                           ),
                           _SummaryStat(
                             label: 'Payments Recorded',
-                            value: '¥ ${MoneyUtils.formatMoney(paymentsRecorded.toStringAsFixed(0))}',
+                            value: '¥ ${MoneyUtils.formatMoney(paymentsRecorded)}',
                           ),
                           _SummaryStat(
                             label: 'Card Fees',
-                            value: '¥ ${MoneyUtils.formatMoney(cardFees.toStringAsFixed(0))}',
+                            value: '¥ ${MoneyUtils.formatMoney(cardFees)}',
                           ),
                           _SummaryStat(
                             label: 'Net After Fees',
-                            value: '¥ ${MoneyUtils.formatMoney(netAfterFees.toStringAsFixed(0))}',
+                            value: '¥ ${MoneyUtils.formatMoney(netAfterFees)}',
                           ),
                           _SummaryStat(
                             label: 'Outstanding Balance',
-                            value: '¥ ${MoneyUtils.formatMoney(outstandingBalance.toStringAsFixed(0))}',
+                            value: '¥ ${MoneyUtils.formatMoney(outstandingBalance)}',
                           ),
                         ],
                       ),
@@ -269,7 +271,8 @@ class _LedgerCard extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
             decoration: BoxDecoration(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(18)),
               color: accent.withOpacity(0.12),
               border: Border(
                 bottom: BorderSide(color: accent.withOpacity(0.25)),
@@ -318,7 +321,7 @@ class _LedgerCard extends StatelessWidget {
                           style: const TextStyle(fontSize: 11),
                         ),
                         trailing: Text(
-                          '¥ ${MoneyUtils.formatMoney(line.amount.toStringAsFixed(0))}',
+                          '¥ ${MoneyUtils.formatMoney(line.amount)}',
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
