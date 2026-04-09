@@ -84,6 +84,7 @@ class EventRecord {
   List<MemberRecord> members;
   List<ScheduleRecord> schedule;
   List<GameModeRecord> gameModes;
+  List<ExpenseRecord> expenses;
 
   EventRecord({
     required this.id,
@@ -99,6 +100,7 @@ class EventRecord {
     required this.members,
     required this.schedule,
     required this.gameModes,
+    required this.expenses,
   });
 
   Map<String, dynamic> toJson() => {
@@ -115,6 +117,7 @@ class EventRecord {
         'members': members.map((e) => e.toJson()).toList(),
         'schedule': schedule.map((e) => e.toJson()).toList(),
         'gameModes': gameModes.map((e) => e.toJson()).toList(),
+        'expenses': expenses.map((e) => e.toJson()).toList(),
       };
 
   factory EventRecord.fromJson(Map<String, dynamic> json) {
@@ -141,6 +144,9 @@ class EventRecord {
           .toList(),
       gameModes: (json['gameModes'] as List<dynamic>? ?? [])
           .map((e) => GameModeRecord.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      expenses: (json['expenses'] as List<dynamic>? ?? [])
+          .map((e) => ExpenseRecord.fromJson(Map<String, dynamic>.from(e)))
           .toList(),
     );
   }
@@ -359,6 +365,44 @@ class PaymentRecord {
       method: json['method']?.toString() ?? '',
       note: json['note']?.toString() ?? '',
       date: json['date']?.toString() ?? '',
+    );
+  }
+}
+
+class ExpenseRecord {
+  String id;
+  String item;
+  String amount;
+  String note;
+  String date;
+  String category;
+
+  ExpenseRecord({
+    required this.id,
+    required this.item,
+    required this.amount,
+    required this.note,
+    required this.date,
+    required this.category,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'item': item,
+        'amount': amount,
+        'note': note,
+        'date': date,
+        'category': category,
+      };
+
+  factory ExpenseRecord.fromJson(Map<String, dynamic> json) {
+    return ExpenseRecord(
+      id: json['id']?.toString() ?? '',
+      item: json['item']?.toString() ?? '',
+      amount: json['amount']?.toString() ?? '',
+      note: json['note']?.toString() ?? '',
+      date: json['date']?.toString() ?? '',
+      category: json['category']?.toString() ?? '',
     );
   }
 }
