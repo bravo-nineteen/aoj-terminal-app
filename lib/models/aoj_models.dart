@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+/// =========================
+/// BASIC UI MODELS
+/// =========================
+
 class DesktopAppItem {
   final String id;
   final String title;
@@ -46,6 +50,10 @@ class DesktopWindowData {
   });
 }
 
+/// =========================
+/// APP STATE
+/// =========================
+
 class AppStateData {
   List<EventRecord> events;
   String? activeEventId;
@@ -62,13 +70,17 @@ class AppStateData {
 
   factory AppStateData.fromJson(Map<String, dynamic> json) {
     return AppStateData(
-      events: (json['events'] as List<dynamic>? ?? [])
-          .map((e) => EventRecord.fromJson(Map<String, dynamic>.from(e)))
+      events: (json['events'] as List? ?? [])
+          .map((e) => EventRecord.fromJson(e))
           .toList(),
-      activeEventId: json['activeEventId']?.toString(),
+      activeEventId: json['activeEventId'],
     );
   }
 }
+
+/// =========================
+/// CORE EVENT
+/// =========================
 
 class EventRecord {
   String id;
@@ -79,6 +91,7 @@ class EventRecord {
   String notes;
   String ticketCostPerPerson;
   String? fieldMapBase64;
+
   List<BookingRecord> bookings;
   List<TicketRecord> tickets;
   List<MemberRecord> members;
@@ -122,142 +135,218 @@ class EventRecord {
 
   factory EventRecord.fromJson(Map<String, dynamic> json) {
     return EventRecord(
-      id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
-      venue: json['venue']?.toString() ?? '',
-      date: json['date']?.toString() ?? '',
-      time: json['time']?.toString() ?? '',
-      notes: json['notes']?.toString() ?? '',
-      ticketCostPerPerson: json['ticketCostPerPerson']?.toString() ?? '0',
-      fieldMapBase64: json['fieldMapBase64']?.toString(),
-      bookings: (json['bookings'] as List<dynamic>? ?? [])
-          .map((e) => BookingRecord.fromJson(Map<String, dynamic>.from(e)))
+      id: json['id'] ?? '',
+      name: json['name'] ?? '',
+      venue: json['venue'] ?? '',
+      date: json['date'] ?? '',
+      time: json['time'] ?? '',
+      notes: json['notes'] ?? '',
+      ticketCostPerPerson: json['ticketCostPerPerson'] ?? '0',
+      fieldMapBase64: json['fieldMapBase64'],
+      bookings: (json['bookings'] as List? ?? [])
+          .map((e) => BookingRecord.fromJson(e))
           .toList(),
-      tickets: (json['tickets'] as List<dynamic>? ?? [])
-          .map((e) => TicketRecord.fromJson(Map<String, dynamic>.from(e)))
+      tickets: (json['tickets'] as List? ?? [])
+          .map((e) => TicketRecord.fromJson(e))
           .toList(),
-      members: (json['members'] as List<dynamic>? ?? [])
-          .map((e) => MemberRecord.fromJson(Map<String, dynamic>.from(e)))
+      members: (json['members'] as List? ?? [])
+          .map((e) => MemberRecord.fromJson(e))
           .toList(),
-      schedule: (json['schedule'] as List<dynamic>? ?? [])
-          .map((e) => ScheduleRecord.fromJson(Map<String, dynamic>.from(e)))
+      schedule: (json['schedule'] as List? ?? [])
+          .map((e) => ScheduleRecord.fromJson(e))
           .toList(),
-      gameModes: (json['gameModes'] as List<dynamic>? ?? [])
-          .map((e) => GameModeRecord.fromJson(Map<String, dynamic>.from(e)))
+      gameModes: (json['gameModes'] as List? ?? [])
+          .map((e) => GameModeRecord.fromJson(e))
           .toList(),
-      expenses: (json['expenses'] as List<dynamic>? ?? [])
-          .map((e) => ExpenseRecord.fromJson(Map<String, dynamic>.from(e)))
+      expenses: (json['expenses'] as List? ?? [])
+          .map((e) => ExpenseRecord.fromJson(e))
           .toList(),
     );
   }
 }
 
-class BookingRecord {
+/// =========================
+/// CORE RECORDS
+/// =========================
+
+class TicketRecord {
   String id;
   String bookingId;
-  String bookingDate;
-  String firstName;
-  String lastName;
-  String email;
-  String phone;
-  String event;
-  String total;
-  String totalPaid;
-  String transactionId;
-  String paymentMethod;
-  String paymentStatus;
-  String checkInStatus;
-  String notes;
-  bool needsPickup;
-  bool needsTraining;
-  String guestNames;
-  String languagePreference;
-  List<String> ticketIds;
-  List<SaleRecord> sales;
-  List<PaymentRecord> payments;
+  String bookingName;
+  String ticketName;
+  String price;
+  int quantity;
+  String status;
 
-  BookingRecord({
+  TicketRecord({
     required this.id,
     required this.bookingId,
-    required this.bookingDate,
-    required this.firstName,
-    required this.lastName,
-    required this.email,
-    required this.phone,
-    required this.event,
-    required this.total,
-    required this.totalPaid,
-    required this.transactionId,
-    required this.paymentMethod,
-    required this.paymentStatus,
-    required this.checkInStatus,
-    required this.notes,
-    required this.needsPickup,
-    required this.needsTraining,
-    required this.guestNames,
-    required this.languagePreference,
-    required this.ticketIds,
-    required this.sales,
-    required this.payments,
+    required this.bookingName,
+    required this.ticketName,
+    required this.price,
+    required this.quantity,
+    required this.status,
   });
-
-  String get fullName => '${firstName.trim()} ${lastName.trim()}'.trim();
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'bookingId': bookingId,
-        'bookingDate': bookingDate,
-        'firstName': firstName,
-        'lastName': lastName,
-        'email': email,
-        'phone': phone,
-        'event': event,
-        'total': total,
-        'totalPaid': totalPaid,
-        'transactionId': transactionId,
-        'paymentMethod': paymentMethod,
-        'paymentStatus': paymentStatus,
-        'checkInStatus': checkInStatus,
-        'notes': notes,
-        'needsPickup': needsPickup,
-        'needsTraining': needsTraining,
-        'guestNames': guestNames,
-        'languagePreference': languagePreference,
-        'ticketIds': ticketIds,
-        'sales': sales.map((e) => e.toJson()).toList(),
-        'payments': payments.map((e) => e.toJson()).toList(),
+        'bookingName': bookingName,
+        'ticketName': ticketName,
+        'price': price,
+        'quantity': quantity,
+        'status': status,
       };
 
-  factory BookingRecord.fromJson(Map<String, dynamic> json) {
-    return BookingRecord(
-      id: json['id']?.toString() ?? '',
-      bookingId: json['bookingId']?.toString() ?? '',
-      bookingDate: json['bookingDate']?.toString() ?? '',
-      firstName: json['firstName']?.toString() ?? '',
-      lastName: json['lastName']?.toString() ?? '',
-      email: json['email']?.toString() ?? '',
-      phone: json['phone']?.toString() ?? '',
-      event: json['event']?.toString() ?? '',
-      total: json['total']?.toString() ?? '',
-      totalPaid: json['totalPaid']?.toString() ?? '',
-      transactionId: json['transactionId']?.toString() ?? '',
-      paymentMethod: json['paymentMethod']?.toString() ?? '',
-      paymentStatus: json['paymentStatus']?.toString() ?? '',
-      checkInStatus: json['checkInStatus']?.toString() ?? '',
-      notes: json['notes']?.toString() ?? '',
-      needsPickup: json['needsPickup'] == true,
-      needsTraining: json['needsTraining'] == true,
-      guestNames: json['guestNames']?.toString() ?? '',
-      languagePreference: json['languagePreference']?.toString() ?? '',
-      ticketIds: (json['ticketIds'] as List<dynamic>? ?? [])
-          .map((e) => e.toString())
-          .toList(),
-      sales: (json['sales'] as List<dynamic>? ?? [])
-          .map((e) => SaleRecord.fromJson(Map<String, dynamic>.from(e)))
-          .toList(),
-      payments: (json['payments'] as List<dynamic>? ?? [])
-          .map((e) => PaymentRecord.fromJson(Map<String, dynamic>.from(e)))
-          .toList(),
+  factory TicketRecord.fromJson(Map<String, dynamic> json) {
+    return TicketRecord(
+      id: json['id'] ?? '',
+      bookingId: json['bookingId'] ?? '',
+      bookingName: json['bookingName'] ?? '',
+      ticketName: json['ticketName'] ?? '',
+      price: json['price'] ?? '0',
+      quantity: json['quantity'] ?? 1,
+      status: json['status'] ?? 'Active',
+    );
+  }
+}
+
+class MemberRecord {
+  String id;
+  String firstName;
+  String lastName;
+  String username;
+  String dateOfBirth;
+  String gender;
+  String telephone;
+  String email;
+  String membershipLevel;
+  int rating;
+
+  MemberRecord({
+    required this.id,
+    required this.firstName,
+    required this.lastName,
+    required this.username,
+    required this.dateOfBirth,
+    required this.gender,
+    required this.telephone,
+    required this.email,
+    required this.membershipLevel,
+    required this.rating,
+  });
+
+  String get fullName => '$firstName $lastName'.trim();
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'firstName': firstName,
+        'lastName': lastName,
+        'username': username,
+        'dateOfBirth': dateOfBirth,
+        'gender': gender,
+        'telephone': telephone,
+        'email': email,
+        'membershipLevel': membershipLevel,
+        'rating': rating,
+      };
+
+  factory MemberRecord.fromJson(Map<String, dynamic> json) {
+    return MemberRecord(
+      id: json['id'] ?? '',
+      firstName: json['firstName'] ?? '',
+      lastName: json['lastName'] ?? '',
+      username: json['username'] ?? '',
+      dateOfBirth: json['dateOfBirth'] ?? '',
+      gender: json['gender'] ?? '',
+      telephone: json['telephone'] ?? '',
+      email: json['email'] ?? '',
+      membershipLevel: json['membershipLevel'] ?? '',
+      rating: json['rating'] ?? 0,
+    );
+  }
+}
+
+class ScheduleRecord {
+  Map<String, dynamic> data;
+
+  ScheduleRecord({required this.data});
+
+  Map<String, dynamic> toJson() => data;
+
+  factory ScheduleRecord.fromJson(Map<String, dynamic> json) {
+    return ScheduleRecord(data: json);
+  }
+}
+
+class GameModeRecord {
+  Map<String, dynamic> data;
+
+  GameModeRecord({required this.data});
+
+  Map<String, dynamic> toJson() => data;
+
+  factory GameModeRecord.fromJson(Map<String, dynamic> json) {
+    return GameModeRecord(data: json);
+  }
+}
+
+class SaleRecord {
+  String id;
+  String product;
+  String price;
+
+  SaleRecord({
+    required this.id,
+    required this.product,
+    required this.price,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'product': product,
+        'price': price,
+      };
+
+  factory SaleRecord.fromJson(Map<String, dynamic> json) {
+    return SaleRecord(
+      id: json['id'] ?? '',
+      product: json['product'] ?? '',
+      price: json['price'] ?? '0',
+    );
+  }
+}
+
+class PaymentRecord {
+  String id;
+  String amount;
+  String method;
+  String note;
+  String date;
+
+  PaymentRecord({
+    required this.id,
+    required this.amount,
+    required this.method,
+    required this.note,
+    required this.date,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'amount': amount,
+        'method': method,
+        'note': note,
+        'date': date,
+      };
+
+  factory PaymentRecord.fromJson(Map<String, dynamic> json) {
+    return PaymentRecord(
+      id: json['id'] ?? '',
+      amount: json['amount'] ?? '0',
+      method: json['method'] ?? '',
+      note: json['note'] ?? '',
+      date: json['date'] ?? '',
     );
   }
 }
@@ -290,39 +379,12 @@ class ExpenseRecord {
 
   factory ExpenseRecord.fromJson(Map<String, dynamic> json) {
     return ExpenseRecord(
-      id: json['id']?.toString() ?? '',
-      item: json['item']?.toString() ?? '',
-      amount: json['amount']?.toString() ?? '',
-      note: json['note']?.toString() ?? '',
-      date: json['date']?.toString() ?? '',
-      category: json['category']?.toString() ?? '',
+      id: json['id'] ?? '',
+      item: json['item'] ?? '',
+      amount: json['amount'] ?? '0',
+      note: json['note'] ?? '',
+      date: json['date'] ?? '',
+      category: json['category'] ?? '',
     );
   }
-}
-
-class BookingGroup {
-  final String key;
-  final BookingRecord primary;
-  final List<BookingRecord> rows;
-  final List<TicketRecord> tickets;
-
-  BookingGroup({
-    required this.key,
-    required this.primary,
-    required this.rows,
-    required this.tickets,
-  });
-
-  String get displayName {
-    final name = primary.fullName.trim();
-    if (name.isNotEmpty) return name;
-    if (primary.email.trim().isNotEmpty) return primary.email.trim();
-    return 'Unnamed Booking';
-  }
-
-  String get bookingId => primary.bookingId.trim();
-  String get email => primary.email.trim();
-  String get phone => primary.phone.trim();
-  bool get needsPickup => rows.any((r) => r.needsPickup);
-  bool get needsTraining => rows.any((r) => r.needsTraining);
 }
