@@ -70,6 +70,11 @@ class _SystemPanelState extends State<SystemPanel> {
     }
   }
 
+  Future<void> _runIfActive(Future<void> Function() action) async {
+    if (widget.activeEvent == null) return;
+    await action();
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasActiveEvent = widget.activeEvent != null;
@@ -138,31 +143,31 @@ class _SystemPanelState extends State<SystemPanel> {
                     children: [
                       ActionLine(
                         label: 'Workbook (.xlsx)',
-                        onTap: hasActiveEvent ? widget.onImportWorkbook : null,
+                        onTap: () => _runIfActive(widget.onImportWorkbook),
                       ),
                       ActionLine(
                         label: 'Bookings CSV',
-                        onTap: hasActiveEvent ? widget.onImportBookings : null,
+                        onTap: () => _runIfActive(widget.onImportBookings),
                       ),
                       ActionLine(
                         label: 'Tickets CSV',
-                        onTap: hasActiveEvent ? widget.onImportTickets : null,
+                        onTap: () => _runIfActive(widget.onImportTickets),
                       ),
                       ActionLine(
                         label: 'Members CSV',
-                        onTap: hasActiveEvent ? widget.onImportMembers : null,
+                        onTap: () => _runIfActive(widget.onImportMembers),
                       ),
                       ActionLine(
                         label: 'Schedule CSV',
-                        onTap: hasActiveEvent ? widget.onImportSchedule : null,
+                        onTap: () => _runIfActive(widget.onImportSchedule),
                       ),
                       ActionLine(
                         label: 'Game Modes CSV',
-                        onTap: hasActiveEvent ? widget.onImportGameModes : null,
+                        onTap: () => _runIfActive(widget.onImportGameModes),
                       ),
                       ActionLine(
                         label: 'Field Map Image',
-                        onTap: hasActiveEvent ? widget.onImportFieldMap : null,
+                        onTap: () => _runIfActive(widget.onImportFieldMap),
                       ),
                     ],
                   ),
