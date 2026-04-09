@@ -455,6 +455,22 @@ class CsvImportService {
         totalPaid: rawTotalPaid,
       );
 
+      final importedPayments = <PaymentRecord>[];
+      final totalPaidValue = double.tryParse(resolvedTotalPaid) ?? 0;
+      if (totalPaidValue > 0) {
+        importedPayments.add(
+          PaymentRecord(
+            id: _makeId('payment', imported.length),
+            amount: resolvedTotalPaid,
+            method: rawPaymentMethod.isEmpty ? 'Imported' : rawPaymentMethod,
+            note: 'Imported from booking file',
+            date: _cellAt(row, bookingDateIndex).isEmpty
+                ? DateTime.now().toIso8601String()
+                : _cellAt(row, bookingDateIndex),
+          ),
+        );
+      }
+
       imported.add(
         BookingRecord(
           id: _makeId('booking_row', imported.length),
@@ -481,7 +497,7 @@ class CsvImportService {
           languagePreference: _cellAt(row, languageIndex),
           ticketIds: [],
           sales: [],
-          payments: [],
+          payments: importedPayments,
         ),
       );
     }
@@ -998,7 +1014,7 @@ class CsvImportService {
     }
 
     if (totalPaidValue > 0) {
-      return 'Partially Paid';
+      return 'Part Paid';
     }
 
     return 'Unpaid';
