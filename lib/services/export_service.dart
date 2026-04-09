@@ -177,6 +177,7 @@ class ExportService {
       ];
 
       double totalCardFees = 0;
+      double totalManualExpenses = 0;
 
       for (final group in groups) {
         final ticketValue = _toDouble(BookingUtils.ticketsTotal(group).toString());
@@ -255,6 +256,29 @@ class ExportService {
         }
       }
 
+      rows.add([]);
+      rows.add(['EXPENSES']);
+      rows.add([
+        'Item',
+        'Category',
+        'Note',
+        'Date',
+        'Amount',
+      ]);
+
+      for (final expense in event.expenses) {
+        final amount = _toDouble(expense.amount);
+        totalManualExpenses += amount;
+
+        rows.add([
+          expense.item,
+          expense.category,
+          expense.note,
+          expense.date,
+          amount.toStringAsFixed(0),
+        ]);
+      }
+
       final totalTicketValue = groups.fold<double>(
         0,
         (sum, group) =>
@@ -284,6 +308,9 @@ class ExportService {
           .where((g) => g.primary.checkInStatus.trim() == 'Checked In')
           .length;
 
+      final totalDeductions = totalCardFees + totalManualExpenses;
+      final netAfterDeductions = totalPaymentsRecorded - totalDeductions;
+
       rows.add([]);
       rows.add(['SUMMARY']);
       rows.add(['Bookings', groups.length]);
@@ -293,10 +320,9 @@ class ExportService {
       rows.add(['Gross Event Value', totalGrandValue.toStringAsFixed(0)]);
       rows.add(['Payments Recorded', totalPaymentsRecorded.toStringAsFixed(0)]);
       rows.add(['Card Fees 4%', totalCardFees.toStringAsFixed(0)]);
-      rows.add([
-        'Net After Fees',
-        (totalPaymentsRecorded - totalCardFees).toStringAsFixed(0),
-      ]);
+      rows.add(['Manual Expenses', totalManualExpenses.toStringAsFixed(0)]);
+      rows.add(['Total Deductions', totalDeductions.toStringAsFixed(0)]);
+      rows.add(['Net After Deductions', netAfterDeductions.toStringAsFixed(0)]);
       rows.add([
         'Outstanding Balance',
         totalOutstandingBalance.toStringAsFixed(0),
