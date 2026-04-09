@@ -15,6 +15,7 @@ import '../services/csv_import_service.dart';
 import '../services/export_service.dart';
 import '../utils/booking_utils.dart';
 import '../panels/accounting_panel.dart';
+import '../panels/booking_editor_panel.dart';
 
 class AOJDesktop extends StatefulWidget {
   const AOJDesktop({super.key});
@@ -865,6 +866,84 @@ class _AOJDesktopState extends State<AOJDesktop> {
     }).toList();
   }
 
+    BookingGroup? _findBookingGroupByPrimaryId(String primaryId) {
+    final event = activeEvent;
+    if (event == null) return null;
+
+    final groups = BookingUtils.groupedBookingsForEvent(event);
+    for (final group in groups) {
+      if (group.primary.id == primaryId) return group;
+    }
+    return null;
+  }
+
+  String _membershipLevelForGroup(EventRecord? event, BookingGroup group) {
+    if (event == null) return '';
+
+    for (final member in event.members) {
+      final memberEmail = member.email.trim().toLowerCase();
+      final memberPhone = member.telephone.trim().toLowerCase();
+      final memberName = member.fullName.trim().toLowerCase();
+
+      final groupEmail = group.email.trim().toLowerCase();
+      final groupPhone = group.phone.trim().toLowerCase();
+      final groupName = group.displayName.trim().toLowerCase();
+
+      final emailMatch =
+          memberEmail.isNotEmpty &&
+          groupEmail.isNotEmpty &&
+          memberEmail == groupEmail;
+
+      final phoneMatch =
+          memberPhone.isNotEmpty &&
+          groupPhone.isNotEmpty &&
+          memberPhone == groupPhone;
+
+      final nameMatch =
+          memberName.isNotEmpty &&
+          groupName.isNotEmpty &&
+          memberName == groupName;
+
+      if (emailMatch || phoneMatch || nameMatch) {
+        return member.membershipLevel;
+      }
+    }
+
+    return '';
+  }
+
+  Future<void> _openBookingEditorWindow(BookingGroup group) async {
+    final windowId = 'booking_editor::${group.primary.id}';
+
+    if (!windows.containsKey(windowId)) {
+      final offsetX = 220 + (windows.length % 3) * 34;
+      final offsetY = 110 + (windows.length % 3) * 24;
+
+      windows[windowId] = DesktopWindowData(
+        id: windowId,
+        title: 'Booking - ${group.displayName}',
+        icon: Icons.assignment_ind_outlined,
+        accent: const Color(0xFF8C6A52),
+        isOpen: true,
+        isMinimized: false,
+        isMaximized: false,
+        position: Offset(offsetX.toDouble(), offsetY.toDouble()),
+        size: const Size(1180, 760),
+        restorePosition: Offset(offsetX.toDouble(), offsetY.toDouble()),
+        restoreSize: const Size(1180, 760),
+        zIndex: nextZ++,
+      );
+    }
+
+    setState(() {
+      final window = windows[windowId]!;
+      window.title = 'Booking - ${group.displayName}';
+      window.isOpen = true;
+      window.isMinimized = false;
+      window.zIndex = nextZ++;
+    });
+  }
+
   List<GameModeRecord> _filteredGameModes() {
     final event = activeEvent;
     if (event == null) return [];
@@ -1285,6 +1364,37 @@ class _AOJDesktopState extends State<AOJDesktop> {
   }
 
   Widget _buildWindowBody(DesktopWindowData window) {
+      if (window.id.startsWith('booking_editor::')) {
+        final primaryId = window.id.replaceFirst('booking_editor::', '');
+        final event = activeEvent;
+        final group = _findBookingGroupByPrimaryId(primaryId);
+
+        if (event == null || group == null) {
+          return const Center(
+            child: Text('BOOKING NO LONGER AVAILABLE'),
+          );
+      }
+
+      return BookingEditorPanel(
+        accent: window.accent,
+        event: event,
+        group: group,
+        membershipLevel: _membershipLevelForGroup(event, group),
+        paymentStatuses: paymentStatuses,
+        checkInStatuses: checkInStatuses,
+        onToggleCheckIn: _toggleCheckInForGroup,
+        onEditContact: _showEditContactDialog,
+        onDeleteGroup: _deleteBookingGroup,
+        onAddTicket: _showAddTicketDialog,
+        onAddPayment: _showAddPaymentDialog,
+        onDeletePayment: _deletePaymentFromGroup,
+        onAddSale: _showAddSaleDialog,
+        onDeleteSale: _deleteSaleFromGroup,
+        onSaveGroup: _saveGroupedBooking,
+        onSave: _saveLocalState,
+        onRefresh: () => setState(() {}),
+      );
+    }
     switch (window.id) {
       case 'system':
         return SystemPanel(
