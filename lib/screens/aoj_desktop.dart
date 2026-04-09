@@ -1314,45 +1314,32 @@ class _AOJDesktopState extends State<AOJDesktop> {
           onSave: _saveLocalState,
           onRefresh: () => setState(() {}),
         );
-      case 'bookings':
-        return BookingsPanel(
-          accent: window.accent,
-          appState: appState,
-          event: activeEvent,
-          groups: _groupedBookingsForActiveEvent(),
-          selectedBookingIndex: selectedBookingIndex,
-          paymentMethods: paymentMethods,
-          paymentStatuses: paymentStatuses,
-          checkInStatuses: checkInStatuses,
-          onSetActiveEvent: (value) async {
-            await _setActiveEvent(value);
-            setState(() {
-              selectedBookingIndex = 0;
-            });
-          },
-          onSearchChanged: (v) {
-            setState(() {
-              bookingSearch = v;
-              selectedBookingIndex = 0;
-            });
-          },
-          onSelectBooking: (index) {
-            setState(() {
-              selectedBookingIndex = index;
-            });
-          },
-          onToggleCheckIn: _toggleCheckInForGroup,
-          onEditContact: _showEditContactDialog,
-          onDeleteGroup: _deleteBookingGroup,
-          onAddTicket: _showAddTicketDialog,
-          onAddPayment: _showAddPaymentDialog,
-          onDeletePayment: _deletePaymentFromGroup,
-          onAddSale: _showAddSaleDialog,
-          onDeleteSale: _deleteSaleFromGroup,
-          onSaveGroup: _saveGroupedBooking,
-          onSave: _saveLocalState,
-          onRefresh: () => setState(() {}),
-        );
+        case 'bookings':
+          return BookingsPanel(
+            accent: window.accent,
+            appState: appState,
+            event: activeEvent,
+            groups: _groupedBookingsForActiveEvent(),
+            selectedBookingIndex: selectedBookingIndex,
+            onSetActiveEvent: (value) async {
+              await _setActiveEvent(value);
+              setState(() {
+                selectedBookingIndex = 0;
+              });
+            },
+            onSearchChanged: (v) {
+              setState(() {
+                bookingSearch = v;
+                selectedBookingIndex = 0;
+              });
+            },
+            onSelectBooking: (index) {
+              setState(() {
+                selectedBookingIndex = index;
+              });
+            },
+            onOpenBookingEditor: _openBookingEditorWindow,
+          );
       case 'accounts':
         return AccountingPanel(
           accent: window.accent,
