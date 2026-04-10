@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../models/aoj_models.dart';
 import '../utils/booking_utils.dart';
 import '../utils/money_utils.dart';
-import '../widgets/ui_components.dart';
 
 class BookingsPanel extends StatefulWidget {
   final Color accent;
@@ -11,9 +10,11 @@ class BookingsPanel extends StatefulWidget {
   final EventRecord? event;
   final List<BookingGroup> groups;
   final int? selectedBookingIndex;
+  final List<String> checkInStatuses;
   final Future<void> Function(String?) onSetActiveEvent;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<int> onSelectBooking;
+  final Future<void> Function(BookingGroup, String) onQuickSetCheckInStatus;
   final Future<void> Function(BookingGroup) onOpenBookingEditor;
 
   const BookingsPanel({
@@ -23,9 +24,11 @@ class BookingsPanel extends StatefulWidget {
     required this.event,
     required this.groups,
     required this.selectedBookingIndex,
+    required this.checkInStatuses,
     required this.onSetActiveEvent,
     required this.onSearchChanged,
     required this.onSelectBooking,
+    required this.onQuickSetCheckInStatus,
     required this.onOpenBookingEditor,
   });
 
@@ -53,8 +56,6 @@ class _BookingsPanelState extends State<BookingsPanel> {
   String _membershipLevelForGroup(EventRecord? event, BookingGroup group) {
     if (event == null) return '';
 
-    MemberRecord? matched;
-
     for (final member in event.members) {
       final memberEmail = member.email.trim().toLowerCase();
       final memberPhone = member.telephone.trim().toLowerCase();
@@ -65,34 +66,60 @@ class _BookingsPanelState extends State<BookingsPanel> {
       final groupName = group.displayName.trim().toLowerCase();
 
       final emailMatch =
-          memberEmail.isNotEmpty && groupEmail.isNotEmpty && memberEmail == groupEmail;
+          memberEmail.isNotEmpty &&
+          groupEmail.isNotEmpty &&
+          memberEmail == groupEmail;
+
       final phoneMatch =
-          memberPhone.isNotEmpty && groupPhone.isNotEmpty && memberPhone == groupPhone;
+          memberPhone.isNotEmpty &&
+          groupPhone.isNotEmpty &&
+          memberPhone == groupPhone;
+
       final nameMatch =
-          memberName.isNotEmpty && groupName.isNotEmpty && memberName == groupName;
+          memberName.isNotEmpty &&
+          groupName.isNotEmpty &&
+          memberName == groupName;
 
       if (emailMatch || phoneMatch || nameMatch) {
-        matched = member;
-        break;
+        return member.membershipLevel;
       }
     }
 
-    return matched?.membershipLevel ?? '';
+    return '';
+  }
+
+  Color _paymentColor(String status) {
+    switch (status.trim()) {
+      case 'Paid':
+        return Colors.greenAccent;
+      case 'Part Paid':
+        return Colors.orangeAccent;
+      case 'Refunded':
+        return Colors.blueAccent;
+      default:
+        return Colors.redAccent;
+    }
+  }
+
+  Color _checkInColor(String status) {
+    switch (status.trim()) {
+      case 'Checked In':
+        return Colors.greenAccent;
+      case 'Cancelled':
+        return Colors.redAccent;
+      case 'No Show':
+        return Colors.orangeAccent;
+      default:
+        return Colors.white70;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Column(
         children: [
-          HeroPanel(
-            title: 'BOOKING ROSTER',
-            subtitle: 'Select and open a booking in a dedicated editor window',
-            accent: widget.accent,
-            icon: Icons.assignment_outlined,
-          ),
-          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
@@ -102,35 +129,39 @@ class _BookingsPanelState extends State<BookingsPanel> {
                     labelText: 'Event',
                     border: OutlineInputBorder(),
                     isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                   ),
                   items: widget.appState.events
                       .map(
                         (e) => DropdownMenuItem<String>(
                           value: e.id,
-                          child: Text(e.name),
+                          child: Text(e.name, overflow: TextOverflow.ellipsis),
                         ),
                       )
                       .toList(),
                   onChanged: widget.onSetActiveEvent,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 flex: 2,
                 child: TextField(
                   controller: _searchController,
                   onChanged: widget.onSearchChanged,
                   decoration: const InputDecoration(
-                    labelText: 'Search name / email / phone / booking ID / guest',
+                    labelText: 'Search booking',
                     border: OutlineInputBorder(),
                     isDense: true,
-                    prefixIcon: Icon(Icons.search),
+                    prefixIcon: Icon(Icons.search, size: 18),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           if (widget.event == null)
             const Expanded(
               child: Center(
@@ -141,192 +172,213 @@ class _BookingsPanelState extends State<BookingsPanel> {
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(16),
                   color: const Color(0xCC101511),
-                  border: Border.all(color: widget.accent.withOpacity(0.35)),
+                  border: Border.all(color: widget.accent.withOpacity(0.30)),
                 ),
                 child: widget.groups.isEmpty
                     ? const Center(child: Text('NO BOOKINGS FOR THIS EVENT'))
                     : ListView.separated(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(8),
                         itemCount: widget.groups.length,
                         separatorBuilder: (_, __) => Divider(
                           height: 1,
-                          color: Colors.white.withOpacity(0.06),
+                          color: Colors.white.withOpacity(0.05),
                         ),
                         itemBuilder: (context, index) {
                           final group = widget.groups[index];
                           final active = index == widget.selectedBookingIndex;
                           final membershipLevel =
                               _membershipLevelForGroup(widget.event, group);
-
-                          final paymentStatus = group.primary.paymentStatus.trim();
-                          final checkInStatus = group.primary.checkInStatus.trim();
+                          final paymentStatus =
+                              group.primary.paymentStatus.trim().isEmpty
+                                  ? 'Unpaid'
+                                  : group.primary.paymentStatus.trim();
+                          final checkInStatus =
+                              group.primary.checkInStatus.trim().isEmpty
+                                  ? 'Not Checked In'
+                                  : group.primary.checkInStatus.trim();
+                          final total = BookingUtils.grandTotal(group);
                           final balance = BookingUtils.balance(group);
-                          final grandTotal = BookingUtils.grandTotal(group);
                           final hasOutstanding = balance > 0;
 
-                          return InkWell(
-                            onTap: () => widget.onSelectBooking(index),
-                            onDoubleTap: () => widget.onOpenBookingEditor(group),
-                            borderRadius: BorderRadius.circular(14),
-                            child: Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(14),
+                          return Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              color: active
+                                  ? widget.accent.withOpacity(0.12)
+                                  : Colors.transparent,
+                              border: Border.all(
                                 color: active
-                                    ? widget.accent.withOpacity(0.14)
-                                    : Colors.transparent,
-                                border: Border.all(
-                                  color: active
-                                      ? widget.accent.withOpacity(0.45)
-                                      : Colors.white.withOpacity(0.04),
-                                ),
+                                    ? widget.accent.withOpacity(0.35)
+                                    : Colors.white.withOpacity(0.03),
                               ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    flex: 4,
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          group.displayName,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Wrap(
-                                          spacing: 6,
-                                          runSpacing: 6,
-                                          children: [
-                                            _RosterBadge(
-                                              text: membershipLevel.isEmpty
-                                                  ? 'NO MEMBERSHIP'
-                                                  : membershipLevel.toUpperCase(),
-                                              background: widget.accent
-                                                  .withOpacity(0.14),
-                                              foreground: widget.accent,
-                                            ),
-                                            _RosterBadge(
-                                              text: checkInStatus.isEmpty
-                                                  ? 'NO STATUS'
-                                                  : checkInStatus.toUpperCase(),
-                                              background: checkInStatus ==
-                                                      'Checked In'
-                                                  ? Colors.green
-                                                      .withOpacity(0.16)
-                                                  : Colors.white
-                                                      .withOpacity(0.08),
-                                              foreground: checkInStatus ==
-                                                      'Checked In'
-                                                  ? Colors.greenAccent
-                                                  : Colors.white70,
-                                            ),
-                                            _RosterBadge(
-                                              text: paymentStatus.isEmpty
-                                                  ? 'NO PAYMENT'
-                                                  : paymentStatus.toUpperCase(),
-                                              background: paymentStatus == 'Paid'
-                                                  ? Colors.green
-                                                      .withOpacity(0.16)
-                                                  : paymentStatus == 'Part Paid'
-                                                      ? Colors.orange
-                                                          .withOpacity(0.16)
-                                                      : Colors.red
-                                                          .withOpacity(0.16),
-                                              foreground: paymentStatus == 'Paid'
-                                                  ? Colors.greenAccent
-                                                  : paymentStatus == 'Part Paid'
-                                                      ? Colors.orangeAccent
-                                                      : Colors.redAccent,
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          [
-                                            if (group.primary.email.isNotEmpty)
-                                              group.primary.email,
-                                            if (group.primary.phone.isNotEmpty)
-                                              group.primary.phone,
-                                          ].join('  •  '),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            color: Color(0xFFAFB7AD),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Expanded(
-                                    flex: 2,
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          '¥ ${MoneyUtils.formatMoney(grandTotal)}',
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 6,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            borderRadius:
-                                                BorderRadius.circular(999),
-                                            color: hasOutstanding
-                                                ? Colors.red.withOpacity(0.18)
-                                                : Colors.green
-                                                    .withOpacity(0.16),
-                                            border: Border.all(
-                                              color: hasOutstanding
-                                                  ? Colors.redAccent
-                                                      .withOpacity(0.45)
-                                                  : Colors.greenAccent
-                                                      .withOpacity(0.35),
-                                            ),
-                                          ),
-                                          child: Text(
-                                            hasOutstanding
-                                                ? 'BAL ¥ ${MoneyUtils.formatMoney(balance)}'
-                                                : 'CLEAR',
-                                            style: TextStyle(
-                                              fontSize: 11,
+                            ),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => widget.onSelectBooking(index),
+                              onDoubleTap: () =>
+                                  widget.onOpenBookingEditor(group),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 8,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      flex: 5,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            membershipLevel.isNotEmpty
+                                                ? '${group.displayName} ($membershipLevel)'
+                                                : group.displayName,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontSize: 14,
                                               fontWeight: FontWeight.w800,
-                                              color: hasOutstanding
-                                                  ? Colors.redAccent
-                                                  : Colors.greenAccent,
                                             ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        OutlinedButton.icon(
-                                          onPressed: () =>
-                                              widget.onOpenBookingEditor(group),
-                                          icon: const Icon(
-                                            Icons.open_in_new,
-                                            size: 16,
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              const Text(
+                                                'Check-in:',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Color(0xFFAFB7AD),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              DropdownButtonHideUnderline(
+                                                child: DropdownButton<String>(
+                                                  value: widget.checkInStatuses
+                                                          .contains(
+                                                              checkInStatus)
+                                                      ? checkInStatus
+                                                      : widget
+                                                          .checkInStatuses.first,
+                                                  isDense: true,
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: _checkInColor(
+                                                        checkInStatus),
+                                                  ),
+                                                  dropdownColor:
+                                                      const Color(0xFF1A211C),
+                                                  items: widget.checkInStatuses
+                                                      .map(
+                                                        (e) => DropdownMenuItem<
+                                                            String>(
+                                                          value: e,
+                                                          child: Text(
+                                                            e,
+                                                            style: TextStyle(
+                                                              color:
+                                                                  _checkInColor(
+                                                                      e),
+                                                              fontSize: 11,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w800,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      )
+                                                      .toList(),
+                                                  onChanged: (value) async {
+                                                    if (value == null) return;
+                                                    await widget
+                                                        .onQuickSetCheckInStatus(
+                                                      group,
+                                                      value,
+                                                    );
+                                                    if (mounted) {
+                                                      setState(() {});
+                                                    }
+                                                  },
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                          label: const Text('OPEN'),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                    Expanded(
+                                      flex: 3,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            '¥ ${MoneyUtils.formatMoney(total)}',
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                paymentStatus,
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: _paymentColor(
+                                                      paymentStatus),
+                                                ),
+                                              ),
+                                              if (hasOutstanding) ...[
+                                                const SizedBox(width: 6),
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 3,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.red
+                                                        .withOpacity(0.18),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            999),
+                                                    border: Border.all(
+                                                      color: Colors.redAccent
+                                                          .withOpacity(0.35),
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    'BAL ¥ ${MoneyUtils.formatMoney(balance)}',
+                                                    style: const TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      color: Colors.redAccent,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _IntegratedOpenButton(
+                                      accent: widget.accent,
+                                      onTap: () =>
+                                          widget.onOpenBookingEditor(group),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           );
@@ -340,32 +392,34 @@ class _BookingsPanelState extends State<BookingsPanel> {
   }
 }
 
-class _RosterBadge extends StatelessWidget {
-  final String text;
-  final Color background;
-  final Color foreground;
+class _IntegratedOpenButton extends StatelessWidget {
+  final Color accent;
+  final VoidCallback onTap;
 
-  const _RosterBadge({
-    required this.text,
-    required this.background,
-    required this.foreground,
+  const _IntegratedOpenButton({
+    required this.accent,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: foreground.withOpacity(0.28)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-          color: foreground,
+    return Material(
+      color: accent.withOpacity(0.14),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: accent.withOpacity(0.35)),
+          ),
+          child: Icon(
+            Icons.open_in_new_rounded,
+            size: 16,
+            color: accent,
+          ),
         ),
       ),
     );
