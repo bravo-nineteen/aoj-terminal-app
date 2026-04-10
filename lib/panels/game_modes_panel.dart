@@ -27,12 +27,6 @@ class GameModesPanel extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          HeroPanel(
-            title: 'GAME MODES',
-            subtitle: 'Imported game mode library with search',
-            accent: accent,
-            icon: Icons.sports_esports_outlined,
-          ),
           const SizedBox(height: 14),
           Row(
             children: [
