@@ -44,12 +44,6 @@ class PropsPanel extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          HeroPanel(
-            title: 'FIELD ASSETS',
-            subtitle: 'Connect to prop Wi-Fi and open on-device control at 192.168.4.1',
-            accent: accent,
-            icon: Icons.precision_manufacturing_outlined,
-          ),
           const SizedBox(height: 14),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
