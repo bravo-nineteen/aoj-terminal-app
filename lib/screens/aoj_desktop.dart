@@ -1,21 +1,22 @@
-import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
+import 'package:flutter/material.dart';
+
 import '../models/aoj_models.dart';
-import '../widgets/desktop_widgets.dart';
-import '../panels/system_panel.dart';
-import '../panels/event_panel.dart';
+import '../panels/accounting_panel.dart';
+import '../panels/booking_editor_panel.dart';
 import '../panels/bookings_panel.dart';
-import '../panels/members_panel.dart';
-import '../panels/schedule_panel.dart';
-import '../panels/props_panel.dart';
+import '../panels/event_panel.dart';
 import '../panels/game_modes_panel.dart';
+import '../panels/members_panel.dart';
+import '../panels/props_panel.dart';
+import '../panels/schedule_panel.dart';
+import '../panels/system_panel.dart';
 import '../services/app_state_service.dart';
 import '../services/csv_import_service.dart';
 import '../services/export_service.dart';
 import '../utils/booking_utils.dart';
-import '../panels/accounting_panel.dart';
-import '../panels/booking_editor_panel.dart';
+import '../widgets/desktop_widgets.dart';
 
 class AOJDesktop extends StatefulWidget {
   const AOJDesktop({super.key});
@@ -96,8 +97,10 @@ class _AOJDesktopState extends State<AOJDesktop> {
   String gameModeSearch = '';
   String systemStatus = 'READY';
   String exportStatus = 'NO EXPORT YET';
+
   final TextEditingController propIpController =
       TextEditingController(text: '192.168.4.1');
+
   bool showPropControlPage = false;
   String propControlStatus = 'PROP CONSOLE OFFLINE';
 
@@ -196,93 +199,6 @@ class _AOJDesktopState extends State<AOJDesktop> {
     }
   }
 
-  Future<void> _showAddExpenseDialog() async {
-    final event = activeEvent;
-    if (event == null) return;
-
-    final itemController = TextEditingController();
-    final amountController = TextEditingController(text: '0');
-    final noteController = TextEditingController();
-    final categoryController = TextEditingController();
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Add Expense'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: itemController,
-                decoration: const InputDecoration(labelText: 'Item'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: amountController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Amount'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: categoryController,
-                decoration: const InputDecoration(labelText: 'Category'),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: noteController,
-                decoration: const InputDecoration(labelText: 'Note'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Add'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (result != true) return;
-
-    setState(() {
-      event.expenses.add(
-        ExpenseRecord(
-          id: DateTime.now().microsecondsSinceEpoch.toString(),
-          item: itemController.text.trim(),
-          amount: amountController.text.trim().isEmpty
-              ? '0'
-              : amountController.text.trim(),
-          note: noteController.text.trim(),
-          date: DateTime.now().toIso8601String(),
-          category: categoryController.text.trim(),
-        ),
-      );
-      systemStatus = 'EXPENSE ADDED';
-    });
-
-    await _saveLocalState();
-  }
-
-  Future<void> _deleteExpenseFromActiveEvent(String expenseId) async {
-    final event = activeEvent;
-    if (event == null) return;
-
-    setState(() {
-      event.expenses.removeWhere((e) => e.id == expenseId);
-      systemStatus = 'EXPENSE DELETED';
-    });
-
-    await _saveLocalState();
-  }
-
   Future<void> _saveLocalState() async {
     await AppStateService.save(appState);
     if (mounted) {
@@ -325,7 +241,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
         window.restorePosition = window.position;
         window.restoreSize = window.size;
         window.position = const Offset(8, 8);
-        window.size = Size(desktopSize.width - 16, desktopSize.height - 80);
+        window.size = Size(desktopSize.width - 16, desktopSize.height - 56);
         window.isMaximized = true;
       } else {
         window.position = window.restorePosition;
@@ -371,6 +287,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
       time: '',
       notes: '',
       ticketCostPerPerson: '0',
+      trainingTrainer: '',
       fieldMapBase64: null,
       bookings: [],
       tickets: [],
@@ -517,6 +434,93 @@ class _AOJDesktopState extends State<AOJDesktop> {
     setState(() {
       exportStatus = status;
     });
+  }
+
+  Future<void> _showAddExpenseDialog() async {
+    final event = activeEvent;
+    if (event == null) return;
+
+    final itemController = TextEditingController();
+    final amountController = TextEditingController(text: '0');
+    final noteController = TextEditingController();
+    final categoryController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Add Expense'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: itemController,
+                decoration: const InputDecoration(labelText: 'Item'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: amountController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'Amount'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: categoryController,
+                decoration: const InputDecoration(labelText: 'Category'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: noteController,
+                decoration: const InputDecoration(labelText: 'Note'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != true) return;
+
+    setState(() {
+      event.expenses.add(
+        ExpenseRecord(
+          id: DateTime.now().microsecondsSinceEpoch.toString(),
+          item: itemController.text.trim(),
+          amount: amountController.text.trim().isEmpty
+              ? '0'
+              : amountController.text.trim(),
+          note: noteController.text.trim(),
+          date: DateTime.now().toIso8601String(),
+          category: categoryController.text.trim(),
+        ),
+      );
+      systemStatus = 'EXPENSE ADDED';
+    });
+
+    await _saveLocalState();
+  }
+
+  Future<void> _deleteExpenseFromActiveEvent(String expenseId) async {
+    final event = activeEvent;
+    if (event == null) return;
+
+    setState(() {
+      event.expenses.removeWhere((e) => e.id == expenseId);
+      systemStatus = 'EXPENSE DELETED';
+    });
+
+    await _saveLocalState();
   }
 
   Future<void> _addManualMember() async {
@@ -866,7 +870,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     }).toList();
   }
 
-    BookingGroup? _findBookingGroupByPrimaryId(String primaryId) {
+  BookingGroup? _findBookingGroupByPrimaryId(String primaryId) {
     final event = activeEvent;
     if (event == null) return null;
 
@@ -912,13 +916,21 @@ class _AOJDesktopState extends State<AOJDesktop> {
     return '';
   }
 
+  Future<void> _quickSetCheckInStatus(
+    BookingGroup group,
+    String status,
+  ) async {
+    group.primary.checkInStatus = status;
+    await _saveGroupedBooking(group);
+    setState(() {
+      systemStatus = 'CHECK-IN STATUS UPDATED';
+    });
+  }
+
   Future<void> _openBookingEditorWindow(BookingGroup group) async {
     final windowId = 'booking_editor::${group.primary.id}';
 
     if (!windows.containsKey(windowId)) {
-      final offsetX = 220 + (windows.length % 3) * 34;
-      final offsetY = 110 + (windows.length % 3) * 24;
-
       windows[windowId] = DesktopWindowData(
         id: windowId,
         title: 'Booking - ${group.displayName}',
@@ -926,10 +938,10 @@ class _AOJDesktopState extends State<AOJDesktop> {
         accent: const Color(0xFF8C6A52),
         isOpen: true,
         isMinimized: false,
-        isMaximized: false,
-        position: Offset(offsetX.toDouble(), offsetY.toDouble()),
+        isMaximized: true,
+        position: const Offset(8, 8),
         size: const Size(1180, 760),
-        restorePosition: Offset(offsetX.toDouble(), offsetY.toDouble()),
+        restorePosition: const Offset(220, 110),
         restoreSize: const Size(1180, 760),
         zIndex: nextZ++,
       );
@@ -940,8 +952,168 @@ class _AOJDesktopState extends State<AOJDesktop> {
       window.title = 'Booking - ${group.displayName}';
       window.isOpen = true;
       window.isMinimized = false;
+      window.isMaximized = true;
       window.zIndex = nextZ++;
     });
+  }
+
+  Future<void> _openTicketEditorWindow(BookingGroup group) async {
+    await _showTicketManagementDialog(group);
+  }
+
+  Future<void> _showTicketManagementDialog(BookingGroup group) async {
+    final event = activeEvent;
+    if (event == null) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          insetPadding: const EdgeInsets.all(18),
+          child: StatefulBuilder(
+            builder: (context, setLocal) {
+              return Container(
+                width: 760,
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Ticket Editor - ${group.displayName}',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () async {
+                            BookingUtils.recalculateAllTotals(event);
+                            await _saveLocalState();
+                            if (mounted) {
+                              Navigator.pop(context);
+                            }
+                          },
+                          icon: const Icon(Icons.save_outlined, size: 16),
+                          label: const Text('SAVE'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          ...group.tickets.map((ticket) {
+                            final nameController =
+                                TextEditingController(text: ticket.ticketName);
+                            final qtyController = TextEditingController(
+                              text: ticket.quantity.toString(),
+                            );
+                            final priceController =
+                                TextEditingController(text: ticket.price);
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.08),
+                                ),
+                              ),
+                              child: Column(
+                                children: [
+                                  TextField(
+                                    controller: nameController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Ticket Name',
+                                      isDense: true,
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    onChanged: (v) {
+                                      ticket.ticketName = v;
+                                    },
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: qtyController,
+                                          keyboardType: TextInputType.number,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Quantity',
+                                            isDense: true,
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          onChanged: (v) {
+                                            ticket.spaces =
+                                                v.trim().isEmpty ? '1' : v.trim();
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: TextField(
+                                          controller: priceController,
+                                          keyboardType:
+                                              const TextInputType.numberWithOptions(
+                                            decimal: true,
+                                          ),
+                                          decoration: const InputDecoration(
+                                            labelText: 'Price',
+                                            isDense: true,
+                                            border: OutlineInputBorder(),
+                                          ),
+                                          onChanged: (v) {
+                                            ticket.price = v;
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        onPressed: () {
+                                          event.tickets.removeWhere(
+                                            (t) => t.id == ticket.id,
+                                          );
+                                          BookingUtils.linkTicketsToBookings(event);
+                                          BookingUtils.recalculateAllTotals(event);
+                                          setLocal(() {});
+                                          setState(() {});
+                                        },
+                                        icon: const Icon(Icons.delete_outline),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                          const SizedBox(height: 8),
+                          ElevatedButton.icon(
+                            onPressed: () async {
+                              await _showAddTicketDialog(group);
+                              setLocal(() {});
+                              setState(() {});
+                            },
+                            icon: const Icon(Icons.add),
+                            label: const Text('ADD NEW TICKET'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
   }
 
   List<GameModeRecord> _filteredGameModes() {
@@ -1125,7 +1297,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
               Positioned(
                 left: 0,
                 right: 0,
-                bottom: 0,
+                bottom: MediaQuery.of(context).padding.bottom,
                 child: _buildOpenTabsBar(openTabs),
               ),
             ],
@@ -1284,12 +1456,10 @@ class _AOJDesktopState extends State<AOJDesktop> {
                   child: GestureDetector(
                     onPanUpdate: (details) {
                       setState(() {
-                        final double newWidth = math
-                            .max(520.0, window.size.width + details.delta.dx)
-                            .toDouble();
-                        final double newHeight = math
-                            .max(340.0, window.size.height + details.delta.dy)
-                            .toDouble();
+                        final double newWidth =
+                            math.max(520.0, window.size.width + details.delta.dx);
+                        final double newHeight =
+                            math.max(340.0, window.size.height + details.delta.dy);
                         window.size = Size(newWidth, newHeight);
                         window.restoreSize = window.size;
                       });
@@ -1317,25 +1487,25 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
   Widget _buildWindowTitleBar(DesktopWindowData window, Size desktopSize) {
     return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [window.accent.withOpacity(0.35), const Color(0xFF162019)],
         ),
         border: Border(
-          bottom: BorderSide(color: Colors.white.withOpacity(0.08)),
+          bottom: BorderSide(color: Colors.white.withOpacity(0.06)),
         ),
       ),
       child: Row(
         children: [
-          Icon(window.icon, size: 18, color: window.accent),
-          const SizedBox(width: 10),
+          Icon(window.icon, size: 17, color: window.accent),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               window.title.toUpperCase(),
               style: const TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.9,
               ),
@@ -1346,13 +1516,13 @@ class _AOJDesktopState extends State<AOJDesktop> {
             color: const Color(0xFF7E8B63),
             onPressed: () => _toggleMaximize(window.id, desktopSize),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           WindowButton(
             icon: Icons.remove,
             color: const Color(0xFFB7A36B),
             onPressed: () => _toggleMinimize(window.id),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           WindowButton(
             icon: Icons.close,
             color: const Color(0xFF9A5A52),
@@ -1364,15 +1534,15 @@ class _AOJDesktopState extends State<AOJDesktop> {
   }
 
   Widget _buildWindowBody(DesktopWindowData window) {
-      if (window.id.startsWith('booking_editor::')) {
-        final primaryId = window.id.replaceFirst('booking_editor::', '');
-        final event = activeEvent;
-        final group = _findBookingGroupByPrimaryId(primaryId);
+    if (window.id.startsWith('booking_editor::')) {
+      final primaryId = window.id.replaceFirst('booking_editor::', '');
+      final event = activeEvent;
+      final group = _findBookingGroupByPrimaryId(primaryId);
 
-        if (event == null || group == null) {
-          return const Center(
-            child: Text('BOOKING NO LONGER AVAILABLE'),
-          );
+      if (event == null || group == null) {
+        return const Center(
+          child: Text('BOOKING NO LONGER AVAILABLE'),
+        );
       }
 
       return BookingEditorPanel(
@@ -1393,8 +1563,10 @@ class _AOJDesktopState extends State<AOJDesktop> {
         onSaveGroup: _saveGroupedBooking,
         onSave: _saveLocalState,
         onRefresh: () => setState(() {}),
+        onOpenTicketEditor: _openTicketEditorWindow,
       );
     }
+
     switch (window.id) {
       case 'system':
         return SystemPanel(
@@ -1424,32 +1596,34 @@ class _AOJDesktopState extends State<AOJDesktop> {
           onSave: _saveLocalState,
           onRefresh: () => setState(() {}),
         );
-        case 'bookings':
-          return BookingsPanel(
-            accent: window.accent,
-            appState: appState,
-            event: activeEvent,
-            groups: _groupedBookingsForActiveEvent(),
-            selectedBookingIndex: selectedBookingIndex,
-            onSetActiveEvent: (value) async {
-              await _setActiveEvent(value);
-              setState(() {
-                selectedBookingIndex = 0;
-              });
-            },
-            onSearchChanged: (v) {
-              setState(() {
-                bookingSearch = v;
-                selectedBookingIndex = 0;
-              });
-            },
-            onSelectBooking: (index) {
-              setState(() {
-                selectedBookingIndex = index;
-              });
-            },
-            onOpenBookingEditor: _openBookingEditorWindow,
-          );
+      case 'bookings':
+        return BookingsPanel(
+          accent: window.accent,
+          appState: appState,
+          event: activeEvent,
+          groups: _groupedBookingsForActiveEvent(),
+          selectedBookingIndex: selectedBookingIndex,
+          checkInStatuses: checkInStatuses,
+          onSetActiveEvent: (value) async {
+            await _setActiveEvent(value);
+            setState(() {
+              selectedBookingIndex = 0;
+            });
+          },
+          onSearchChanged: (v) {
+            setState(() {
+              bookingSearch = v;
+              selectedBookingIndex = 0;
+            });
+          },
+          onSelectBooking: (index) {
+            setState(() {
+              selectedBookingIndex = index;
+            });
+          },
+          onQuickSetCheckInStatus: _quickSetCheckInStatus,
+          onOpenBookingEditor: _openBookingEditorWindow,
+        );
       case 'accounts':
         return AccountingPanel(
           accent: window.accent,
@@ -1528,18 +1702,18 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
   Widget _buildOpenTabsBar(List<DesktopWindowData> openTabs) {
     return Container(
-      height: 58,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: const Color(0xCC0C120D),
-        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.08))),
+        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.06))),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               color: const Color(0xFF121813),
               border: Border.all(color: const Color(0x337E8B63)),
             ),
@@ -1547,55 +1721,55 @@ class _AOJDesktopState extends State<AOJDesktop> {
               children: [
                 const Icon(
                   Icons.shield_outlined,
-                  size: 18,
+                  size: 16,
                   color: Color(0xFF7E8B63),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Text(
                   activeEvent?.name ?? 'NO ACTIVE EVENT',
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           Expanded(
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: openTabs.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, __) => const SizedBox(width: 6),
               itemBuilder: (context, index) {
                 final tab = openTabs[index];
                 final active = !tab.isMinimized;
                 return GestureDetector(
                   onTap: () => _toggleFromTab(tab.id),
                   child: Container(
-                    width: 150,
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    width: 140,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                       color: active
                           ? tab.accent.withOpacity(0.20)
                           : const Color(0xFF121813),
                       border: Border.all(
                         color: active
                             ? tab.accent.withOpacity(0.85)
-                            : Colors.white.withOpacity(0.08),
+                            : Colors.white.withOpacity(0.06),
                       ),
                     ),
                     child: Row(
                       children: [
-                        Icon(tab.icon, size: 16, color: tab.accent),
-                        const SizedBox(width: 8),
+                        Icon(tab.icon, size: 14, color: tab.accent),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             tab.title,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              fontSize: 11,
+                              fontSize: 10,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
