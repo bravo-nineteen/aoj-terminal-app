@@ -1022,8 +1022,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
   const tabBarHeight = 44.0;
 
   final maximizedSize = Size(
-    media.width - (sideInset * 2),
-    media.height - topInset - tabBarHeight - bottomInset - 8 - titleBarHeightAllowance,
+    (media.width - (sideInset * 2)).toDouble(),
+    (media.height - topInset - tabBarHeight - bottomInset - 8).toDouble(),
   );
 
   if (!windows.containsKey(windowId)) {
