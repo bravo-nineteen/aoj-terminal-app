@@ -1015,16 +1015,18 @@ class _AOJDesktopState extends State<AOJDesktop> {
   final windowId = 'booking_editor::${group.primary.id}';
 
   final media = MediaQuery.of(context).size;
-  final bottomInset = MediaQuery.of(context).padding.bottom;
-  const topInset = 8.0;
-  const sideInset = 8.0;
-  const titleBarHeightAllowance = 0.0;
-  const tabBarHeight = 44.0;
+  final double bottomInset = MediaQuery.of(context).padding.bottom;
+  const double topInset = 8.0;
+  const double sideInset = 8.0;
+  const double tabBarHeight = 44.0;
+  const double extraBottomGap = 8.0;
 
-  final maximizedSize = Size(
-    (media.width - (sideInset * 2)).toDouble(),
-    (media.height - topInset - tabBarHeight - bottomInset - 8).toDouble(),
-  );
+  final double width = (media.width - (sideInset * 2)).toDouble();
+  final double height =
+      (media.height - topInset - tabBarHeight - bottomInset - extraBottomGap)
+          .toDouble();
+
+  final maximizedSize = Size(width, height);
 
   if (!windows.containsKey(windowId)) {
     windows[windowId] = DesktopWindowData(
