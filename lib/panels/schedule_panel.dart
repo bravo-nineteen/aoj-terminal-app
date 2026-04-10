@@ -35,12 +35,6 @@ class SchedulePanel extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          HeroPanel(
-            title: 'OPERATIONS TIMING',
-            subtitle: 'Imported schedule for active event',
-            accent: accent,
-            icon: Icons.access_time_outlined,
-          ),
           const SizedBox(height: 14),
           if (event == null)
             const Expanded(child: Center(child: Text('NO ACTIVE EVENT')))
