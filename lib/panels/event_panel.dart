@@ -218,12 +218,6 @@ class _EventPanelState extends State<EventPanel> {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          HeroPanel(
-            title: 'MISSION BRIEF',
-            subtitle: 'Active event selection, field information and logistics overview',
-            accent: widget.accent,
-            icon: Icons.map_outlined,
-          ),
           const SizedBox(height: 14),
           Row(
             children: [
