@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../models/aoj_models.dart';
 import '../utils/booking_utils.dart';
 import '../utils/money_utils.dart';
-import '../widgets/desktop_widgets.dart';
 import '../widgets/persistent_edit_field.dart';
 import '../widgets/ui_components.dart';
 
@@ -37,7 +36,6 @@ class _EventPanelState extends State<EventPanel> {
   @override
   void didUpdateWidget(covariant EventPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-
     if (oldWidget.event?.id != widget.event?.id) {
       _isEditing = false;
     }
@@ -51,36 +49,21 @@ class _EventPanelState extends State<EventPanel> {
     }
   }
 
-  String _eventTicketCostPerPerson(EventRecord event) {
-    try {
-      final dynamic dynamicEvent = event;
-      final value = dynamicEvent.ticketCostPerPerson;
-      if (value == null) return '0';
-      return value.toString();
-    } catch (_) {
-      return '0';
-    }
-  }
-
-  Future<void> _setEventTicketCostPerPerson(EventRecord event, String value) async {
-    try {
-      final dynamic dynamicEvent = event;
-      dynamicEvent.ticketCostPerPerson = value.trim().isEmpty ? '0' : value.trim();
-      await _saveAndRefresh();
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Add "ticketCostPerPerson" to EventRecord to save event ticket costs.'),
-        ),
-      );
-    }
-  }
-
   double _parseMoney(String value) {
     final cleaned = value.replaceAll(RegExp(r'[^0-9.\-]'), '');
     return double.tryParse(cleaned) ?? 0;
-    }
+  }
+
+  String _eventTicketCostPerPerson(EventRecord event) {
+    return event.ticketCostPerPerson.trim().isEmpty
+        ? '0'
+        : event.ticketCostPerPerson.trim();
+  }
+
+  Future<void> _setEventTicketCostPerPerson(EventRecord event, String value) async {
+    event.ticketCostPerPerson = value.trim().isEmpty ? '0' : value.trim();
+    await _saveAndRefresh();
+  }
 
   double _ticketRevenue(EventRecord event) {
     return BookingUtils.eventTicketValue(event);
@@ -111,32 +94,36 @@ class _EventPanelState extends State<EventPanel> {
     required String value,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withOpacity(0.10)),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
           color: const Color(0x66121813),
         ),
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              label.toUpperCase(),
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
-                color: Colors.white.withOpacity(0.65),
+            SizedBox(
+              width: 125,
+              child: Text(
+                label.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: Colors.white.withOpacity(0.62),
+                ),
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              value.trim().isEmpty ? '—' : value,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+            Expanded(
+              child: Text(
+                value.trim().isEmpty ? '—' : value,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -148,13 +135,15 @@ class _EventPanelState extends State<EventPanel> {
   Widget _buildRosterCard({
     required String title,
     required List<String> names,
+    Widget? topExtra,
+    String emptyText = 'NONE',
   }) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(14),
         color: const Color(0xCC101511),
-        border: Border.all(color: widget.accent.withOpacity(0.35)),
+        border: Border.all(color: widget.accent.withOpacity(0.30)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -162,24 +151,40 @@ class _EventPanelState extends State<EventPanel> {
           Text(
             title,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: FontWeight.w800,
               color: widget.accent,
             ),
           ),
-          const SizedBox(height: 10),
+          if (topExtra != null) ...[
+            const SizedBox(height: 8),
+            topExtra,
+          ],
+          const SizedBox(height: 8),
           Expanded(
             child: names.isEmpty
                 ? Center(
                     child: Text(
-                      title == 'Pickup Roster' ? 'NO PICKUPS' : 'NO TRAINING REQUESTS',
+                      emptyText,
+                      style: const TextStyle(fontSize: 12),
                     ),
                   )
-                : ListView.builder(
+                : ListView.separated(
                     itemCount: names.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 4),
                     itemBuilder: (context, index) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          color: Colors.white.withOpacity(0.03),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.05),
+                          ),
+                        ),
                         child: Text(
                           names[index],
                           style: const TextStyle(
@@ -215,10 +220,9 @@ class _EventPanelState extends State<EventPanel> {
             .toList();
 
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Column(
         children: [
-          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
@@ -227,19 +231,25 @@ class _EventPanelState extends State<EventPanel> {
                   decoration: const InputDecoration(
                     labelText: 'Active Event',
                     border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                   ),
                   items: widget.appState.events
                       .map(
                         (e) => DropdownMenuItem<String>(
                           value: e.id,
-                          child: Text(e.name),
+                          child: Text(
+                            e.name,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       )
                       .toList(),
                   onChanged: widget.onSetActiveEvent,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               if (event != null)
                 IconButton(
                   tooltip: _isEditing ? 'Finish editing' : 'Edit event',
@@ -251,17 +261,18 @@ class _EventPanelState extends State<EventPanel> {
                   icon: Icon(
                     _isEditing ? Icons.check_circle_outline : Icons.edit_outlined,
                     color: widget.accent,
+                    size: 20,
                   ),
                 ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 4),
               OutlinedButton.icon(
                 onPressed: event == null ? null : widget.onDeleteEvent,
-                icon: const Icon(Icons.delete_outline),
-                label: const Text('DELETE EVENT'),
+                icon: const Icon(Icons.delete_outline, size: 18),
+                label: const Text('DELETE'),
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           if (event == null)
             const Expanded(
               child: Center(
@@ -293,26 +304,36 @@ class _EventPanelState extends State<EventPanel> {
                               await _saveAndRefresh();
                             },
                           ),
-                          PersistentEditField(
-                            label: 'Date',
-                            value: event.date,
-                            onChanged: (v) async {
-                              event.date = v;
-                              await _saveAndRefresh();
-                            },
-                          ),
-                          PersistentEditField(
-                            label: 'Time',
-                            value: event.time,
-                            onChanged: (v) async {
-                              event.time = v;
-                              await _saveAndRefresh();
-                            },
+                          Row(
+                            children: [
+                              Expanded(
+                                child: PersistentEditField(
+                                  label: 'Date',
+                                  value: event.date,
+                                  onChanged: (v) async {
+                                    event.date = v;
+                                    await _saveAndRefresh();
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: PersistentEditField(
+                                  label: 'Time',
+                                  value: event.time,
+                                  onChanged: (v) async {
+                                    event.time = v;
+                                    await _saveAndRefresh();
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
                           PersistentEditField(
                             label: 'Ticket Cost Per Person',
                             value: _eventTicketCostPerPerson(event),
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            keyboardType:
+                                const TextInputType.numberWithOptions(decimal: true),
                             onChanged: (v) async {
                               await _setEventTicketCostPerPerson(event, v);
                             },
@@ -320,7 +341,7 @@ class _EventPanelState extends State<EventPanel> {
                           PersistentEditField(
                             label: 'Notes',
                             value: event.notes,
-                            maxLines: 5,
+                            maxLines: 4,
                             onChanged: (v) async {
                               event.notes = v;
                               await _saveAndRefresh();
@@ -345,14 +366,15 @@ class _EventPanelState extends State<EventPanel> {
                           ),
                           _buildReadOnlyRow(
                             label: 'Ticket Cost Per Person',
-                            value: '¥ ${MoneyUtils.formatMoney(_ticketCostPerPersonNumber(event))}',
+                            value:
+                                '¥ ${MoneyUtils.formatMoney(_ticketCostPerPersonNumber(event))}',
                           ),
                           _buildReadOnlyRow(
                             label: 'Notes',
                             value: event.notes,
                           ),
                         ],
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         InfoCard(
                           title: 'Event Totals',
                           accent: widget.accent,
@@ -394,32 +416,12 @@ class _EventPanelState extends State<EventPanel> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 10),
                   Expanded(
                     flex: 5,
-                    child: Column(
+                    child: Row(
                       children: [
                         Expanded(
                           child: _buildRosterCard(
                             title: 'Pickup Roster',
-                            names: pickupNames,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Expanded(
-                          child: _buildRosterCard(
-                            title: 'Training Requests',
-                            names: trainingNames,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
+                            names: pickupNames
