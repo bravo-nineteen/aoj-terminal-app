@@ -28,12 +28,6 @@ class AccountingPanel extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            HeroPanel(
-              title: 'ACCOUNT MANAGEMENT',
-              subtitle: 'Income, deductions and event totals',
-              accent: accent,
-              icon: Icons.account_balance_wallet_outlined,
-            ),
             const Expanded(
               child: Center(
                 child: Text('NO ACTIVE EVENT'),
