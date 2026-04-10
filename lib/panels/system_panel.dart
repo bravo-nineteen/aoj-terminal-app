@@ -83,12 +83,6 @@ class _SystemPanelState extends State<SystemPanel> {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          HeroPanel(
-            title: 'AOJ CENTRAL COMMAND',
-            subtitle: 'Offline event management and import control',
-            accent: widget.accent,
-            icon: Icons.shield_outlined,
-          ),
           const SizedBox(height: 14),
           Row(
             children: [
