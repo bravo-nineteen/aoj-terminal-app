@@ -78,6 +78,7 @@ class EventRecord {
   String time;
   String notes;
   String ticketCostPerPerson;
+  String trainingTrainer;
   String? fieldMapBase64;
   List<BookingRecord> bookings;
   List<TicketRecord> tickets;
@@ -94,6 +95,7 @@ class EventRecord {
     required this.time,
     required this.notes,
     required this.ticketCostPerPerson,
+    required this.trainingTrainer,
     required this.fieldMapBase64,
     required this.bookings,
     required this.tickets,
@@ -111,6 +113,7 @@ class EventRecord {
         'time': time,
         'notes': notes,
         'ticketCostPerPerson': ticketCostPerPerson,
+        'trainingTrainer': trainingTrainer,
         'fieldMapBase64': fieldMapBase64,
         'bookings': bookings.map((e) => e.toJson()).toList(),
         'tickets': tickets.map((e) => e.toJson()).toList(),
@@ -129,6 +132,7 @@ class EventRecord {
       time: json['time']?.toString() ?? '',
       notes: json['notes']?.toString() ?? '',
       ticketCostPerPerson: json['ticketCostPerPerson']?.toString() ?? '0',
+      trainingTrainer: json['trainingTrainer']?.toString() ?? '',
       fieldMapBase64: json['fieldMapBase64']?.toString(),
       bookings: (json['bookings'] as List<dynamic>? ?? [])
           .map((e) => BookingRecord.fromJson(Map<String, dynamic>.from(e)))
@@ -238,8 +242,8 @@ class BookingRecord {
       email: json['email']?.toString() ?? '',
       phone: json['phone']?.toString() ?? '',
       event: json['event']?.toString() ?? '',
-      total: json['total']?.toString() ?? '',
-      totalPaid: json['totalPaid']?.toString() ?? '',
+      total: json['total']?.toString() ?? '0',
+      totalPaid: json['totalPaid']?.toString() ?? '0',
       transactionId: json['transactionId']?.toString() ?? '',
       paymentMethod: json['paymentMethod']?.toString() ?? '',
       paymentStatus: json['paymentStatus']?.toString() ?? '',
@@ -302,7 +306,7 @@ class TicketRecord {
       bookingId: json['bookingId']?.toString() ?? '',
       bookingName: json['bookingName']?.toString() ?? '',
       ticketName: json['ticketName']?.toString() ?? '',
-      price: json['price']?.toString() ?? '',
+      price: json['price']?.toString() ?? '0',
       spaces: json['spaces']?.toString() ??
           json['quantity']?.toString() ??
           '1',
@@ -332,7 +336,7 @@ class SaleRecord {
     return SaleRecord(
       id: json['id']?.toString() ?? '',
       product: json['product']?.toString() ?? '',
-      price: json['price']?.toString() ?? '',
+      price: json['price']?.toString() ?? '0',
     );
   }
 }
@@ -363,7 +367,7 @@ class PaymentRecord {
   factory PaymentRecord.fromJson(Map<String, dynamic> json) {
     return PaymentRecord(
       id: json['id']?.toString() ?? '',
-      amount: json['amount']?.toString() ?? '',
+      amount: json['amount']?.toString() ?? '0',
       method: json['method']?.toString() ?? '',
       note: json['note']?.toString() ?? '',
       date: json['date']?.toString() ?? '',
@@ -401,7 +405,7 @@ class ExpenseRecord {
     return ExpenseRecord(
       id: json['id']?.toString() ?? '',
       item: json['item']?.toString() ?? '',
-      amount: json['amount']?.toString() ?? '',
+      amount: json['amount']?.toString() ?? '0',
       note: json['note']?.toString() ?? '',
       date: json['date']?.toString() ?? '',
       category: json['category']?.toString() ?? '',
