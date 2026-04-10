@@ -60,7 +60,10 @@ class _EventPanelState extends State<EventPanel> {
         : event.ticketCostPerPerson.trim();
   }
 
-  Future<void> _setEventTicketCostPerPerson(EventRecord event, String value) async {
+  Future<void> _setEventTicketCostPerPerson(
+    EventRecord event,
+    String value,
+  ) async {
     event.ticketCostPerPerson = value.trim().isEmpty ? '0' : value.trim();
     await _saveAndRefresh();
   }
@@ -259,7 +262,9 @@ class _EventPanelState extends State<EventPanel> {
                     });
                   },
                   icon: Icon(
-                    _isEditing ? Icons.check_circle_outline : Icons.edit_outlined,
+                    _isEditing
+                        ? Icons.check_circle_outline
+                        : Icons.edit_outlined,
                     color: widget.accent,
                     size: 20,
                   ),
@@ -332,8 +337,9 @@ class _EventPanelState extends State<EventPanel> {
                           PersistentEditField(
                             label: 'Ticket Cost Per Person',
                             value: _eventTicketCostPerPerson(event),
-                            keyboardType:
-                                const TextInputType.numberWithOptions(decimal: true),
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
                             onChanged: (v) async {
                               await _setEventTicketCostPerPerson(event, v);
                             },
@@ -424,4 +430,58 @@ class _EventPanelState extends State<EventPanel> {
                         Expanded(
                           child: _buildRosterCard(
                             title: 'Pickup Roster',
-                            names: pickupNames
+                            names: pickupNames,
+                            emptyText: 'NO PICKUPS',
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildRosterCard(
+                            title: 'Training Roster',
+                            names: trainingNames,
+                            emptyText: 'NO TRAINING REQUESTS',
+                            topExtra: _isEditing
+                                ? PersistentEditField(
+                                    label: 'Trainer',
+                                    value: event.trainingTrainer,
+                                    onChanged: (v) async {
+                                      event.trainingTrainer = v;
+                                      await _saveAndRefresh();
+                                    },
+                                  )
+                                : Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 9,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(10),
+                                      color: Colors.white.withOpacity(0.03),
+                                      border: Border.all(
+                                        color: Colors.white.withOpacity(0.06),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      event.trainingTrainer.trim().isEmpty
+                                          ? 'Trainer: —'
+                                          : 'Trainer: ${event.trainingTrainer}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
