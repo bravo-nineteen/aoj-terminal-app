@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/aoj_models.dart';
-import '../widgets/desktop_widgets.dart';
 import '../widgets/persistent_edit_field.dart';
-import '../widgets/ui_components.dart';
 
 class MembersPanel extends StatefulWidget {
   final Color accent;
@@ -90,8 +88,9 @@ class _MembersPanelState extends State<MembersPanel> {
         case 'name_za':
           return b.fullName.toLowerCase().compareTo(a.fullName.toLowerCase());
         case 'level':
-          final levelCompare =
-              a.membershipLevel.toLowerCase().compareTo(b.membershipLevel.toLowerCase());
+          final levelCompare = a.membershipLevel
+              .toLowerCase()
+              .compareTo(b.membershipLevel.toLowerCase());
           if (levelCompare != 0) return levelCompare;
           return a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase());
         case 'rating_high':
@@ -167,37 +166,41 @@ class _MembersPanelState extends State<MembersPanel> {
     }
   }
 
-  Widget _buildReadOnlyRow({
+  Widget _buildCompactReadOnlyRow({
     required String label,
     required String value,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withOpacity(0.10)),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
           color: const Color(0x66121813),
         ),
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              label.toUpperCase(),
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
-                color: Colors.white.withOpacity(0.65),
+            SizedBox(
+              width: 110,
+              child: Text(
+                label.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: Colors.white.withOpacity(0.62),
+                ),
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              value.trim().isEmpty ? '—' : value,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+            Expanded(
+              child: Text(
+                value.trim().isEmpty ? '—' : value,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -206,46 +209,53 @@ class _MembersPanelState extends State<MembersPanel> {
     );
   }
 
-  Widget _buildRatingRow(MemberRecord member) {
+  Widget _buildCompactRatingRow(MemberRecord member) {
     final rating = _getRating(member);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withOpacity(0.10)),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
           color: const Color(0x66121813),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Text(
-              'RATING',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.6,
-                color: Colors.white.withOpacity(0.65),
+            SizedBox(
+              width: 110,
+              child: Text(
+                'RATING',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: Colors.white.withOpacity(0.62),
+                ),
               ),
             ),
-            const SizedBox(height: 6),
-            Row(
-              children: List.generate(5, (index) {
-                final starValue = index + 1;
-                return IconButton(
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-                  onPressed: _isEditing ? () => _setRating(member, starValue) : null,
-                  icon: Icon(
-                    starValue <= rating ? Icons.star_rounded : Icons.star_border_rounded,
-                    color: widget.accent,
-                    size: 24,
-                  ),
-                );
-              }),
+            Expanded(
+              child: Row(
+                children: List.generate(5, (index) {
+                  final starValue = index + 1;
+                  return IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints(minWidth: 28, minHeight: 28),
+                    onPressed:
+                        _isEditing ? () => _setRating(member, starValue) : null,
+                    icon: Icon(
+                      starValue <= rating
+                          ? Icons.star_rounded
+                          : Icons.star_border_rounded,
+                      color: widget.accent,
+                      size: 22,
+                    ),
+                  );
+                }),
+              ),
             ),
           ],
         ),
@@ -260,16 +270,9 @@ class _MembersPanelState extends State<MembersPanel> {
     final filteredSelectedIndex = _resolvedSelectedFilteredIndex(filteredMembers);
 
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Column(
         children: [
-          HeroPanel(
-            title: 'PERSONNEL RECORDS',
-            subtitle: 'Member records, search, sort and controlled editing',
-            accent: widget.accent,
-            icon: Icons.groups_outlined,
-          ),
-          const SizedBox(height: 14),
           if (widget.event == null)
             const Expanded(
               child: Center(
@@ -290,10 +293,14 @@ class _MembersPanelState extends State<MembersPanel> {
                               child: TextField(
                                 controller: _searchController,
                                 decoration: const InputDecoration(
-                                  hintText: 'Search name, email, username, phone',
-                                  prefixIcon: Icon(Icons.search),
+                                  hintText: 'Search member',
+                                  prefixIcon: Icon(Icons.search, size: 18),
                                   border: OutlineInputBorder(),
                                   isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 10,
+                                  ),
                                 ),
                                 onChanged: (value) {
                                   setState(() {
@@ -302,15 +309,19 @@ class _MembersPanelState extends State<MembersPanel> {
                                 },
                               ),
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 8),
                             SizedBox(
-                              width: 170,
+                              width: 155,
                               child: DropdownButtonFormField<String>(
                                 value: _sortMode,
                                 decoration: const InputDecoration(
                                   labelText: 'Sort',
                                   border: OutlineInputBorder(),
                                   isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 10,
+                                  ),
                                 ),
                                 items: const [
                                   DropdownMenuItem(
@@ -344,60 +355,91 @@ class _MembersPanelState extends State<MembersPanel> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 8),
                         Align(
                           alignment: Alignment.centerLeft,
                           child: ElevatedButton.icon(
                             onPressed: widget.onAddMember,
-                            icon: const Icon(Icons.person_add_alt_1),
+                            icon: const Icon(Icons.person_add_alt_1, size: 18),
                             label: const Text('ADD MEMBER'),
                           ),
                         ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 8),
                         Expanded(
                           child: Container(
                             decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(18),
+                              borderRadius: BorderRadius.circular(16),
                               color: const Color(0xCC101511),
-                              border: Border.all(color: widget.accent.withOpacity(0.35)),
+                              border: Border.all(
+                                color: widget.accent.withOpacity(0.30),
+                              ),
                             ),
                             child: filteredMembers.isEmpty
                                 ? const Center(child: Text('NO MEMBERS FOUND'))
-                                : ListView.builder(
+                                : ListView.separated(
+                                    padding: const EdgeInsets.all(8),
                                     itemCount: filteredMembers.length,
+                                    separatorBuilder: (_, __) => Divider(
+                                      height: 1,
+                                      color: Colors.white.withOpacity(0.05),
+                                    ),
                                     itemBuilder: (context, index) {
                                       final row = filteredMembers[index];
-                                      final active = index == filteredSelectedIndex;
+                                      final active =
+                                          index == filteredSelectedIndex;
 
                                       return ListTile(
+                                        dense: true,
+                                        visualDensity: const VisualDensity(
+                                          vertical: -2,
+                                        ),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 2,
+                                        ),
                                         selected: active,
-                                        selectedTileColor: widget.accent.withOpacity(0.16),
+                                        selectedTileColor:
+                                            widget.accent.withOpacity(0.14),
                                         title: Text(
-                                          row.fullName.isEmpty ? 'Unnamed Member' : row.fullName,
+                                          row.fullName.isEmpty
+                                              ? 'Unnamed Member'
+                                              : row.fullName,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                          ),
                                         ),
                                         subtitle: Text(
                                           row.membershipLevel.isEmpty
-                                              ? 'No membership level'
+                                              ? 'No membership'
                                               : row.membershipLevel,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                          ),
                                         ),
                                         trailing: Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             if (_getRating(row) > 0)
                                               Padding(
-                                                padding: const EdgeInsets.only(right: 6),
+                                                padding: const EdgeInsets.only(
+                                                  right: 5,
+                                                ),
                                                 child: Text(
                                                   '${_getRating(row)}/5',
-                                                  style: const TextStyle(fontSize: 11),
+                                                  style: const TextStyle(
+                                                    fontSize: 10,
+                                                  ),
                                                 ),
                                               ),
                                             Icon(
                                               Icons.person_outline,
-                                              size: 18,
+                                              size: 16,
                                               color: widget.accent,
                                             ),
                                           ],
@@ -416,15 +458,17 @@ class _MembersPanelState extends State<MembersPanel> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 10),
                   Expanded(
                     flex: 6,
                     child: Container(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(16),
                         color: const Color(0xCC101511),
-                        border: Border.all(color: widget.accent.withOpacity(0.35)),
+                        border: Border.all(
+                          color: widget.accent.withOpacity(0.30),
+                        ),
                       ),
                       child: member == null
                           ? const Center(child: Text('SELECT A MEMBER'))
@@ -433,101 +477,108 @@ class _MembersPanelState extends State<MembersPanel> {
                                 Row(
                                   children: [
                                     Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            member.fullName.isEmpty
-                                                ? 'Unnamed Member'
-                                                : member.fullName,
-                                            style: const TextStyle(
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            member.membershipLevel.isEmpty
-                                                ? 'No membership level'
-                                                : member.membershipLevel,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700,
-                                              color: widget.accent,
-                                            ),
-                                          ),
-                                        ],
+                                      child: Text(
+                                        member.fullName.isEmpty
+                                            ? 'Unnamed Member'
+                                            : member.membershipLevel.trim().isEmpty
+                                                ? member.fullName
+                                                : '${member.fullName} (${member.membershipLevel})',
+                                        style: const TextStyle(
+                                          fontSize: 19,
+                                          fontWeight: FontWeight.w800,
+                                        ),
                                       ),
                                     ),
                                     IconButton(
-                                      tooltip: _isEditing ? 'Finish editing' : 'Edit member',
+                                      tooltip: _isEditing
+                                          ? 'Finish editing'
+                                          : 'Edit member',
                                       onPressed: () {
                                         setState(() {
                                           _isEditing = !_isEditing;
                                         });
                                       },
                                       icon: Icon(
-                                        _isEditing ? Icons.check_circle_outline : Icons.edit_outlined,
+                                        _isEditing
+                                            ? Icons.check_circle_outline
+                                            : Icons.edit_outlined,
                                         color: widget.accent,
+                                        size: 20,
                                       ),
                                     ),
-                                    if (_isEditing)
+                                    if (_isEditing) ...[
                                       const SizedBox(width: 4),
-                                    if (_isEditing)
                                       OutlinedButton.icon(
                                         onPressed: widget.onDeleteMember,
-                                        icon: const Icon(Icons.delete_outline),
+                                        icon: const Icon(
+                                          Icons.delete_outline,
+                                          size: 18,
+                                        ),
                                         label: const Text('DELETE'),
                                       ),
+                                    ],
                                   ],
                                 ),
-                                const SizedBox(height: 14),
-                                _buildRatingRow(member),
+                                const SizedBox(height: 8),
+                                _buildCompactRatingRow(member),
                                 if (_isEditing) ...[
-                                  PersistentEditField(
-                                    label: 'First Name',
-                                    value: member.firstName,
-                                    onChanged: (v) async {
-                                      member.firstName = v;
-                                      await _saveAndRefresh();
-                                    },
-                                  ),
-                                  PersistentEditField(
-                                    label: 'Last Name',
-                                    value: member.lastName,
-                                    onChanged: (v) async {
-                                      member.lastName = v;
-                                      await _saveAndRefresh();
-                                    },
-                                  ),
-                                  PersistentEditField(
-                                    label: 'Date of Birth',
-                                    value: member.dateOfBirth,
-                                    onChanged: (v) async {
-                                      member.dateOfBirth = v;
-                                      await _saveAndRefresh();
-                                    },
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: DropdownButtonFormField<String>(
-                                      value: _normalizedGenderValue(member.gender),
-                                      decoration: const InputDecoration(
-                                        labelText: 'Gender',
-                                        border: OutlineInputBorder(),
-                                        isDense: true,
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: PersistentEditField(
+                                          label: 'Date of Birth',
+                                          value: member.dateOfBirth,
+                                          onChanged: (v) async {
+                                            member.dateOfBirth = v;
+                                            await _saveAndRefresh();
+                                          },
+                                        ),
                                       ),
-                                      items: const [
-                                        DropdownMenuItem(value: '', child: Text('Not Set')),
-                                        DropdownMenuItem(value: 'Male', child: Text('Male')),
-                                        DropdownMenuItem(value: 'Female', child: Text('Female')),
-                                        DropdownMenuItem(value: 'Other', child: Text('Other')),
-                                      ],
-                                      onChanged: (v) async {
-                                        member.gender = v ?? '';
-                                        await _saveAndRefresh();
-                                      },
-                                    ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Padding(
+                                          padding:
+                                              const EdgeInsets.only(bottom: 6),
+                                          child: DropdownButtonFormField<String>(
+                                            value: _normalizedGenderValue(
+                                              member.gender,
+                                            ),
+                                            decoration: const InputDecoration(
+                                              labelText: 'Gender',
+                                              border: OutlineInputBorder(),
+                                              isDense: true,
+                                              contentPadding:
+                                                  EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 10,
+                                              ),
+                                            ),
+                                            items: const [
+                                              DropdownMenuItem(
+                                                value: '',
+                                                child: Text('Not Set'),
+                                              ),
+                                              DropdownMenuItem(
+                                                value: 'Male',
+                                                child: Text('Male'),
+                                              ),
+                                              DropdownMenuItem(
+                                                value: 'Female',
+                                                child: Text('Female'),
+                                              ),
+                                              DropdownMenuItem(
+                                                value: 'Other',
+                                                child: Text('Other'),
+                                              ),
+                                            ],
+                                            onChanged: (v) async {
+                                              member.gender = v ?? '';
+                                              await _saveAndRefresh();
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   PersistentEditField(
                                     label: 'Telephone',
@@ -547,16 +598,32 @@ class _MembersPanelState extends State<MembersPanel> {
                                       await _saveAndRefresh();
                                     },
                                   ),
+                                  PersistentEditField(
+                                    label: 'Username',
+                                    value: _getUsername(member),
+                                    onChanged: (v) async {
+                                      try {
+                                        final dynamic dynamicMember = member;
+                                        dynamicMember.username = v;
+                                        await _saveAndRefresh();
+                                      } catch (_) {}
+                                    },
+                                  ),
                                   Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
+                                    padding: const EdgeInsets.only(bottom: 6),
                                     child: DropdownButtonFormField<String>(
-                                      value: widget.membershipLevels.contains(member.membershipLevel)
+                                      value: widget.membershipLevels.contains(
+                                              member.membershipLevel)
                                           ? member.membershipLevel
                                           : widget.membershipLevels.first,
                                       decoration: const InputDecoration(
                                         labelText: 'Membership Level',
                                         border: OutlineInputBorder(),
                                         isDense: true,
+                                        contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 10,
+                                        ),
                                       ),
                                       items: widget.membershipLevels
                                           .map(
@@ -574,33 +641,23 @@ class _MembersPanelState extends State<MembersPanel> {
                                     ),
                                   ),
                                 ] else ...[
-                                  _buildReadOnlyRow(
-                                    label: 'First Name',
-                                    value: member.firstName,
+                                  _buildCompactReadOnlyRow(
+                                    label: 'Date / Gender',
+                                    value:
+                                        '${member.dateOfBirth.trim().isEmpty ? '—' : member.dateOfBirth}   ${member.gender.trim().isEmpty ? '' : '• ${member.gender}'}'
+                                            .trim(),
                                   ),
-                                  _buildReadOnlyRow(
-                                    label: 'Last Name',
-                                    value: member.lastName,
-                                  ),
-                                  _buildReadOnlyRow(
-                                    label: 'Date of Birth',
-                                    value: member.dateOfBirth,
-                                  ),
-                                  _buildReadOnlyRow(
-                                    label: 'Gender',
-                                    value: member.gender,
-                                  ),
-                                  _buildReadOnlyRow(
+                                  _buildCompactReadOnlyRow(
                                     label: 'Telephone',
                                     value: member.telephone,
                                   ),
-                                  _buildReadOnlyRow(
+                                  _buildCompactReadOnlyRow(
                                     label: 'Email',
                                     value: member.email,
                                   ),
-                                  _buildReadOnlyRow(
-                                    label: 'Membership Level',
-                                    value: member.membershipLevel,
+                                  _buildCompactReadOnlyRow(
+                                    label: 'Username',
+                                    value: _getUsername(member),
                                   ),
                                 ],
                               ],
