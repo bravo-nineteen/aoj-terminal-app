@@ -188,10 +188,10 @@ class _AOJDesktopState extends State<AOJDesktop> {
   }
 
   Rect _desktopRect(BuildContext context, Size size) {
-    final bottomInset = MediaQuery.of(context).padding.bottom;
-    final width = math.max(0, size.width - (_desktopPadding * 2));
-    final height = math.max(
-      0,
+    final double bottomInset = MediaQuery.of(context).padding.bottom;
+    final double width = math.max(0.0, size.width - (_desktopPadding * 2));
+    final double height = math.max(
+      0.0,
       size.height - _tabBarHeight - bottomInset - (_desktopPadding * 2),
     );
     return Rect.fromLTWH(
@@ -203,11 +203,11 @@ class _AOJDesktopState extends State<AOJDesktop> {
   }
 
   Offset _clampPosition(Offset position, Size windowSize, Rect desktopRect) {
-    final maxX = desktopRect.right - windowSize.width;
-    final maxY = desktopRect.bottom - windowSize.height;
+    final double maxX = desktopRect.right - windowSize.width;
+    final double maxY = desktopRect.bottom - windowSize.height;
     return Offset(
-      position.dx.clamp(desktopRect.left, maxX),
-      position.dy.clamp(desktopRect.top, maxY),
+      position.dx.clamp(desktopRect.left, maxX).toDouble(),
+      position.dy.clamp(desktopRect.top, maxY).toDouble(),
     );
   }
 
