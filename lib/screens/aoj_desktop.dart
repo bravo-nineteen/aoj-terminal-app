@@ -26,6 +26,11 @@ class AOJDesktop extends StatefulWidget {
 }
 
 class _AOJDesktopState extends State<AOJDesktop> {
+  static const double _windowMinWidth = 520;
+  static const double _windowMinHeight = 340;
+  static const double _tabBarHeight = 44;
+  static const double _desktopPadding = 8;
+
   final List<DesktopAppItem> apps = const [
     DesktopAppItem(
       id: 'system',
@@ -182,6 +187,85 @@ class _AOJDesktopState extends State<AOJDesktop> {
     return event.members[selectedMemberIndex!];
   }
 
+  Rect _desktopRect(BuildContext context, Size size) {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final width = math.max(0, size.width - (_desktopPadding * 2));
+    final height = math.max(
+      0,
+      size.height - _tabBarHeight - bottomInset - (_desktopPadding * 2),
+    );
+    return Rect.fromLTWH(
+      _desktopPadding,
+      _desktopPadding,
+      width,
+      height,
+    );
+  }
+
+  Offset _clampPosition(Offset position, Size windowSize, Rect desktopRect) {
+    final maxX = desktopRect.right - windowSize.width;
+    final maxY = desktopRect.bottom - windowSize.height;
+    return Offset(
+      position.dx.clamp(desktopRect.left, maxX),
+      position.dy.clamp(desktopRect.top, maxY),
+    );
+  }
+
+  void _maximizeWindowToRect(DesktopWindowData window, Rect desktopRect) {
+    if (!window.isMaximized) {
+      window.restorePosition = window.position;
+      window.restoreSize = window.size;
+    }
+    window.position = desktopRect.topLeft;
+    window.size = desktopRect.size;
+    window.isMaximized = true;
+  }
+
+  void _snapWindowLeft(DesktopWindowData window, Rect desktopRect) {
+    if (!window.isMaximized) {
+      window.restorePosition = window.position;
+      window.restoreSize = window.size;
+    }
+    final halfWidth = desktopRect.width / 2;
+    window.position = desktopRect.topLeft;
+    window.size = Size(halfWidth - 4, desktopRect.height);
+    window.isMaximized = false;
+  }
+
+  void _snapWindowRight(DesktopWindowData window, Rect desktopRect) {
+    if (!window.isMaximized) {
+      window.restorePosition = window.position;
+      window.restoreSize = window.size;
+    }
+    final halfWidth = desktopRect.width / 2;
+    window.position = Offset(desktopRect.left + halfWidth + 4, desktopRect.top);
+    window.size = Size(halfWidth - 4, desktopRect.height);
+    window.isMaximized = false;
+  }
+
+  void _applyEdgeSnap(DesktopWindowData window, Rect desktopRect) {
+    final leftEdge = window.position.dx;
+    final rightEdge = window.position.dx + window.size.width;
+    final topEdge = window.position.dy;
+
+    if (topEdge <= desktopRect.top + 16) {
+      _maximizeWindowToRect(window, desktopRect);
+      return;
+    }
+
+    if (leftEdge <= desktopRect.left + 16) {
+      _snapWindowLeft(window, desktopRect);
+      return;
+    }
+
+    if (rightEdge >= desktopRect.right - 16) {
+      _snapWindowRight(window, desktopRect);
+      return;
+    }
+
+    window.position = _clampPosition(window.position, window.size, desktopRect);
+  }
+
   Future<void> _loadLocalState() async {
     try {
       final loaded = await AppStateService.load();
@@ -234,18 +318,18 @@ class _AOJDesktopState extends State<AOJDesktop> {
     });
   }
 
-  void _toggleMaximize(String id, Size desktopSize) {
+  void _toggleMaximize(String id, Rect desktopRect) {
     setState(() {
       final window = windows[id]!;
       if (!window.isMaximized) {
-        window.restorePosition = window.position;
-        window.restoreSize = window.size;
-        window.position = const Offset(8, 8);
-        window.size = Size(desktopSize.width - 16, desktopSize.height - 56);
-        window.isMaximized = true;
+        _maximizeWindowToRect(window, desktopRect);
       } else {
-        window.position = window.restorePosition;
-        window.size = window.restoreSize;
+        window.position =
+            _clampPosition(window.restorePosition, window.restoreSize, desktopRect);
+        window.size = Size(
+          math.max(_windowMinWidth, window.restoreSize.width),
+          math.max(_windowMinHeight, window.restoreSize.height),
+        );
         window.isMaximized = false;
       }
       window.zIndex = nextZ++;
@@ -1271,6 +1355,19 @@ class _AOJDesktopState extends State<AOJDesktop> {
       body: LayoutBuilder(
         builder: (context, constraints) {
           final desktopSize = Size(constraints.maxWidth, constraints.maxHeight);
+          final desktopRect = _desktopRect(context, desktopSize);
+
+          for (final window in windows.values) {
+            if (window.isOpen && !window.isMinimized) {
+              if (window.isMaximized) {
+                window.position = desktopRect.topLeft;
+                window.size = desktopRect.size;
+              } else {
+                window.position =
+                    _clampPosition(window.position, window.size, desktopRect);
+              }
+            }
+          }
 
           return Stack(
             children: [
@@ -1289,7 +1386,9 @@ class _AOJDesktopState extends State<AOJDesktop> {
                           ),
                         ),
                       ),
-                      ...visibleWindows.map((w) => _buildWindow(w, desktopSize)),
+                      ...visibleWindows.map(
+                        (w) => _buildWindow(w, desktopRect),
+                      ),
                     ],
                   ),
                 ),
@@ -1388,7 +1487,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     );
   }
 
-  Widget _buildWindow(DesktopWindowData window, Size desktopSize) {
+  Widget _buildWindow(DesktopWindowData window, Rect desktopRect) {
     return Positioned(
       left: window.position.dx,
       top: window.position.dy,
@@ -1404,10 +1503,21 @@ class _AOJDesktopState extends State<AOJDesktop> {
         onPanUpdate: (details) {
           if (!window.isMaximized) {
             setState(() {
-              window.position = Offset(
-                window.position.dx + details.delta.dx,
-                window.position.dy + details.delta.dy,
+              window.position = _clampPosition(
+                Offset(
+                  window.position.dx + details.delta.dx,
+                  window.position.dy + details.delta.dy,
+                ),
+                window.size,
+                desktopRect,
               );
+            });
+          }
+        },
+        onPanEnd: (_) {
+          if (!window.isMaximized) {
+            setState(() {
+              _applyEdgeSnap(window, desktopRect);
             });
           }
         },
@@ -1440,7 +1550,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
                 borderRadius: BorderRadius.circular(20),
                 child: Column(
                   children: [
-                    _buildWindowTitleBar(window, desktopSize),
+                    _buildWindowTitleBar(window, desktopRect),
                     Expanded(
                       child: KeyboardSafeArea(
                         child: _buildWindowBody(window),
@@ -1456,11 +1566,21 @@ class _AOJDesktopState extends State<AOJDesktop> {
                   child: GestureDetector(
                     onPanUpdate: (details) {
                       setState(() {
-                        final double newWidth =
-                            math.max(520.0, window.size.width + details.delta.dx);
-                        final double newHeight =
-                            math.max(340.0, window.size.height + details.delta.dy);
+                        final newWidth = math.max(
+                          _windowMinWidth,
+                          window.size.width + details.delta.dx,
+                        );
+                        final newHeight = math.max(
+                          _windowMinHeight,
+                          window.size.height + details.delta.dy,
+                        );
+
                         window.size = Size(newWidth, newHeight);
+                        window.position = _clampPosition(
+                          window.position,
+                          window.size,
+                          desktopRect,
+                        );
                         window.restoreSize = window.size;
                       });
                     },
@@ -1485,50 +1605,77 @@ class _AOJDesktopState extends State<AOJDesktop> {
     );
   }
 
-  Widget _buildWindowTitleBar(DesktopWindowData window, Size desktopSize) {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [window.accent.withOpacity(0.35), const Color(0xFF162019)],
+  Widget _buildWindowTitleBar(DesktopWindowData window, Rect desktopRect) {
+    return GestureDetector(
+      onDoubleTap: () => _toggleMaximize(window.id, desktopRect),
+      child: Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [window.accent.withOpacity(0.35), const Color(0xFF162019)],
+          ),
+          border: Border(
+            bottom: BorderSide(color: Colors.white.withOpacity(0.06)),
+          ),
         ),
-        border: Border(
-          bottom: BorderSide(color: Colors.white.withOpacity(0.06)),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(window.icon, size: 17, color: window.accent),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              window.title.toUpperCase(),
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.9,
+        child: Row(
+          children: [
+            Icon(window.icon, size: 17, color: window.accent),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                window.title.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.9,
+                ),
               ),
             ),
-          ),
-          WindowButton(
-            icon: window.isMaximized ? Icons.filter_none : Icons.crop_square,
-            color: const Color(0xFF7E8B63),
-            onPressed: () => _toggleMaximize(window.id, desktopSize),
-          ),
-          const SizedBox(width: 6),
-          WindowButton(
-            icon: Icons.remove,
-            color: const Color(0xFFB7A36B),
-            onPressed: () => _toggleMinimize(window.id),
-          ),
-          const SizedBox(width: 6),
-          WindowButton(
-            icon: Icons.close,
-            color: const Color(0xFF9A5A52),
-            onPressed: () => _closeWindow(window.id),
-          ),
-        ],
+            WindowButton(
+              icon: Icons.vertical_align_top,
+              color: const Color(0xFF6D7F96),
+              onPressed: () {
+                setState(() {
+                  final win = windows[window.id]!;
+                  _snapWindowLeft(win, desktopRect);
+                  win.zIndex = nextZ++;
+                });
+              },
+            ),
+            const SizedBox(width: 6),
+            WindowButton(
+              icon: Icons.vertical_align_bottom,
+              color: const Color(0xFF6D7F96),
+              onPressed: () {
+                setState(() {
+                  final win = windows[window.id]!;
+                  _snapWindowRight(win, desktopRect);
+                  win.zIndex = nextZ++;
+                });
+              },
+            ),
+            const SizedBox(width: 6),
+            WindowButton(
+              icon: window.isMaximized ? Icons.filter_none : Icons.crop_square,
+              color: const Color(0xFF7E8B63),
+              onPressed: () => _toggleMaximize(window.id, desktopRect),
+            ),
+            const SizedBox(width: 6),
+            WindowButton(
+              icon: Icons.remove,
+              color: const Color(0xFFB7A36B),
+              onPressed: () => _toggleMinimize(window.id),
+            ),
+            const SizedBox(width: 6),
+            WindowButton(
+              icon: Icons.close,
+              color: const Color(0xFF9A5A52),
+              onPressed: () => _closeWindow(window.id),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1702,7 +1849,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
   Widget _buildOpenTabsBar(List<DesktopWindowData> openTabs) {
     return Container(
-      height: 44,
+      height: _tabBarHeight,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: const Color(0xCC0C120D),
