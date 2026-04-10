@@ -1012,34 +1012,48 @@ class _AOJDesktopState extends State<AOJDesktop> {
   }
 
   Future<void> _openBookingEditorWindow(BookingGroup group) async {
-    final windowId = 'booking_editor::${group.primary.id}';
+  final windowId = 'booking_editor::${group.primary.id}';
 
-    if (!windows.containsKey(windowId)) {
-      windows[windowId] = DesktopWindowData(
-        id: windowId,
-        title: 'Booking - ${group.displayName}',
-        icon: Icons.assignment_ind_outlined,
-        accent: const Color(0xFF8C6A52),
-        isOpen: true,
-        isMinimized: false,
-        isMaximized: true,
-        position: const Offset(8, 8),
-        size: const Size(1180, 760),
-        restorePosition: const Offset(220, 110),
-        restoreSize: const Size(1180, 760),
-        zIndex: nextZ++,
-      );
-    }
+  final media = MediaQuery.of(context).size;
+  final bottomInset = MediaQuery.of(context).padding.bottom;
+  const topInset = 8.0;
+  const sideInset = 8.0;
+  const titleBarHeightAllowance = 0.0;
+  const tabBarHeight = 44.0;
 
-    setState(() {
-      final window = windows[windowId]!;
-      window.title = 'Booking - ${group.displayName}';
-      window.isOpen = true;
-      window.isMinimized = false;
-      window.isMaximized = true;
-      window.zIndex = nextZ++;
-    });
+  final maximizedSize = Size(
+    media.width - (sideInset * 2),
+    media.height - topInset - tabBarHeight - bottomInset - 8 - titleBarHeightAllowance,
+  );
+
+  if (!windows.containsKey(windowId)) {
+    windows[windowId] = DesktopWindowData(
+      id: windowId,
+      title: 'Booking - ${group.displayName}',
+      icon: Icons.assignment_ind_outlined,
+      accent: const Color(0xFF8C6A52),
+      isOpen: true,
+      isMinimized: false,
+      isMaximized: true,
+      position: const Offset(sideInset, topInset),
+      size: maximizedSize,
+      restorePosition: const Offset(220, 110),
+      restoreSize: const Size(1180, 760),
+      zIndex: nextZ++,
+    );
   }
+
+  setState(() {
+    final window = windows[windowId]!;
+    window.title = 'Booking - ${group.displayName}';
+    window.isOpen = true;
+    window.isMinimized = false;
+    window.isMaximized = true;
+    window.position = const Offset(sideInset, topInset);
+    window.size = maximizedSize;
+    window.zIndex = nextZ++;
+  });
+}
 
   Future<void> _openTicketEditorWindow(BookingGroup group) async {
     await _showTicketManagementDialog(group);
