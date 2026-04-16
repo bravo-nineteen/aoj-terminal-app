@@ -294,6 +294,36 @@ class _AOJDesktopState extends State<AOJDesktop> {
     }
   }
 
+  Future<void> _syncPush() async {
+    setState(() => syncStatus = 'PUSHING…');
+    try {
+      await SupabaseService.pushAppState(appState);
+      if (mounted) setState(() => syncStatus = 'PUSH OK');
+    } catch (e) {
+      if (mounted) setState(() => syncStatus = 'PUSH FAILED');
+    }
+  }
+
+  Future<void> _syncPull() async {
+    setState(() => syncStatus = 'PULLING…');
+    try {
+      final pulled = await SupabaseService.pullAppState();
+      await AppStateService.save(pulled);
+      if (mounted) {
+        setState(() {
+          appState = pulled;
+          selectedBookingIndex = 0;
+          selectedMemberIndex =
+              activeEvent?.members.isNotEmpty == true ? 0 : null;
+          syncStatus = 'PULL OK';
+          systemStatus = 'SYNCED FROM CLOUD';
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => syncStatus = 'PULL FAILED');
+    }
+  }
+
   void _bringToFront(String id) {
     setState(() {
       windows[id]!.zIndex = nextZ++;
@@ -1740,6 +1770,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
           activeEvent: activeEvent,
           systemStatus: systemStatus,
           exportStatus: exportStatus,
+          syncStatus: syncStatus,
           onCreateEvent: _createEvent,
           onExportEvent: _exportActiveEventJson,
           onExportBookings: _exportBookingsCsv,
@@ -1750,6 +1781,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
           onImportSchedule: _importScheduleCsv,
           onImportGameModes: _importGameModesCsv,
           onImportFieldMap: _importFieldMap,
+          onSyncPush: _syncPush,
+          onSyncPull: _syncPull,
         );
       case 'event':
         return EventPanel(
