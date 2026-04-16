@@ -16,9 +16,6 @@ class AppStateService {
     final file = await stateFile();
     if (!await file.exists()) return null;
     final jsonText = await file.readAsString();
-    final SyncService _syncService = SyncService(
-  endpoint: 'https://uvixlrhcjojezhqmgnxk.supabase.co/functions/v1/smooth-task',
-);
     final map = jsonDecode(jsonText) as Map<String, dynamic>;
     return AppStateData.fromJson(map);
   }
