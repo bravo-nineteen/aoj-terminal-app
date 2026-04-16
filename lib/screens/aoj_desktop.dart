@@ -103,6 +103,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
   String gameModeSearch = '';
   String systemStatus = 'READY';
   String exportStatus = 'NO EXPORT YET';
+  String syncStatus = 'NOT SYNCED';
 
   final TextEditingController propIpController =
       TextEditingController(text: '192.168.4.1');
