@@ -15,6 +15,7 @@ import '../panels/system_panel.dart';
 import '../services/app_state_service.dart';
 import '../services/csv_import_service.dart';
 import '../services/export_service.dart';
+import '../services/supabase_service.dart';
 import '../utils/booking_utils.dart';
 import '../widgets/desktop_widgets.dart';
 

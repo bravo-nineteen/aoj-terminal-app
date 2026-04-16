@@ -9,6 +9,7 @@ class SystemPanel extends StatefulWidget {
   final EventRecord? activeEvent;
   final String systemStatus;
   final String exportStatus;
+  final String syncStatus;
   final Future<void> Function(String) onCreateEvent;
   final Future<void> Function() onExportEvent;
   final Future<void> Function() onExportBookings;
@@ -19,6 +20,8 @@ class SystemPanel extends StatefulWidget {
   final Future<void> Function() onImportSchedule;
   final Future<void> Function() onImportGameModes;
   final Future<void> Function() onImportFieldMap;
+  final Future<void> Function() onSyncPush;
+  final Future<void> Function() onSyncPull;
 
   const SystemPanel({
     super.key,
@@ -27,6 +30,7 @@ class SystemPanel extends StatefulWidget {
     required this.activeEvent,
     required this.systemStatus,
     required this.exportStatus,
+    required this.syncStatus,
     required this.onCreateEvent,
     required this.onExportEvent,
     required this.onExportBookings,
@@ -37,6 +41,8 @@ class SystemPanel extends StatefulWidget {
     required this.onImportSchedule,
     required this.onImportGameModes,
     required this.onImportFieldMap,
+    required this.onSyncPush,
+    required this.onSyncPull,
   });
 
   @override
@@ -125,6 +131,7 @@ class _SystemPanelState extends State<SystemPanel> {
                       InfoLine('Events', widget.appState.events.length.toString()),
                       InfoLine('Active', widget.activeEvent?.name ?? 'None'),
                       InfoLine('Export', widget.exportStatus),
+                      InfoLine('Sync', widget.syncStatus),
                     ],
                   ),
                 ),
@@ -161,6 +168,23 @@ class _SystemPanelState extends State<SystemPanel> {
                       ActionLine(
                         label: 'Field Map Image',
                         onTap: () => _runIfActive(widget.onImportFieldMap),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: InfoCard(
+                    title: 'Supabase Sync',
+                    accent: widget.accent,
+                    children: [
+                      ActionLine(
+                        label: 'Push to Supabase',
+                        onTap: widget.onSyncPush,
+                      ),
+                      ActionLine(
+                        label: 'Pull from Supabase',
+                        onTap: widget.onSyncPull,
                       ),
                     ],
                   ),
