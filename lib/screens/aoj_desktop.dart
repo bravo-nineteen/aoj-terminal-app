@@ -785,7 +785,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
                   ),
                   const SizedBox(height: 10),
                   DropdownButtonFormField<String>(
-                    value: method,
+                    initialValue: method,
                     items: paymentMethods
                         .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                         .toList(),

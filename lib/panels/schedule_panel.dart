@@ -5,8 +5,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../models/aoj_models.dart';
-import '../widgets/desktop_widgets.dart';
-import '../widgets/ui_components.dart';
 
 class SchedulePanel extends StatelessWidget {
   final Color accent;

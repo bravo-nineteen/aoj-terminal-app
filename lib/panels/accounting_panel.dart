@@ -24,11 +24,11 @@ class AccountingPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (event == null) {
-      return Padding(
-        padding: const EdgeInsets.all(16),
+      return const Padding(
+        padding: EdgeInsets.all(16),
         child: Column(
           children: [
-            const Expanded(
+            Expanded(
               child: Center(
                 child: Text('NO ACTIVE EVENT'),
               ),

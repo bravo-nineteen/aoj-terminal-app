@@ -289,7 +289,7 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                                 children: [
                                   Expanded(
                                     child: DropdownButtonFormField<String>(
-                                      value: widget.paymentStatuses.contains(
+                                      initialValue: widget.paymentStatuses.contains(
                                         group.primary.paymentStatus,
                                       )
                                           ? group.primary.paymentStatus
@@ -321,7 +321,7 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: DropdownButtonFormField<String>(
-                                      value: widget.checkInStatuses.contains(
+                                      initialValue: widget.checkInStatuses.contains(
                                         group.primary.checkInStatus,
                                       )
                                           ? group.primary.checkInStatus

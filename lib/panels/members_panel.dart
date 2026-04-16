@@ -313,7 +313,7 @@ class _MembersPanelState extends State<MembersPanel> {
                             SizedBox(
                               width: 155,
                               child: DropdownButtonFormField<String>(
-                                value: _sortMode,
+                                initialValue: _sortMode,
                                 decoration: const InputDecoration(
                                   labelText: 'Sort',
                                   border: OutlineInputBorder(),
@@ -540,7 +540,7 @@ class _MembersPanelState extends State<MembersPanel> {
                                           padding:
                                               const EdgeInsets.only(bottom: 6),
                                           child: DropdownButtonFormField<String>(
-                                            value: _normalizedGenderValue(
+                                            initialValue: _normalizedGenderValue(
                                               member.gender,
                                             ),
                                             decoration: const InputDecoration(
@@ -612,7 +612,7 @@ class _MembersPanelState extends State<MembersPanel> {
                                   Padding(
                                     padding: const EdgeInsets.only(bottom: 6),
                                     child: DropdownButtonFormField<String>(
-                                      value: widget.membershipLevels.contains(
+                                      initialValue: widget.membershipLevels.contains(
                                               member.membershipLevel)
                                           ? member.membershipLevel
                                           : widget.membershipLevels.first,

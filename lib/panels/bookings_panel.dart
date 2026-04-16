@@ -124,7 +124,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: widget.appState.activeEventId,
+                  initialValue: widget.appState.activeEventId,
                   decoration: const InputDecoration(
                     labelText: 'Event',
                     border: OutlineInputBorder(),

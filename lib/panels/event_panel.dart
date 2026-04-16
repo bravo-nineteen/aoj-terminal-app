@@ -230,7 +230,7 @@ class _EventPanelState extends State<EventPanel> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: widget.appState.activeEventId,
+                  initialValue: widget.appState.activeEventId,
                   decoration: const InputDecoration(
                     labelText: 'Active Event',
                     border: OutlineInputBorder(),

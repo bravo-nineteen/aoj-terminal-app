@@ -126,12 +126,12 @@ class PropsPanel extends StatelessWidget {
                             onPageFinished: onPageFinished,
                             onWebError: onWebError,
                           )
-                        : Center(
+                        : const Center(
                             child: Padding(
-                              padding: const EdgeInsets.all(24),
+                              padding: EdgeInsets.all(24),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
+                                children: [
                                   Icon(Icons.router_outlined, size: 52, color: Color(0xFF7E8B63)),
                                   SizedBox(height: 12),
                                   Text(
