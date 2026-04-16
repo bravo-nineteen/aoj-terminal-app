@@ -1458,80 +1458,87 @@ class _AOJDesktopState extends State<AOJDesktop> {
     const iconsPerColumn = 5;
     final columnCount = (apps.length / iconsPerColumn).ceil();
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: List.generate(columnCount, (columnIndex) {
-        final start = columnIndex * iconsPerColumn;
-        final end = math.min(start + iconsPerColumn, apps.length);
-        final columnApps = apps.sublist(start, end);
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: _tabBarHeight + 20),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: List.generate(columnCount, (columnIndex) {
+            final start = columnIndex * iconsPerColumn;
+            final end = math.min(start + iconsPerColumn, apps.length);
+            final columnApps = apps.sublist(start, end);
 
-        return Padding(
-          padding:
-              EdgeInsets.only(right: columnIndex == columnCount - 1 ? 0 : 18),
-          child: SizedBox(
-            width: 94,
-            child: Column(
-              children: columnApps.map((app) {
-                final selected = selectedIconId == app.id;
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 18),
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        selectedIconId = app.id;
-                      });
-                    },
-                    onDoubleTap: () => _openWindow(app.id),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      width: 94,
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 10,
-                        horizontal: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? const Color(0x66161F18)
-                            : const Color(0x33101812),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: selected
-                              ? app.accent.withOpacity(0.75)
-                              : Colors.white.withOpacity(0.08),
-                          width: 1.2,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.30),
-                            blurRadius: 14,
-                            offset: const Offset(0, 6),
+            return Padding(
+              padding: EdgeInsets.only(
+                right: columnIndex == columnCount - 1 ? 0 : 18,
+              ),
+              child: SizedBox(
+                width: 94,
+                child: Column(
+                  children: columnApps.map((app) {
+                    final selected = selectedIconId == app.id;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 18),
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            selectedIconId = app.id;
+                          });
+                        },
+                        onDoubleTap: () => _openWindow(app.id),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          width: 94,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 10,
+                            horizontal: 8,
                           ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
-                          AOJDesktopIcon(icon: app.icon, accent: app.accent),
-                          const SizedBox(height: 8),
-                          Text(
-                            app.title,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.4,
-                              height: 1.25,
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? const Color(0x66161F18)
+                                : const Color(0x33101812),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: selected
+                                  ? app.accent.withOpacity(0.75)
+                                  : Colors.white.withOpacity(0.08),
+                              width: 1.2,
                             ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.30),
+                                blurRadius: 14,
+                                offset: const Offset(0, 6),
+                              ),
+                            ],
                           ),
-                        ],
+                          child: Column(
+                            children: [
+                              AOJDesktopIcon(icon: app.icon, accent: app.accent),
+                              const SizedBox(height: 8),
+                              Text(
+                                app.title,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.4,
+                                  height: 1.25,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        );
-      }),
+                    );
+                  }).toList(),
+                ),
+              ),
+            );
+          }),
+        ),
+      ),
     );
   }
 

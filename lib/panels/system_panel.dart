@@ -83,15 +83,19 @@ class _SystemPanelState extends State<SystemPanel> {
   @override
   Widget build(BuildContext context) {
     final hasActiveEvent = widget.activeEvent != null;
+    final isNarrow = MediaQuery.of(context).size.width < 1200;
 
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
           const SizedBox(height: 14),
-          Row(
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
             children: [
-              Expanded(
+              SizedBox(
+                width: 320,
                 child: TextField(
                   controller: _eventController,
                   decoration: const InputDecoration(
@@ -120,76 +124,145 @@ class _SystemPanelState extends State<SystemPanel> {
           ),
           const SizedBox(height: 14),
           Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: InfoCard(
-                    title: 'System Status',
-                    accent: widget.accent,
-                    children: [
-                      InfoLine('State', widget.systemStatus),
-                      InfoLine('Events', widget.appState.events.length.toString()),
-                      InfoLine('Active', widget.activeEvent?.name ?? 'None'),
-                      InfoLine('Export', widget.exportStatus),
-                      InfoLine('Sync', widget.syncStatus),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: InfoCard(
-                    title: 'Import Control',
-                    accent: widget.accent,
-                    children: [
-                      ActionLine(
-                        label: 'Workbook (.xlsx)',
-                        onTap: () => _runIfActive(widget.onImportWorkbook),
-                      ),
-                      ActionLine(
-                        label: 'Bookings CSV',
-                        onTap: () => _runIfActive(widget.onImportBookings),
-                      ),
-                      ActionLine(
-                        label: 'Tickets CSV',
-                        onTap: () => _runIfActive(widget.onImportTickets),
-                      ),
-                      ActionLine(
-                        label: 'Members CSV',
-                        onTap: () => _runIfActive(widget.onImportMembers),
-                      ),
-                      ActionLine(
-                        label: 'Schedule CSV',
-                        onTap: () => _runIfActive(widget.onImportSchedule),
-                      ),
-                      ActionLine(
-                        label: 'Game Modes CSV',
-                        onTap: () => _runIfActive(widget.onImportGameModes),
-                      ),
-                      ActionLine(
-                        label: 'Field Map Image',
-                        onTap: () => _runIfActive(widget.onImportFieldMap),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: InfoCard(
-                    title: 'Supabase Sync',
-                    accent: widget.accent,
-                    children: [
-                      ActionLine(
-                        label: 'Push to Supabase',
-                        onTap: widget.onSyncPush,
-                      ),
-                      ActionLine(
-                        label: 'Pull from Supabase',
-                        onTap: widget.onSyncPull,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            child: SingleChildScrollView(
+              child: isNarrow
+                  ? Column(
+                      children: [
+                        InfoCard(
+                          title: 'System Status',
+                          accent: widget.accent,
+                          children: [
+                            InfoLine('State', widget.systemStatus),
+                            InfoLine('Events', widget.appState.events.length.toString()),
+                            InfoLine('Active', widget.activeEvent?.name ?? 'None'),
+                            InfoLine('Export', widget.exportStatus),
+                            InfoLine('Sync', widget.syncStatus),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        InfoCard(
+                          title: 'Import Control',
+                          accent: widget.accent,
+                          children: [
+                            ActionLine(
+                              label: 'Workbook (.xlsx)',
+                              onTap: () => _runIfActive(widget.onImportWorkbook),
+                            ),
+                            ActionLine(
+                              label: 'Bookings CSV',
+                              onTap: () => _runIfActive(widget.onImportBookings),
+                            ),
+                            ActionLine(
+                              label: 'Tickets CSV',
+                              onTap: () => _runIfActive(widget.onImportTickets),
+                            ),
+                            ActionLine(
+                              label: 'Members CSV',
+                              onTap: () => _runIfActive(widget.onImportMembers),
+                            ),
+                            ActionLine(
+                              label: 'Schedule CSV',
+                              onTap: () => _runIfActive(widget.onImportSchedule),
+                            ),
+                            ActionLine(
+                              label: 'Game Modes CSV',
+                              onTap: () => _runIfActive(widget.onImportGameModes),
+                            ),
+                            ActionLine(
+                              label: 'Field Map Image',
+                              onTap: () => _runIfActive(widget.onImportFieldMap),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        InfoCard(
+                          title: 'Supabase Sync',
+                          accent: widget.accent,
+                          children: [
+                            ActionLine(
+                              label: 'Push to Supabase',
+                              onTap: widget.onSyncPush,
+                            ),
+                            ActionLine(
+                              label: 'Pull from Supabase',
+                              onTap: widget.onSyncPull,
+                            ),
+                          ],
+                        ),
+                      ],
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: InfoCard(
+                            title: 'System Status',
+                            accent: widget.accent,
+                            children: [
+                              InfoLine('State', widget.systemStatus),
+                              InfoLine('Events', widget.appState.events.length.toString()),
+                              InfoLine('Active', widget.activeEvent?.name ?? 'None'),
+                              InfoLine('Export', widget.exportStatus),
+                              InfoLine('Sync', widget.syncStatus),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: InfoCard(
+                            title: 'Import Control',
+                            accent: widget.accent,
+                            children: [
+                              ActionLine(
+                                label: 'Workbook (.xlsx)',
+                                onTap: () => _runIfActive(widget.onImportWorkbook),
+                              ),
+                              ActionLine(
+                                label: 'Bookings CSV',
+                                onTap: () => _runIfActive(widget.onImportBookings),
+                              ),
+                              ActionLine(
+                                label: 'Tickets CSV',
+                                onTap: () => _runIfActive(widget.onImportTickets),
+                              ),
+                              ActionLine(
+                                label: 'Members CSV',
+                                onTap: () => _runIfActive(widget.onImportMembers),
+                              ),
+                              ActionLine(
+                                label: 'Schedule CSV',
+                                onTap: () => _runIfActive(widget.onImportSchedule),
+                              ),
+                              ActionLine(
+                                label: 'Game Modes CSV',
+                                onTap: () => _runIfActive(widget.onImportGameModes),
+                              ),
+                              ActionLine(
+                                label: 'Field Map Image',
+                                onTap: () => _runIfActive(widget.onImportFieldMap),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: InfoCard(
+                            title: 'Supabase Sync',
+                            accent: widget.accent,
+                            children: [
+                              ActionLine(
+                                label: 'Push to Supabase',
+                                onTap: widget.onSyncPush,
+                              ),
+                              ActionLine(
+                                label: 'Pull from Supabase',
+                                onTap: widget.onSyncPull,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
             ),
           ),
         ],
