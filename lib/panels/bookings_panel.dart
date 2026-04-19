@@ -65,18 +65,15 @@ class _BookingsPanelState extends State<BookingsPanel> {
       final groupPhone = group.phone.trim().toLowerCase();
       final groupName = group.displayName.trim().toLowerCase();
 
-      final emailMatch =
-          memberEmail.isNotEmpty &&
+      final emailMatch = memberEmail.isNotEmpty &&
           groupEmail.isNotEmpty &&
           memberEmail == groupEmail;
 
-      final phoneMatch =
-          memberPhone.isNotEmpty &&
+      final phoneMatch = memberPhone.isNotEmpty &&
           groupPhone.isNotEmpty &&
           memberPhone == groupPhone;
 
-      final nameMatch =
-          memberName.isNotEmpty &&
+      final nameMatch = memberName.isNotEmpty &&
           groupName.isNotEmpty &&
           memberName == groupName;
 
@@ -174,7 +171,8 @@ class _BookingsPanelState extends State<BookingsPanel> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
                   color: const Color(0xCC101511),
-                  border: Border.all(color: widget.accent.withOpacity(0.30)),
+                  border:
+                      Border.all(color: widget.accent.withValues(alpha: 0.30)),
                 ),
                 child: widget.groups.isEmpty
                     ? const Center(child: Text('NO BOOKINGS FOR THIS EVENT'))
@@ -183,7 +181,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
                         itemCount: widget.groups.length,
                         separatorBuilder: (_, __) => Divider(
                           height: 1,
-                          color: Colors.white.withOpacity(0.05),
+                          color: Colors.white.withValues(alpha: 0.05),
                         ),
                         itemBuilder: (context, index) {
                           final group = widget.groups[index];
@@ -206,12 +204,12 @@ class _BookingsPanelState extends State<BookingsPanel> {
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
                               color: active
-                                  ? widget.accent.withOpacity(0.12)
+                                  ? widget.accent.withValues(alpha: 0.12)
                                   : Colors.transparent,
                               border: Border.all(
                                 color: active
-                                    ? widget.accent.withOpacity(0.35)
-                                    : Colors.white.withOpacity(0.03),
+                                    ? widget.accent.withValues(alpha: 0.35)
+                                    : Colors.white.withValues(alpha: 0.03),
                               ),
                             ),
                             child: InkWell(
@@ -260,8 +258,8 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                                           .contains(
                                                               checkInStatus)
                                                       ? checkInStatus
-                                                      : widget
-                                                          .checkInStatuses.first,
+                                                      : widget.checkInStatuses
+                                                          .first,
                                                   isDense: true,
                                                   style: TextStyle(
                                                     fontSize: 11,
@@ -339,20 +337,22 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                               if (hasOutstanding) ...[
                                                 const SizedBox(width: 6),
                                                 Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
                                                     horizontal: 6,
                                                     vertical: 3,
                                                   ),
                                                   decoration: BoxDecoration(
                                                     color: Colors.red
-                                                        .withOpacity(0.18),
+                                                        .withValues(
+                                                            alpha: 0.18),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             999),
                                                     border: Border.all(
                                                       color: Colors.redAccent
-                                                          .withOpacity(0.35),
+                                                          .withValues(
+                                                              alpha: 0.35),
                                                     ),
                                                   ),
                                                   child: Text(
@@ -404,7 +404,7 @@ class _IntegratedOpenButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: accent.withOpacity(0.14),
+      color: accent.withValues(alpha: 0.14),
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
@@ -413,7 +413,7 @@ class _IntegratedOpenButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: accent.withOpacity(0.35)),
+            border: Border.all(color: accent.withValues(alpha: 0.35)),
           ),
           child: Icon(
             Icons.open_in_new_rounded,

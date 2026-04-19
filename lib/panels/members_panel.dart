@@ -160,7 +160,8 @@ class _MembersPanelState extends State<MembersPanel> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Add "rating" to MemberRecord to enable saved ratings.'),
+          content:
+              Text('Add "rating" to MemberRecord to enable saved ratings.'),
         ),
       );
     }
@@ -176,7 +177,7 @@ class _MembersPanelState extends State<MembersPanel> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           color: const Color(0x66121813),
         ),
         child: Row(
@@ -190,7 +191,7 @@ class _MembersPanelState extends State<MembersPanel> {
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.5,
-                  color: Colors.white.withOpacity(0.62),
+                  color: Colors.white.withValues(alpha: 0.62),
                 ),
               ),
             ),
@@ -218,7 +219,7 @@ class _MembersPanelState extends State<MembersPanel> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           color: const Color(0x66121813),
         ),
         child: Row(
@@ -231,7 +232,7 @@ class _MembersPanelState extends State<MembersPanel> {
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.5,
-                  color: Colors.white.withOpacity(0.62),
+                  color: Colors.white.withValues(alpha: 0.62),
                 ),
               ),
             ),
@@ -267,7 +268,8 @@ class _MembersPanelState extends State<MembersPanel> {
   Widget build(BuildContext context) {
     final member = widget.selectedMember;
     final filteredMembers = _filteredMembers();
-    final filteredSelectedIndex = _resolvedSelectedFilteredIndex(filteredMembers);
+    final filteredSelectedIndex =
+        _resolvedSelectedFilteredIndex(filteredMembers);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
@@ -371,7 +373,7 @@ class _MembersPanelState extends State<MembersPanel> {
                               borderRadius: BorderRadius.circular(16),
                               color: const Color(0xCC101511),
                               border: Border.all(
-                                color: widget.accent.withOpacity(0.30),
+                                color: widget.accent.withValues(alpha: 0.30),
                               ),
                             ),
                             child: filteredMembers.isEmpty
@@ -381,7 +383,8 @@ class _MembersPanelState extends State<MembersPanel> {
                                     itemCount: filteredMembers.length,
                                     separatorBuilder: (_, __) => Divider(
                                       height: 1,
-                                      color: Colors.white.withOpacity(0.05),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.05),
                                     ),
                                     itemBuilder: (context, index) {
                                       final row = filteredMembers[index];
@@ -399,8 +402,8 @@ class _MembersPanelState extends State<MembersPanel> {
                                           vertical: 2,
                                         ),
                                         selected: active,
-                                        selectedTileColor:
-                                            widget.accent.withOpacity(0.14),
+                                        selectedTileColor: widget.accent
+                                            .withValues(alpha: 0.14),
                                         title: Text(
                                           row.fullName.isEmpty
                                               ? 'Unnamed Member'
@@ -445,8 +448,9 @@ class _MembersPanelState extends State<MembersPanel> {
                                           ],
                                         ),
                                         onTap: () {
-                                          final realIndex = widget.event!.members
-                                              .indexWhere((m) => m.id == row.id);
+                                          final realIndex =
+                                              widget.event!.members.indexWhere(
+                                                  (m) => m.id == row.id);
                                           if (realIndex == -1) return;
                                           widget.onSelectMember(realIndex);
                                         },
@@ -467,7 +471,7 @@ class _MembersPanelState extends State<MembersPanel> {
                         borderRadius: BorderRadius.circular(16),
                         color: const Color(0xCC101511),
                         border: Border.all(
-                          color: widget.accent.withOpacity(0.30),
+                          color: widget.accent.withValues(alpha: 0.30),
                         ),
                       ),
                       child: member == null
@@ -480,7 +484,9 @@ class _MembersPanelState extends State<MembersPanel> {
                                       child: Text(
                                         member.fullName.isEmpty
                                             ? 'Unnamed Member'
-                                            : member.membershipLevel.trim().isEmpty
+                                            : member.membershipLevel
+                                                    .trim()
+                                                    .isEmpty
                                                 ? member.fullName
                                                 : '${member.fullName} (${member.membershipLevel})',
                                         style: const TextStyle(
@@ -539,8 +545,10 @@ class _MembersPanelState extends State<MembersPanel> {
                                         child: Padding(
                                           padding:
                                               const EdgeInsets.only(bottom: 6),
-                                          child: DropdownButtonFormField<String>(
-                                            initialValue: _normalizedGenderValue(
+                                          child:
+                                              DropdownButtonFormField<String>(
+                                            initialValue:
+                                                _normalizedGenderValue(
                                               member.gender,
                                             ),
                                             decoration: const InputDecoration(
@@ -612,8 +620,8 @@ class _MembersPanelState extends State<MembersPanel> {
                                   Padding(
                                     padding: const EdgeInsets.only(bottom: 6),
                                     child: DropdownButtonFormField<String>(
-                                      initialValue: widget.membershipLevels.contains(
-                                              member.membershipLevel)
+                                      initialValue: widget.membershipLevels
+                                              .contains(member.membershipLevel)
                                           ? member.membershipLevel
                                           : widget.membershipLevels.first,
                                       decoration: const InputDecoration(

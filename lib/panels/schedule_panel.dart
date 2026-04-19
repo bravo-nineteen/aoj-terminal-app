@@ -1,4 +1,3 @@
-
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -47,7 +46,8 @@ class SchedulePanel extends StatelessWidget {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(18),
                         color: const Color(0xCC101511),
-                        border: Border.all(color: accent.withOpacity(0.35)),
+                        border:
+                            Border.all(color: accent.withValues(alpha: 0.35)),
                       ),
                       child: event!.schedule.isEmpty
                           ? const Center(child: Text('NO SCHEDULE IMPORTED'))
@@ -60,14 +60,18 @@ class SchedulePanel extends StatelessWidget {
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(12),
-                                    color: Colors.white.withOpacity(0.03),
-                                    border: Border.all(color: Colors.white.withOpacity(0.06)),
+                                    color: Colors.white.withValues(alpha: 0.03),
+                                    border: Border.all(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.06)),
                                   ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: row.data.entries.map((entry) {
                                       return Padding(
-                                        padding: const EdgeInsets.only(bottom: 4),
+                                        padding:
+                                            const EdgeInsets.only(bottom: 4),
                                         child: Text(
                                           '${entry.key}: ${entry.value}',
                                           style: const TextStyle(fontSize: 11),
@@ -87,14 +91,16 @@ class SchedulePanel extends StatelessWidget {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(18),
                         color: const Color(0xCC101511),
-                        border: Border.all(color: accent.withOpacity(0.35)),
+                        border:
+                            Border.all(color: accent.withValues(alpha: 0.35)),
                       ),
                       child: fieldMapBytes == null
                           ? const Center(child: Text('NO FIELD MAP'))
                           : ClipRRect(
                               borderRadius: BorderRadius.circular(18),
                               child: InteractiveViewer(
-                                child: Image.memory(fieldMapBytes, fit: BoxFit.contain),
+                                child: Image.memory(fieldMapBytes,
+                                    fit: BoxFit.contain),
                               ),
                             ),
                     ),

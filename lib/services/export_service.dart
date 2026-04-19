@@ -19,9 +19,11 @@ class ExportService {
       flush: true,
     );
 
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      text: 'AOJ event export: ${event.name}',
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        text: 'AOJ event export: ${event.name}',
+      ),
     );
 
     return 'EXPORTED ${event.name} JSON';
@@ -134,9 +136,11 @@ class ExportService {
     final csv = const ListToCsvConverter().convert(rows);
     await file.writeAsString(csv, flush: true);
 
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      text: 'AOJ bookings export: ${event.name}',
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        text: 'AOJ bookings export: ${event.name}',
+      ),
     );
 
     return 'EXPORTED ${event.name} BOOKINGS CSV';
@@ -180,7 +184,8 @@ class ExportService {
       double totalManualExpenses = 0;
 
       for (final group in groups) {
-        final ticketValue = _toDouble(BookingUtils.ticketsTotal(group).toString());
+        final ticketValue =
+            _toDouble(BookingUtils.ticketsTotal(group).toString());
         final salesValue = _toDouble(BookingUtils.salesTotal(group).toString());
         final grandTotal = _toDouble(BookingUtils.grandTotal(group).toString());
         final paymentsRecorded =
@@ -301,8 +306,7 @@ class ExportService {
       );
       final totalOutstandingBalance = groups.fold<double>(
         0,
-        (sum, group) =>
-            sum + _toDouble(BookingUtils.balance(group).toString()),
+        (sum, group) => sum + _toDouble(BookingUtils.balance(group).toString()),
       );
       final checkedInCount = groups
           .where((g) => g.primary.checkInStatus.trim() == 'Checked In')
@@ -331,9 +335,11 @@ class ExportService {
       final csv = const ListToCsvConverter().convert(rows);
       await file.writeAsString(csv, flush: true);
 
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: 'AOJ full event export: ${event.name}',
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: 'AOJ full event export: ${event.name}',
+        ),
       );
 
       return 'EXPORTED ${event.name} FULL EVENT CSV';
@@ -349,7 +355,8 @@ class ExportService {
         .replaceAll(RegExp(r'\s+'), '_');
   }
 
-  static String _membershipLevelForGroup(EventRecord event, BookingGroup group) {
+  static String _membershipLevelForGroup(
+      EventRecord event, BookingGroup group) {
     for (final member in event.members) {
       final memberEmail = member.email.trim().toLowerCase();
       final memberPhone = member.telephone.trim().toLowerCase();
@@ -367,8 +374,9 @@ class ExportService {
           groupPhone.isNotEmpty &&
           memberPhone == groupPhone;
 
-      final nameMatch =
-          memberName.isNotEmpty && groupName.isNotEmpty && memberName == groupName;
+      final nameMatch = memberName.isNotEmpty &&
+          groupName.isNotEmpty &&
+          memberName == groupName;
 
       if (emailMatch || phoneMatch || nameMatch) {
         return member.membershipLevel;

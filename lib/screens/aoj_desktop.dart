@@ -1130,9 +1130,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
                           onPressed: () async {
                             BookingUtils.recalculateAllTotals(event);
                             await _saveLocalState();
-                            if (mounted) {
-                              Navigator.pop(context);
-                            }
+                            if (!context.mounted) return;
+                            Navigator.pop(context);
                           },
                           icon: const Icon(Icons.save_outlined, size: 16),
                           label: const Text('SAVE'),
@@ -1159,7 +1158,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: Colors.white.withOpacity(0.08),
+                                  color: Colors.white.withValues(alpha: 0.08),
                                 ),
                               ),
                               child: Column(
@@ -1510,13 +1509,13 @@ class _AOJDesktopState extends State<AOJDesktop> {
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: selected
-                                  ? app.accent.withOpacity(0.75)
-                                  : Colors.white.withOpacity(0.08),
+                                  ? app.accent.withValues(alpha: 0.75)
+                                  : Colors.white.withValues(alpha: 0.08),
                               width: 1.2,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.30),
+                                color: Colors.black.withValues(alpha: 0.30),
                                 blurRadius: 14,
                                 offset: const Offset(0, 6),
                               ),
@@ -1590,7 +1589,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: window.accent.withOpacity(0.65),
+              color: window.accent.withValues(alpha: 0.65),
               width: 1.3,
             ),
             gradient: const LinearGradient(
@@ -1603,7 +1602,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.45),
+                color: Colors.black.withValues(alpha: 0.45),
                 blurRadius: 30,
                 offset: const Offset(0, 18),
               ),
@@ -1653,10 +1652,10 @@ class _AOJDesktopState extends State<AOJDesktop> {
                       width: 22,
                       height: 22,
                       decoration: BoxDecoration(
-                        color: window.accent.withOpacity(0.22),
+                        color: window.accent.withValues(alpha: 0.22),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: window.accent.withOpacity(0.7),
+                          color: window.accent.withValues(alpha: 0.7),
                         ),
                       ),
                       child: const Icon(Icons.open_in_full, size: 12),
@@ -1678,10 +1677,13 @@ class _AOJDesktopState extends State<AOJDesktop> {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [window.accent.withOpacity(0.35), const Color(0xFF162019)],
+            colors: [
+              window.accent.withValues(alpha: 0.35),
+              const Color(0xFF162019)
+            ],
           ),
           border: Border(
-            bottom: BorderSide(color: Colors.white.withOpacity(0.06)),
+            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
           ),
         ),
         child: Row(
@@ -1921,7 +1923,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: const Color(0xCC0C120D),
-        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.06))),
+        border: Border(
+            top: BorderSide(color: Colors.white.withValues(alpha: 0.06))),
       ),
       child: Row(
         children: [
@@ -1967,12 +1970,12 @@ class _AOJDesktopState extends State<AOJDesktop> {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
                       color: active
-                          ? tab.accent.withOpacity(0.20)
+                          ? tab.accent.withValues(alpha: 0.20)
                           : const Color(0xFF121813),
                       border: Border.all(
                         color: active
-                            ? tab.accent.withOpacity(0.85)
-                            : Colors.white.withOpacity(0.06),
+                            ? tab.accent.withValues(alpha: 0.85)
+                            : Colors.white.withValues(alpha: 0.06),
                       ),
                     ),
                     child: Row(

@@ -61,11 +61,11 @@ class AOJDesktopIcon extends StatelessWidget {
         shape: BoxShape.circle,
         gradient: LinearGradient(
           colors: [
-            accent.withOpacity(0.35),
+            accent.withValues(alpha: 0.35),
             const Color(0xFF111713),
           ],
         ),
-        border: Border.all(color: accent.withOpacity(0.75), width: 1.3),
+        border: Border.all(color: accent.withValues(alpha: 0.75), width: 1.3),
       ),
       child: Icon(icon, size: 26, color: accent),
     );
@@ -92,7 +92,7 @@ class WindowButton extends StatelessWidget {
         width: 28,
         height: 28,
         decoration: BoxDecoration(
-          color: color.withOpacity(0.2),
+          color: color.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Icon(icon, size: 14, color: color),
@@ -116,7 +116,7 @@ class GridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFF7E8B63).withOpacity(0.06)
+      ..color = const Color(0xFF7E8B63).withValues(alpha: 0.06)
       ..strokeWidth = 1;
 
     const gap = 28.0;

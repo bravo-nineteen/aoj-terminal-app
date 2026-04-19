@@ -184,7 +184,7 @@ class AccountingPanel extends StatelessWidget {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(18),
                     color: const Color(0xCC101511),
-                    border: Border.all(color: accent.withOpacity(0.35)),
+                    border: Border.all(color: accent.withValues(alpha: 0.35)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -224,7 +224,8 @@ class AccountingPanel extends StatelessWidget {
                           ),
                           _SummaryStat(
                             label: 'Payments Recorded',
-                            value: '¥ ${MoneyUtils.formatMoney(paymentsRecorded)}',
+                            value:
+                                '¥ ${MoneyUtils.formatMoney(paymentsRecorded)}',
                           ),
                           _SummaryStat(
                             label: 'Card Fees',
@@ -312,7 +313,7 @@ class _LedgerCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         color: const Color(0xCC101511),
-        border: Border.all(color: accent.withOpacity(0.35)),
+        border: Border.all(color: accent.withValues(alpha: 0.35)),
       ),
       child: Column(
         children: [
@@ -322,9 +323,9 @@ class _LedgerCard extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(18)),
-              color: accent.withOpacity(0.12),
+              color: accent.withValues(alpha: 0.12),
               border: Border(
-                bottom: BorderSide(color: accent.withOpacity(0.25)),
+                bottom: BorderSide(color: accent.withValues(alpha: 0.25)),
               ),
             ),
             child: Row(
@@ -351,7 +352,7 @@ class _LedgerCard extends StatelessWidget {
                     itemCount: lines.length,
                     separatorBuilder: (_, __) => Divider(
                       height: 1,
-                      color: Colors.white.withOpacity(0.06),
+                      color: Colors.white.withValues(alpha: 0.06),
                     ),
                     itemBuilder: (context, index) {
                       final line = lines[index];
@@ -390,7 +391,8 @@ class _LedgerCard extends StatelessWidget {
                               const SizedBox(width: 6),
                               IconButton(
                                 onPressed: () => onDeleteLine!(line),
-                                icon: const Icon(Icons.delete_outline, size: 18),
+                                icon:
+                                    const Icon(Icons.delete_outline, size: 18),
                                 tooltip: 'Delete expense',
                               ),
                             ],

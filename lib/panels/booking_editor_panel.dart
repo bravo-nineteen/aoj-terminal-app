@@ -84,8 +84,8 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        color: Colors.white.withOpacity(0.03),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
+        color: Colors.white.withValues(alpha: 0.03),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -177,10 +177,10 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.18),
+                      color: Colors.orange.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(999),
                       border: Border.all(
-                        color: Colors.orange.withOpacity(0.35),
+                        color: Colors.orange.withValues(alpha: 0.35),
                       ),
                     ),
                     child: const Text(
@@ -219,16 +219,20 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                               ),
                               IconButton(
                                 onPressed: _confirmAndDelete,
-                                icon: const Icon(Icons.delete_outline, size: 18),
+                                icon:
+                                    const Icon(Icons.delete_outline, size: 18),
                                 tooltip: 'Delete booking',
                               ),
                             ],
                           ),
                           child: Column(
                             children: [
-                              SummaryLine(label: 'Email', value: group.primary.email),
-                              SummaryLine(label: 'Phone', value: group.primary.phone),
-                              SummaryLine(label: 'Booking ID', value: group.bookingId),
+                              SummaryLine(
+                                  label: 'Email', value: group.primary.email),
+                              SummaryLine(
+                                  label: 'Phone', value: group.primary.phone),
+                              SummaryLine(
+                                  label: 'Booking ID', value: group.bookingId),
                               SummaryLine(
                                 label: 'Transaction ID',
                                 value: group.primary.transactionId,
@@ -274,7 +278,8 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                               ),
                               SummaryLine(
                                 label: 'Total',
-                                value: '¥ ${MoneyUtils.formatMoney(grandTotal)}',
+                                value:
+                                    '¥ ${MoneyUtils.formatMoney(grandTotal)}',
                               ),
                               SummaryLine(
                                 label: 'Paid',
@@ -289,11 +294,12 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                                 children: [
                                   Expanded(
                                     child: DropdownButtonFormField<String>(
-                                      initialValue: widget.paymentStatuses.contains(
+                                      initialValue:
+                                          widget.paymentStatuses.contains(
                                         group.primary.paymentStatus,
                                       )
-                                          ? group.primary.paymentStatus
-                                          : 'Unpaid',
+                                              ? group.primary.paymentStatus
+                                              : 'Unpaid',
                                       decoration: const InputDecoration(
                                         labelText: 'Payment',
                                         border: OutlineInputBorder(),
@@ -321,11 +327,12 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: DropdownButtonFormField<String>(
-                                      initialValue: widget.checkInStatuses.contains(
+                                      initialValue:
+                                          widget.checkInStatuses.contains(
                                         group.primary.checkInStatus,
                                       )
-                                          ? group.primary.checkInStatus
-                                          : 'Not Checked In',
+                                              ? group.primary.checkInStatus
+                                              : 'Not Checked In',
                                       decoration: const InputDecoration(
                                         labelText: 'Check-in',
                                         border: OutlineInputBorder(),
@@ -361,10 +368,11 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                                     vertical: 8,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: Colors.red.withOpacity(0.15),
+                                    color: Colors.red.withValues(alpha: 0.15),
                                     borderRadius: BorderRadius.circular(10),
                                     border: Border.all(
-                                      color: Colors.redAccent.withOpacity(0.35),
+                                      color: Colors.redAccent
+                                          .withValues(alpha: 0.35),
                                     ),
                                   ),
                                   child: Text(
@@ -415,9 +423,11 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                                       padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(10),
-                                        color: Colors.white.withOpacity(0.03),
+                                        color: Colors.white
+                                            .withValues(alpha: 0.03),
                                         border: Border.all(
-                                          color: Colors.white.withOpacity(0.05),
+                                          color: Colors.white
+                                              .withValues(alpha: 0.05),
                                         ),
                                       ),
                                       child: Row(
@@ -488,14 +498,17 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                                     const SizedBox(height: 4),
                                     ...group.primary.payments.map(
                                       (payment) => Container(
-                                        margin: const EdgeInsets.only(bottom: 6),
+                                        margin:
+                                            const EdgeInsets.only(bottom: 6),
                                         padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
                                           borderRadius:
                                               BorderRadius.circular(10),
-                                          color: Colors.white.withOpacity(0.03),
+                                          color: Colors.white
+                                              .withValues(alpha: 0.03),
                                           border: Border.all(
-                                            color: Colors.white.withOpacity(0.05),
+                                            color: Colors.white
+                                                .withValues(alpha: 0.05),
                                           ),
                                         ),
                                         child: Row(
@@ -575,14 +588,17 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                                     const SizedBox(height: 4),
                                     ...group.primary.sales.map(
                                       (sale) => Container(
-                                        margin: const EdgeInsets.only(bottom: 6),
+                                        margin:
+                                            const EdgeInsets.only(bottom: 6),
                                         padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
                                           borderRadius:
                                               BorderRadius.circular(10),
-                                          color: Colors.white.withOpacity(0.03),
+                                          color: Colors.white
+                                              .withValues(alpha: 0.03),
                                           border: Border.all(
-                                            color: Colors.white.withOpacity(0.05),
+                                            color: Colors.white
+                                                .withValues(alpha: 0.05),
                                           ),
                                         ),
                                         child: Row(

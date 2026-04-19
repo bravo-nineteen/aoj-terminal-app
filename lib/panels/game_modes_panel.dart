@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../models/aoj_models.dart';
@@ -57,7 +56,7 @@ class GameModesPanel extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
                   color: const Color(0xCC101511),
-                  border: Border.all(color: accent.withOpacity(0.35)),
+                  border: Border.all(color: accent.withValues(alpha: 0.35)),
                 ),
                 child: ListView.builder(
                   itemCount: modes.length,
@@ -68,28 +67,32 @@ class GameModesPanel extends StatelessWidget {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        color: Colors.white.withOpacity(0.03),
-                        border: Border.all(color: Colors.white.withOpacity(0.06)),
+                        color: Colors.white.withValues(alpha: 0.03),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.06)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             mode.title,
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                            style: const TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w800),
                           ),
                           if (mode.description.isNotEmpty) ...[
                             const SizedBox(height: 6),
                             Text(
                               mode.description,
-                              style: const TextStyle(fontSize: 11, color: Color(0xFFAFB7AD)),
+                              style: const TextStyle(
+                                  fontSize: 11, color: Color(0xFFAFB7AD)),
                             ),
                           ],
                           const SizedBox(height: 8),
                           ...mode.data.entries.map(
                             (entry) => Padding(
                               padding: const EdgeInsets.only(bottom: 3),
-                              child: Text('${entry.key}: ${entry.value}', style: const TextStyle(fontSize: 11)),
+                              child: Text('${entry.key}: ${entry.value}',
+                                  style: const TextStyle(fontSize: 11)),
                             ),
                           ),
                         ],

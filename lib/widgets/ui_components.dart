@@ -23,16 +23,16 @@ class HeroPanel extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         gradient: LinearGradient(
           colors: [
-            accent.withOpacity(0.20),
+            accent.withValues(alpha: 0.20),
             const Color(0xCC101511),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        border: Border.all(color: accent.withOpacity(0.35)),
+        border: Border.all(color: accent.withValues(alpha: 0.35)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.18),
+            color: Colors.black.withValues(alpha: 0.18),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -45,8 +45,8 @@ class HeroPanel extends StatelessWidget {
             height: 52,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: accent.withOpacity(0.14),
-              border: Border.all(color: accent.withOpacity(0.55)),
+              color: accent.withValues(alpha: 0.14),
+              border: Border.all(color: accent.withValues(alpha: 0.55)),
             ),
             child: Icon(icon, color: accent, size: 26),
           ),
@@ -69,7 +69,7 @@ class HeroPanel extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.35,
-                    color: Colors.white.withOpacity(0.72),
+                    color: Colors.white.withValues(alpha: 0.72),
                   ),
                 ),
               ],
@@ -101,7 +101,7 @@ class InfoCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
         color: const Color(0xCC101511),
-        border: Border.all(color: accent.withOpacity(0.35)),
+        border: Border.all(color: accent.withValues(alpha: 0.35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -147,7 +147,7 @@ class InfoLine extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: Colors.white.withOpacity(0.72),
+                color: Colors.white.withValues(alpha: 0.72),
               ),
             ),
           ),
@@ -189,8 +189,8 @@ class ActionLine extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            color: Colors.white.withOpacity(0.03),
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
+            color: Colors.white.withValues(alpha: 0.03),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           ),
           child: Row(
             children: [

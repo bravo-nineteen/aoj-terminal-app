@@ -89,7 +89,9 @@ class _EventPanelState extends State<EventPanel> {
   }
 
   double _estimatedProfit(EventRecord event) {
-    return _ticketRevenue(event) - _ticketCostTotal(event) + _salesRevenue(event);
+    return _ticketRevenue(event) -
+        _ticketCostTotal(event) +
+        _salesRevenue(event);
   }
 
   Widget _buildReadOnlyRow({
@@ -102,7 +104,7 @@ class _EventPanelState extends State<EventPanel> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
           color: const Color(0x66121813),
         ),
         child: Row(
@@ -116,7 +118,7 @@ class _EventPanelState extends State<EventPanel> {
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.5,
-                  color: Colors.white.withOpacity(0.62),
+                  color: Colors.white.withValues(alpha: 0.62),
                 ),
               ),
             ),
@@ -146,7 +148,7 @@ class _EventPanelState extends State<EventPanel> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
         color: const Color(0xCC101511),
-        border: Border.all(color: widget.accent.withOpacity(0.30)),
+        border: Border.all(color: widget.accent.withValues(alpha: 0.30)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -183,9 +185,9 @@ class _EventPanelState extends State<EventPanel> {
                         ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(10),
-                          color: Colors.white.withOpacity(0.03),
+                          color: Colors.white.withValues(alpha: 0.03),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.05),
+                            color: Colors.white.withValues(alpha: 0.05),
                           ),
                         ),
                         child: Text(
@@ -411,11 +413,15 @@ class _EventPanelState extends State<EventPanel> {
                             ),
                             InfoLine(
                               'Pickup Bookings',
-                              BookingUtils.pickupGroups(event).length.toString(),
+                              BookingUtils.pickupGroups(event)
+                                  .length
+                                  .toString(),
                             ),
                             InfoLine(
                               'Training Requests',
-                              BookingUtils.trainingGroups(event).length.toString(),
+                              BookingUtils.trainingGroups(event)
+                                  .length
+                                  .toString(),
                             ),
                           ],
                         ),
@@ -457,9 +463,11 @@ class _EventPanelState extends State<EventPanel> {
                                     ),
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(10),
-                                      color: Colors.white.withOpacity(0.03),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.03),
                                       border: Border.all(
-                                        color: Colors.white.withOpacity(0.06),
+                                        color: Colors.white
+                                            .withValues(alpha: 0.06),
                                       ),
                                     ),
                                     child: Text(

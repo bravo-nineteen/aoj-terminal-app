@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../models/aoj_models.dart';
@@ -53,8 +52,13 @@ class PropsPanel extends StatelessWidget {
                   title: 'Prop Console',
                   accent: accent,
                   children: [
-                    InfoLine('Field Map', event!.fieldMapBase64 == null ? 'NOT LOADED' : 'LOADED'),
-                    InfoLine('Notes', event!.notes.isEmpty ? 'NONE' : 'SEE EVENT INFO'),
+                    InfoLine(
+                        'Field Map',
+                        event!.fieldMapBase64 == null
+                            ? 'NOT LOADED'
+                            : 'LOADED'),
+                    InfoLine('Notes',
+                        event!.notes.isEmpty ? 'NONE' : 'SEE EVENT INFO'),
                     InfoLine('Console', propControlStatus),
                     const InfoLine('Wi-Fi', 'JOIN PROP NETWORK FIRST'),
                     TextField(
@@ -83,7 +87,9 @@ class PropsPanel extends StatelessWidget {
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: showPropControlPage ? onClosePropControlPage : null,
+                            onPressed: showPropControlPage
+                                ? onClosePropControlPage
+                                : null,
                             icon: const Icon(Icons.link_off),
                             label: const Text('CLOSE PAGE'),
                           ),
@@ -96,12 +102,16 @@ class PropsPanel extends StatelessWidget {
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        color: Colors.white.withOpacity(0.03),
-                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        color: Colors.white.withValues(alpha: 0.03),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.08)),
                       ),
                       child: const Text(
                         'This does not switch Wi-Fi automatically. Connect the tablet to the prop Wi-Fi first, then open the prop page here.',
-                        style: TextStyle(fontSize: 11, color: Color(0xFFAFB7AD), height: 1.4),
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFFAFB7AD),
+                            height: 1.4),
                       ),
                     ),
                   ],
@@ -114,7 +124,7 @@ class PropsPanel extends StatelessWidget {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(18),
                     color: const Color(0xCC101511),
-                    border: Border.all(color: accent.withOpacity(0.35)),
+                    border: Border.all(color: accent.withValues(alpha: 0.35)),
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(18),
@@ -131,17 +141,23 @@ class PropsPanel extends StatelessWidget {
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.router_outlined, size: 52, color: Color(0xFF7E8B63)),
+                                  Icon(Icons.router_outlined,
+                                      size: 52, color: Color(0xFF7E8B63)),
                                   SizedBox(height: 12),
                                   Text(
                                     'PROP PAGE STANDBY',
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800),
                                   ),
                                   SizedBox(height: 8),
                                   Text(
                                     'Connect to the prop Wi-Fi network, then open 192.168.4.1 here to change prop settings.',
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 12, color: Color(0xFFAFB7AD), height: 1.5),
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFFAFB7AD),
+                                        height: 1.5),
                                   ),
                                 ],
                               ),
