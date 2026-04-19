@@ -2,18 +2,23 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/aoj_models.dart';
 
-/// Supabase project credentials.
-const String _kSupabaseUrl = 'https://uvixlrhcjojezhqmgnxk.supabase.co';
-const String _kSupabaseAnonKey =
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'
+const String _kFallbackSupabaseUrl = 'https://uvixlrhcjojezhqmgnxk.supabase.co';
+const String _kFallbackSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'
     '.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2aXhscmhjam9qZXpocW1nbnhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMzY5NzIsImV4cCI6MjA5MTkxMjk3Mn0'
     '.1ychTDnuRxtOFY9SquXtg8RkzX0UxvyXENU1ncAaFO4';
 
 class SupabaseService {
   static Future<void> initialize() async {
+    const envUrl = String.fromEnvironment('SUPABASE_URL');
+    const envAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+    final resolvedUrl = envUrl.isNotEmpty ? envUrl : _kFallbackSupabaseUrl;
+    final resolvedAnonKey =
+        envAnonKey.isNotEmpty ? envAnonKey : _kFallbackSupabaseAnonKey;
+
     await Supabase.initialize(
-      url: _kSupabaseUrl,
-      anonKey: _kSupabaseAnonKey,
+      url: resolvedUrl,
+      anonKey: resolvedAnonKey,
     );
   }
 
@@ -21,7 +26,10 @@ class SupabaseService {
 
   // ─── Push ─────────────────────────────────────────────────────────────────
 
-  /// Pushes the full local app state to Supabase, upsert-then-prune.
+  /// Pushes the full local app state to Supabase with merge-safe upserts.
+  ///
+  /// This intentionally avoids table pruning to reduce accidental data loss
+  /// across multiple devices that sync at different times.
   static Future<void> pushAppState(AppStateData appState) async {
     final db = _db;
 
@@ -45,17 +53,6 @@ class SupabaseService {
 
     if (eventRows.isNotEmpty) {
       await db.from('events').upsert(eventRows);
-    }
-
-    // Prune deleted events
-    final eventIds = appState.events.map((e) => e.id).toList();
-    if (eventIds.isEmpty) {
-      await db.from('events').delete().neq('id', '');
-    } else {
-      await db
-          .from('events')
-          .delete()
-          .not('id', 'in', '(${eventIds.join(',')})');
     }
 
     // ── Save active event id ─────────────────────────────────────────────────
@@ -111,17 +108,6 @@ class SupabaseService {
     if (rows.isNotEmpty) {
       await db.from('bookings').upsert(rows);
     }
-
-    final ids = event.bookings.map((b) => b.id).toList();
-    if (ids.isEmpty) {
-      await db.from('bookings').delete().eq('event_id', event.id);
-    } else {
-      await db
-          .from('bookings')
-          .delete()
-          .eq('event_id', event.id)
-          .not('id', 'in', '(${ids.join(',')})');
-    }
   }
 
   static Future<void> _pushTickets(
@@ -145,17 +131,6 @@ class SupabaseService {
 
     if (rows.isNotEmpty) {
       await db.from('tickets').upsert(rows);
-    }
-
-    final ids = event.tickets.map((t) => t.id).toList();
-    if (ids.isEmpty) {
-      await db.from('tickets').delete().eq('event_id', event.id);
-    } else {
-      await db
-          .from('tickets')
-          .delete()
-          .eq('event_id', event.id)
-          .not('id', 'in', '(${ids.join(',')})');
     }
   }
 
@@ -184,17 +159,6 @@ class SupabaseService {
     if (rows.isNotEmpty) {
       await db.from('members').upsert(rows);
     }
-
-    final ids = event.members.map((m) => m.id).toList();
-    if (ids.isEmpty) {
-      await db.from('members').delete().eq('event_id', event.id);
-    } else {
-      await db
-          .from('members')
-          .delete()
-          .eq('event_id', event.id)
-          .not('id', 'in', '(${ids.join(',')})');
-    }
   }
 
   static Future<void> _pushSchedule(
@@ -216,17 +180,6 @@ class SupabaseService {
 
     if (rows.isNotEmpty) {
       await db.from('schedule').upsert(rows);
-    }
-
-    final ids = event.schedule.map((s) => s.id).toList();
-    if (ids.isEmpty) {
-      await db.from('schedule').delete().eq('event_id', event.id);
-    } else {
-      await db
-          .from('schedule')
-          .delete()
-          .eq('event_id', event.id)
-          .not('id', 'in', '(${ids.join(',')})');
     }
   }
 
@@ -251,17 +204,14 @@ class SupabaseService {
     if (rows.isNotEmpty) {
       await db.from('expenses').upsert(rows);
     }
+  }
 
-    final ids = event.expenses.map((e) => e.id).toList();
-    if (ids.isEmpty) {
-      await db.from('expenses').delete().eq('event_id', event.id);
-    } else {
-      await db
-          .from('expenses')
-          .delete()
-          .eq('event_id', event.id)
-          .not('id', 'in', '(${ids.join(',')})');
-    }
+  /// Pulls, merges, and pushes so each device converges to one merged state.
+  static Future<AppStateData> syncMergeAppState(AppStateData localState) async {
+    final cloudState = await pullAppState();
+    final merged = _mergeAppState(localState, cloudState);
+    await pushAppState(merged);
+    return merged;
   }
 
   // ─── Pull ─────────────────────────────────────────────────────────────────
@@ -384,8 +334,7 @@ class SupabaseService {
               gender: m['gender'] as String? ?? '',
               telephone: m['telephone'] as String? ?? '',
               email: m['email'] as String? ?? '',
-              membershipLevel:
-                  m['membership_level'] as String? ?? 'Regular',
+              membershipLevel: m['membership_level'] as String? ?? 'Regular',
               rating: (m['rating'] as num?)?.toInt() ?? 0,
             ),
           )
@@ -424,8 +373,7 @@ class SupabaseService {
           date: row['date'] as String? ?? '',
           time: row['time'] as String? ?? '',
           notes: row['notes'] as String? ?? '',
-          ticketCostPerPerson:
-              row['ticket_cost_per_person'] as String? ?? '0',
+          ticketCostPerPerson: row['ticket_cost_per_person'] as String? ?? '0',
           trainingTrainer: row['training_trainer'] as String? ?? '',
           fieldMapBase64: row['field_map_base64'] as String?,
           bookings: bookings,
@@ -439,5 +387,284 @@ class SupabaseService {
     }
 
     return AppStateData(events: events, activeEventId: activeEventId);
+  }
+
+  static AppStateData _mergeAppState(
+    AppStateData local,
+    AppStateData cloud,
+  ) {
+    final mergedEventsById = <String, EventRecord>{};
+
+    for (final event in cloud.events) {
+      mergedEventsById[event.id] = event;
+    }
+
+    for (final localEvent in local.events) {
+      final cloudEvent = mergedEventsById[localEvent.id];
+      if (cloudEvent == null) {
+        mergedEventsById[localEvent.id] = localEvent;
+        continue;
+      }
+
+      mergedEventsById[localEvent.id] = _mergeEvent(localEvent, cloudEvent);
+    }
+
+    final mergedEvents = mergedEventsById.values.toList();
+    final activeEventId = _resolveActiveEventId(local, cloud, mergedEvents);
+
+    return AppStateData(
+      events: mergedEvents,
+      activeEventId: activeEventId,
+    );
+  }
+
+  static String? _resolveActiveEventId(
+    AppStateData local,
+    AppStateData cloud,
+    List<EventRecord> mergedEvents,
+  ) {
+    final mergedIds = mergedEvents.map((e) => e.id).toSet();
+
+    if (local.activeEventId != null &&
+        mergedIds.contains(local.activeEventId)) {
+      return local.activeEventId;
+    }
+
+    if (cloud.activeEventId != null &&
+        mergedIds.contains(cloud.activeEventId)) {
+      return cloud.activeEventId;
+    }
+
+    return mergedEvents.isEmpty ? null : mergedEvents.first.id;
+  }
+
+  static EventRecord _mergeEvent(EventRecord local, EventRecord cloud) {
+    return EventRecord(
+      id: local.id,
+      name: _preferString(local.name, cloud.name),
+      venue: _preferString(local.venue, cloud.venue),
+      date: _preferString(local.date, cloud.date),
+      time: _preferString(local.time, cloud.time),
+      notes: _preferString(local.notes, cloud.notes),
+      ticketCostPerPerson: _preferString(
+        local.ticketCostPerPerson,
+        cloud.ticketCostPerPerson,
+      ),
+      trainingTrainer:
+          _preferString(local.trainingTrainer, cloud.trainingTrainer),
+      fieldMapBase64:
+          _preferStringNullable(local.fieldMapBase64, cloud.fieldMapBase64),
+      bookings: _mergeById(
+        local.bookings,
+        cloud.bookings,
+        (x) => x.id,
+        _mergeBooking,
+      ),
+      tickets: _mergeById(
+        local.tickets,
+        cloud.tickets,
+        (x) => x.id,
+        _mergeTicket,
+      ),
+      members: _mergeById(
+        local.members,
+        cloud.members,
+        (x) => x.id,
+        _mergeMember,
+      ),
+      schedule: _mergeById(
+        local.schedule,
+        cloud.schedule,
+        (x) => x.id,
+        _mergeSchedule,
+      ),
+      gameModes: _mergeGameModes(local.gameModes, cloud.gameModes),
+      expenses: _mergeById(
+        local.expenses,
+        cloud.expenses,
+        (x) => x.id,
+        _mergeExpense,
+      ),
+    );
+  }
+
+  static BookingRecord _mergeBooking(BookingRecord local, BookingRecord cloud) {
+    return BookingRecord(
+      id: local.id,
+      bookingId: _preferString(local.bookingId, cloud.bookingId),
+      bookingDate: _preferString(local.bookingDate, cloud.bookingDate),
+      firstName: _preferString(local.firstName, cloud.firstName),
+      lastName: _preferString(local.lastName, cloud.lastName),
+      email: _preferString(local.email, cloud.email),
+      phone: _preferString(local.phone, cloud.phone),
+      event: _preferString(local.event, cloud.event),
+      total: _preferString(local.total, cloud.total),
+      totalPaid: _preferString(local.totalPaid, cloud.totalPaid),
+      transactionId: _preferString(local.transactionId, cloud.transactionId),
+      paymentMethod: _preferString(local.paymentMethod, cloud.paymentMethod),
+      paymentStatus: _preferString(local.paymentStatus, cloud.paymentStatus),
+      checkInStatus: _preferString(local.checkInStatus, cloud.checkInStatus),
+      notes: _preferString(local.notes, cloud.notes),
+      needsPickup: local.needsPickup || cloud.needsPickup,
+      needsTraining: local.needsTraining || cloud.needsTraining,
+      guestNames: _preferString(local.guestNames, cloud.guestNames),
+      languagePreference: _preferString(
+        local.languagePreference,
+        cloud.languagePreference,
+      ),
+      ticketIds: _mergeUniqueStrings(local.ticketIds, cloud.ticketIds),
+      sales: _mergeById(local.sales, cloud.sales, (x) => x.id, _mergeSale),
+      payments: _mergeById(
+        local.payments,
+        cloud.payments,
+        (x) => x.id,
+        _mergePayment,
+      ),
+    );
+  }
+
+  static TicketRecord _mergeTicket(TicketRecord local, TicketRecord cloud) {
+    return TicketRecord(
+      id: local.id,
+      bookingId: _preferString(local.bookingId, cloud.bookingId),
+      bookingName: _preferString(local.bookingName, cloud.bookingName),
+      ticketName: _preferString(local.ticketName, cloud.ticketName),
+      price: _preferString(local.price, cloud.price),
+      spaces: _preferString(local.spaces, cloud.spaces),
+      status: _preferString(local.status, cloud.status),
+    );
+  }
+
+  static MemberRecord _mergeMember(MemberRecord local, MemberRecord cloud) {
+    return MemberRecord(
+      id: local.id,
+      firstName: _preferString(local.firstName, cloud.firstName),
+      lastName: _preferString(local.lastName, cloud.lastName),
+      username: _preferString(local.username, cloud.username),
+      dateOfBirth: _preferString(local.dateOfBirth, cloud.dateOfBirth),
+      gender: _preferString(local.gender, cloud.gender),
+      telephone: _preferString(local.telephone, cloud.telephone),
+      email: _preferString(local.email, cloud.email),
+      membershipLevel:
+          _preferString(local.membershipLevel, cloud.membershipLevel),
+      rating: local.rating >= cloud.rating ? local.rating : cloud.rating,
+    );
+  }
+
+  static ScheduleRecord _mergeSchedule(
+      ScheduleRecord local, ScheduleRecord cloud) {
+    return ScheduleRecord(
+      id: local.id,
+      time: _preferString(local.time, cloud.time),
+      activity: _preferString(local.activity, cloud.activity),
+      location: _preferString(local.location, cloud.location),
+      notes: _preferString(local.notes, cloud.notes),
+    );
+  }
+
+  static ExpenseRecord _mergeExpense(ExpenseRecord local, ExpenseRecord cloud) {
+    return ExpenseRecord(
+      id: local.id,
+      item: _preferString(local.item, cloud.item),
+      amount: _preferString(local.amount, cloud.amount),
+      note: _preferString(local.note, cloud.note),
+      date: _preferString(local.date, cloud.date),
+      category: _preferString(local.category, cloud.category),
+    );
+  }
+
+  static SaleRecord _mergeSale(SaleRecord local, SaleRecord cloud) {
+    return SaleRecord(
+      id: local.id,
+      product: _preferString(local.product, cloud.product),
+      price: _preferString(local.price, cloud.price),
+    );
+  }
+
+  static PaymentRecord _mergePayment(PaymentRecord local, PaymentRecord cloud) {
+    return PaymentRecord(
+      id: local.id,
+      amount: _preferString(local.amount, cloud.amount),
+      method: _preferString(local.method, cloud.method),
+      note: _preferString(local.note, cloud.note),
+      date: _preferString(local.date, cloud.date),
+    );
+  }
+
+  static List<GameModeRecord> _mergeGameModes(
+    List<GameModeRecord> local,
+    List<GameModeRecord> cloud,
+  ) {
+    final merged = <GameModeRecord>[];
+    final seenSignatures = <String>{};
+
+    for (final mode in [...cloud, ...local]) {
+      final keys = mode.data.keys.toList()..sort();
+      final signature = keys.map((k) => '$k=${mode.data[k] ?? ''}').join('|');
+      if (seenSignatures.contains(signature)) continue;
+      seenSignatures.add(signature);
+      merged.add(mode);
+    }
+
+    return merged;
+  }
+
+  static List<T> _mergeById<T>(
+    List<T> local,
+    List<T> cloud,
+    String Function(T value) idOf,
+    T Function(T localValue, T cloudValue) merge,
+  ) {
+    final mergedById = <String, T>{};
+
+    for (final value in cloud) {
+      mergedById[idOf(value)] = value;
+    }
+
+    for (final value in local) {
+      final id = idOf(value);
+      final existing = mergedById[id];
+      if (existing == null) {
+        mergedById[id] = value;
+      } else {
+        mergedById[id] = merge(value, existing);
+      }
+    }
+
+    return mergedById.values.toList();
+  }
+
+  static List<String> _mergeUniqueStrings(
+      List<String> local, List<String> cloud) {
+    final seen = <String>{};
+    final merged = <String>[];
+    for (final value in [...cloud, ...local]) {
+      if (seen.contains(value)) continue;
+      seen.add(value);
+      merged.add(value);
+    }
+    return merged;
+  }
+
+  static String _preferString(String local, String cloud) {
+    final l = local.trim();
+    final c = cloud.trim();
+
+    if (l.isEmpty && c.isEmpty) return '';
+    if (l.isEmpty) return cloud;
+    if (c.isEmpty) return local;
+
+    return l.length >= c.length ? local : cloud;
+  }
+
+  static String? _preferStringNullable(String? local, String? cloud) {
+    final l = (local ?? '').trim();
+    final c = (cloud ?? '').trim();
+
+    if (l.isEmpty && c.isEmpty) return null;
+    if (l.isEmpty) return cloud;
+    if (c.isEmpty) return local;
+
+    return l.length >= c.length ? local : cloud;
   }
 }

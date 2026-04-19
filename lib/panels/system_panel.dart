@@ -133,8 +133,10 @@ class _SystemPanelState extends State<SystemPanel> {
                           accent: widget.accent,
                           children: [
                             InfoLine('State', widget.systemStatus),
-                            InfoLine('Events', widget.appState.events.length.toString()),
-                            InfoLine('Active', widget.activeEvent?.name ?? 'None'),
+                            InfoLine('Events',
+                                widget.appState.events.length.toString()),
+                            InfoLine(
+                                'Active', widget.activeEvent?.name ?? 'None'),
                             InfoLine('Export', widget.exportStatus),
                             InfoLine('Sync', widget.syncStatus),
                           ],
@@ -146,31 +148,36 @@ class _SystemPanelState extends State<SystemPanel> {
                           children: [
                             ActionLine(
                               label: 'Workbook (.xlsx)',
-                              onTap: () => _runIfActive(widget.onImportWorkbook),
+                              onTap: () =>
+                                  _runIfActive(widget.onImportWorkbook),
                             ),
                             ActionLine(
-                              label: 'Bookings CSV',
-                              onTap: () => _runIfActive(widget.onImportBookings),
+                              label: 'Bookings (CSV/Excel)',
+                              onTap: () =>
+                                  _runIfActive(widget.onImportBookings),
                             ),
                             ActionLine(
-                              label: 'Tickets CSV',
+                              label: 'Tickets (CSV/Excel)',
                               onTap: () => _runIfActive(widget.onImportTickets),
                             ),
                             ActionLine(
-                              label: 'Members CSV',
+                              label: 'Members (CSV/Excel)',
                               onTap: () => _runIfActive(widget.onImportMembers),
                             ),
                             ActionLine(
-                              label: 'Schedule CSV',
-                              onTap: () => _runIfActive(widget.onImportSchedule),
+                              label: 'Schedule (CSV/Excel)',
+                              onTap: () =>
+                                  _runIfActive(widget.onImportSchedule),
                             ),
                             ActionLine(
-                              label: 'Game Modes CSV',
-                              onTap: () => _runIfActive(widget.onImportGameModes),
+                              label: 'Game Modes (CSV/Excel)',
+                              onTap: () =>
+                                  _runIfActive(widget.onImportGameModes),
                             ),
                             ActionLine(
                               label: 'Field Map Image',
-                              onTap: () => _runIfActive(widget.onImportFieldMap),
+                              onTap: () =>
+                                  _runIfActive(widget.onImportFieldMap),
                             ),
                           ],
                         ),
@@ -180,11 +187,11 @@ class _SystemPanelState extends State<SystemPanel> {
                           accent: widget.accent,
                           children: [
                             ActionLine(
-                              label: 'Push to Supabase',
+                              label: 'Sync Merge to Supabase',
                               onTap: widget.onSyncPush,
                             ),
                             ActionLine(
-                              label: 'Pull from Supabase',
+                              label: 'Sync Merge from Supabase',
                               onTap: widget.onSyncPull,
                             ),
                           ],
@@ -200,8 +207,10 @@ class _SystemPanelState extends State<SystemPanel> {
                             accent: widget.accent,
                             children: [
                               InfoLine('State', widget.systemStatus),
-                              InfoLine('Events', widget.appState.events.length.toString()),
-                              InfoLine('Active', widget.activeEvent?.name ?? 'None'),
+                              InfoLine('Events',
+                                  widget.appState.events.length.toString()),
+                              InfoLine(
+                                  'Active', widget.activeEvent?.name ?? 'None'),
                               InfoLine('Export', widget.exportStatus),
                               InfoLine('Sync', widget.syncStatus),
                             ],
@@ -215,31 +224,38 @@ class _SystemPanelState extends State<SystemPanel> {
                             children: [
                               ActionLine(
                                 label: 'Workbook (.xlsx)',
-                                onTap: () => _runIfActive(widget.onImportWorkbook),
+                                onTap: () =>
+                                    _runIfActive(widget.onImportWorkbook),
                               ),
                               ActionLine(
-                                label: 'Bookings CSV',
-                                onTap: () => _runIfActive(widget.onImportBookings),
+                                label: 'Bookings (CSV/Excel)',
+                                onTap: () =>
+                                    _runIfActive(widget.onImportBookings),
                               ),
                               ActionLine(
-                                label: 'Tickets CSV',
-                                onTap: () => _runIfActive(widget.onImportTickets),
+                                label: 'Tickets (CSV/Excel)',
+                                onTap: () =>
+                                    _runIfActive(widget.onImportTickets),
                               ),
                               ActionLine(
-                                label: 'Members CSV',
-                                onTap: () => _runIfActive(widget.onImportMembers),
+                                label: 'Members (CSV/Excel)',
+                                onTap: () =>
+                                    _runIfActive(widget.onImportMembers),
                               ),
                               ActionLine(
-                                label: 'Schedule CSV',
-                                onTap: () => _runIfActive(widget.onImportSchedule),
+                                label: 'Schedule (CSV/Excel)',
+                                onTap: () =>
+                                    _runIfActive(widget.onImportSchedule),
                               ),
                               ActionLine(
-                                label: 'Game Modes CSV',
-                                onTap: () => _runIfActive(widget.onImportGameModes),
+                                label: 'Game Modes (CSV/Excel)',
+                                onTap: () =>
+                                    _runIfActive(widget.onImportGameModes),
                               ),
                               ActionLine(
                                 label: 'Field Map Image',
-                                onTap: () => _runIfActive(widget.onImportFieldMap),
+                                onTap: () =>
+                                    _runIfActive(widget.onImportFieldMap),
                               ),
                             ],
                           ),
@@ -251,11 +267,11 @@ class _SystemPanelState extends State<SystemPanel> {
                             accent: widget.accent,
                             children: [
                               ActionLine(
-                                label: 'Push to Supabase',
+                                label: 'Sync Merge to Supabase',
                                 onTap: widget.onSyncPush,
                               ),
                               ActionLine(
-                                label: 'Pull from Supabase',
+                                label: 'Sync Merge from Supabase',
                                 onTap: widget.onSyncPull,
                               ),
                             ],

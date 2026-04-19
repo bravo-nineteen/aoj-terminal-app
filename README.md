@@ -1,21 +1,15 @@
-<<<<<<< HEAD
-# aoj_terminal_app
-
-A new Flutter project.
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-=======
 # aoj-terminal-app
-Event Management app
->>>>>>> a9a59e9fb0a27d22c17b4b67701e9a2183cf6c1b
+
+Event management terminal app built with Flutter.
+
+## Development
+
+1. Install Flutter SDK and run `flutter pub get`.
+2. Start the app with `flutter run -d windows` (or another target device).
+
+## Sync
+
+The app supports Supabase-based sync merge between devices.
+For production, pass credentials via dart-defines:
+
+`--dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...`

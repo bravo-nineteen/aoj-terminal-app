@@ -18,7 +18,8 @@ create table if not exists events (
   ticket_cost_per_person text not null default '0',
   training_trainer      text not null default '',
   field_map_base64      text,
-  game_modes            jsonb not null default '[]'
+  game_modes            jsonb not null default '[]',
+  updated_at            timestamptz not null default now()
 );
 
 -- ── bookings ─────────────────────────────────────────────────────────────────
@@ -45,7 +46,8 @@ create table if not exists bookings (
   language_preference text not null default '',
   ticket_ids          jsonb not null default '[]',
   sales               jsonb not null default '[]',
-  payments            jsonb not null default '[]'
+  payments            jsonb not null default '[]',
+  updated_at          timestamptz not null default now()
 );
 
 -- ── tickets ──────────────────────────────────────────────────────────────────
@@ -57,7 +59,8 @@ create table if not exists tickets (
   ticket_name  text not null default '',
   price        text not null default '0',
   spaces       text not null default '1',
-  status       text not null default 'Active'
+  status       text not null default 'Active',
+  updated_at   timestamptz not null default now()
 );
 
 -- ── members ──────────────────────────────────────────────────────────────────
@@ -72,7 +75,8 @@ create table if not exists members (
   telephone        text not null default '',
   email            text not null default '',
   membership_level text not null default 'Regular',
-  rating           integer not null default 0
+  rating           integer not null default 0,
+  updated_at       timestamptz not null default now()
 );
 
 -- ── schedule ─────────────────────────────────────────────────────────────────
@@ -82,7 +86,8 @@ create table if not exists schedule (
   time     text not null default '',
   activity text not null default '',
   location text not null default '',
-  notes    text not null default ''
+  notes    text not null default '',
+  updated_at timestamptz not null default now()
 );
 
 -- ── expenses ─────────────────────────────────────────────────────────────────
@@ -93,5 +98,12 @@ create table if not exists expenses (
   amount   text not null default '0',
   note     text not null default '',
   date     text not null default '',
-  category text not null default ''
+  category text not null default '',
+  updated_at timestamptz not null default now()
 );
+
+create index if not exists idx_bookings_event_id on bookings(event_id);
+create index if not exists idx_tickets_event_id on tickets(event_id);
+create index if not exists idx_members_event_id on members(event_id);
+create index if not exists idx_schedule_event_id on schedule(event_id);
+create index if not exists idx_expenses_event_id on expenses(event_id);

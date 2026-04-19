@@ -275,7 +275,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
       setState(() {
         appState = loaded;
         selectedBookingIndex = 0;
-        selectedMemberIndex = activeEvent?.members.isNotEmpty == true ? 0 : null;
+        selectedMemberIndex =
+            activeEvent?.members.isNotEmpty == true ? 0 : null;
         systemStatus = 'LOCAL DATA LOADED';
       });
     } catch (_) {
@@ -295,32 +296,39 @@ class _AOJDesktopState extends State<AOJDesktop> {
   }
 
   Future<void> _syncPush() async {
-    setState(() => syncStatus = 'PUSHING…');
+    setState(() => syncStatus = 'SYNCING…');
     try {
-      await SupabaseService.pushAppState(appState);
-      if (mounted) setState(() => syncStatus = 'PUSH OK');
+      final merged = await SupabaseService.syncMergeAppState(appState);
+      await AppStateService.save(merged);
+      if (mounted) {
+        setState(() {
+          appState = merged;
+          syncStatus = 'SYNC OK';
+          systemStatus = 'SYNCED WITH CLOUD';
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() => syncStatus = 'PUSH FAILED');
+      if (mounted) setState(() => syncStatus = 'SYNC FAILED');
     }
   }
 
   Future<void> _syncPull() async {
-    setState(() => syncStatus = 'PULLING…');
+    setState(() => syncStatus = 'SYNCING…');
     try {
-      final pulled = await SupabaseService.pullAppState();
-      await AppStateService.save(pulled);
+      final merged = await SupabaseService.syncMergeAppState(appState);
+      await AppStateService.save(merged);
       if (mounted) {
         setState(() {
-          appState = pulled;
+          appState = merged;
           selectedBookingIndex = 0;
           selectedMemberIndex =
               activeEvent?.members.isNotEmpty == true ? 0 : null;
-          syncStatus = 'PULL OK';
-          systemStatus = 'SYNCED FROM CLOUD';
+          syncStatus = 'SYNC OK';
+          systemStatus = 'SYNCED WITH CLOUD';
         });
       }
     } catch (e) {
-      if (mounted) setState(() => syncStatus = 'PULL FAILED');
+      if (mounted) setState(() => syncStatus = 'SYNC FAILED');
     }
   }
 
@@ -356,8 +364,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
       if (!window.isMaximized) {
         _maximizeWindowToRect(window, desktopRect);
       } else {
-        window.position =
-            _clampPosition(window.restorePosition, window.restoreSize, desktopRect);
+        window.position = _clampPosition(
+            window.restorePosition, window.restoreSize, desktopRect);
         window.size = Size(
           math.max(_windowMinWidth, window.restoreSize.width),
           math.max(_windowMinHeight, window.restoreSize.height),
@@ -1009,18 +1017,15 @@ class _AOJDesktopState extends State<AOJDesktop> {
       final groupPhone = group.phone.trim().toLowerCase();
       final groupName = group.displayName.trim().toLowerCase();
 
-      final emailMatch =
-          memberEmail.isNotEmpty &&
+      final emailMatch = memberEmail.isNotEmpty &&
           groupEmail.isNotEmpty &&
           memberEmail == groupEmail;
 
-      final phoneMatch =
-          memberPhone.isNotEmpty &&
+      final phoneMatch = memberPhone.isNotEmpty &&
           groupPhone.isNotEmpty &&
           memberPhone == groupPhone;
 
-      final nameMatch =
-          memberName.isNotEmpty &&
+      final nameMatch = memberName.isNotEmpty &&
           groupName.isNotEmpty &&
           memberName == groupName;
 
@@ -1044,50 +1049,50 @@ class _AOJDesktopState extends State<AOJDesktop> {
   }
 
   Future<void> _openBookingEditorWindow(BookingGroup group) async {
-  final windowId = 'booking_editor::${group.primary.id}';
+    final windowId = 'booking_editor::${group.primary.id}';
 
-  final media = MediaQuery.of(context).size;
-  final double bottomInset = MediaQuery.of(context).padding.bottom;
-  const double topInset = 8.0;
-  const double sideInset = 8.0;
-  const double tabBarHeight = 44.0;
-  const double extraBottomGap = 8.0;
+    final media = MediaQuery.of(context).size;
+    final double bottomInset = MediaQuery.of(context).padding.bottom;
+    const double topInset = 8.0;
+    const double sideInset = 8.0;
+    const double tabBarHeight = 44.0;
+    const double extraBottomGap = 8.0;
 
-  final double width = (media.width - (sideInset * 2)).toDouble();
-  final double height =
-      (media.height - topInset - tabBarHeight - bottomInset - extraBottomGap)
-          .toDouble();
+    final double width = (media.width - (sideInset * 2)).toDouble();
+    final double height =
+        (media.height - topInset - tabBarHeight - bottomInset - extraBottomGap)
+            .toDouble();
 
-  final maximizedSize = Size(width, height);
+    final maximizedSize = Size(width, height);
 
-  if (!windows.containsKey(windowId)) {
-    windows[windowId] = DesktopWindowData(
-      id: windowId,
-      title: 'Booking - ${group.displayName}',
-      icon: Icons.assignment_ind_outlined,
-      accent: const Color(0xFF8C6A52),
-      isOpen: true,
-      isMinimized: false,
-      isMaximized: true,
-      position: const Offset(sideInset, topInset),
-      size: maximizedSize,
-      restorePosition: const Offset(220, 110),
-      restoreSize: const Size(1180, 760),
-      zIndex: nextZ++,
-    );
+    if (!windows.containsKey(windowId)) {
+      windows[windowId] = DesktopWindowData(
+        id: windowId,
+        title: 'Booking - ${group.displayName}',
+        icon: Icons.assignment_ind_outlined,
+        accent: const Color(0xFF8C6A52),
+        isOpen: true,
+        isMinimized: false,
+        isMaximized: true,
+        position: const Offset(sideInset, topInset),
+        size: maximizedSize,
+        restorePosition: const Offset(220, 110),
+        restoreSize: const Size(1180, 760),
+        zIndex: nextZ++,
+      );
+    }
+
+    setState(() {
+      final window = windows[windowId]!;
+      window.title = 'Booking - ${group.displayName}';
+      window.isOpen = true;
+      window.isMinimized = false;
+      window.isMaximized = true;
+      window.position = const Offset(sideInset, topInset);
+      window.size = maximizedSize;
+      window.zIndex = nextZ++;
+    });
   }
-
-  setState(() {
-    final window = windows[windowId]!;
-    window.title = 'Booking - ${group.displayName}';
-    window.isOpen = true;
-    window.isMinimized = false;
-    window.isMaximized = true;
-    window.position = const Offset(sideInset, topInset);
-    window.size = maximizedSize;
-    window.zIndex = nextZ++;
-  });
-}
 
   Future<void> _openTicketEditorWindow(BookingGroup group) async {
     await _showTicketManagementDialog(group);
@@ -1183,8 +1188,9 @@ class _AOJDesktopState extends State<AOJDesktop> {
                                             border: OutlineInputBorder(),
                                           ),
                                           onChanged: (v) {
-                                            ticket.spaces =
-                                                v.trim().isEmpty ? '1' : v.trim();
+                                            ticket.spaces = v.trim().isEmpty
+                                                ? '1'
+                                                : v.trim();
                                           },
                                         ),
                                       ),
@@ -1192,8 +1198,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
                                       Expanded(
                                         child: TextField(
                                           controller: priceController,
-                                          keyboardType:
-                                              const TextInputType.numberWithOptions(
+                                          keyboardType: const TextInputType
+                                              .numberWithOptions(
                                             decimal: true,
                                           ),
                                           decoration: const InputDecoration(
@@ -1212,8 +1218,10 @@ class _AOJDesktopState extends State<AOJDesktop> {
                                           event.tickets.removeWhere(
                                             (t) => t.id == ticket.id,
                                           );
-                                          BookingUtils.linkTicketsToBookings(event);
-                                          BookingUtils.recalculateAllTotals(event);
+                                          BookingUtils.linkTicketsToBookings(
+                                              event);
+                                          BookingUtils.recalculateAllTotals(
+                                              event);
                                           setLocal(() {});
                                           setState(() {});
                                         },
@@ -1391,9 +1399,10 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
   @override
   Widget build(BuildContext context) {
-    final visibleWindows =
-        windows.values.where((w) => w.isOpen && !w.isMinimized).toList()
-          ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
+    final visibleWindows = windows.values
+        .where((w) => w.isOpen && !w.isMinimized)
+        .toList()
+      ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
 
     final openTabs = windows.values.where((w) => w.isOpen).toList()
       ..sort((a, b) => a.zIndex.compareTo(b.zIndex));
@@ -1515,7 +1524,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
                           ),
                           child: Column(
                             children: [
-                              AOJDesktopIcon(icon: app.icon, accent: app.accent),
+                              AOJDesktopIcon(
+                                  icon: app.icon, accent: app.accent),
                               const SizedBox(height: 8),
                               Text(
                                 app.title,

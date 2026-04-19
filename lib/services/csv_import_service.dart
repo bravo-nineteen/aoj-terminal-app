@@ -43,7 +43,7 @@ class CsvImportService {
   static Future<WorkbookImportResult> importWorkbookXlsx(
     EventRecord event,
   ) async {
-    final bytes = await _pickFileBytes(['xlsx']);
+    final bytes = await _pickFileBytes(['xlsx', 'xls']);
     if (bytes == null || bytes.isEmpty) {
       return const WorkbookImportResult(
         success: false,
@@ -187,10 +187,17 @@ class CsvImportService {
   }
 
   static Future<bool> importBookingsCsv(EventRecord event) async {
-    final csvText = await _pickCsvText();
-    if (csvText == null || csvText.trim().isEmpty) return false;
-
-    final rows = _parseCsvRows(csvText);
+    final rows = await _pickTabularRows(
+      candidateSheetNames: const ['Bookings', 'Booking'],
+      requiredColumns: const [
+        'Name',
+        'Event',
+        'Status',
+        'Total',
+        'Booking Date',
+        'Booking ID',
+      ],
+    );
     if (rows.isEmpty) return false;
 
     final imported = _parseBookingsRows(rows, event.name);
@@ -206,10 +213,16 @@ class CsvImportService {
   }
 
   static Future<bool> importTicketsCsv(EventRecord event) async {
-    final csvText = await _pickCsvText();
-    if (csvText == null || csvText.trim().isEmpty) return false;
-
-    final rows = _parseCsvRows(csvText);
+    final rows = await _pickTabularRows(
+      candidateSheetNames: const ['Tickets', 'Ticket'],
+      requiredColumns: const [
+        'Name',
+        'Ticket Name',
+        'Status',
+        'Ticket Price',
+        'Ticket Spaces',
+      ],
+    );
     if (rows.isEmpty) return false;
 
     final imported = _parseTicketsRows(rows);
@@ -225,10 +238,16 @@ class CsvImportService {
   }
 
   static Future<bool> importMembersCsv(EventRecord event) async {
-    final csvText = await _pickCsvText();
-    if (csvText == null || csvText.trim().isEmpty) return false;
-
-    final rows = _parseCsvRows(csvText);
+    final rows = await _pickTabularRows(
+      candidateSheetNames: const ['Members', 'Member'],
+      requiredColumns: const [
+        'First Name',
+        'Last Name',
+        'Telephone No',
+        'Email',
+        'Membership Level',
+      ],
+    );
     if (rows.isEmpty) return false;
 
     final imported = _parseMembersRows(rows);
@@ -241,10 +260,13 @@ class CsvImportService {
   }
 
   static Future<bool> importScheduleCsv(EventRecord event) async {
-    final csvText = await _pickCsvText();
-    if (csvText == null || csvText.trim().isEmpty) return false;
-
-    final rows = _parseCsvRows(csvText);
+    final rows = await _pickTabularRows(
+      candidateSheetNames: const ['Schedule', 'Run Sheet', 'Timeline'],
+      requiredColumns: const [
+        'Time',
+        'Activity',
+      ],
+    );
     if (rows.isEmpty) return false;
 
     final imported = _parseScheduleRows(rows);
@@ -257,10 +279,12 @@ class CsvImportService {
   }
 
   static Future<bool> importGameModesCsv(EventRecord event) async {
-    final csvText = await _pickCsvText();
-    if (csvText == null || csvText.trim().isEmpty) return false;
-
-    final rows = _parseCsvRows(csvText);
+    final rows = await _pickTabularRows(
+      candidateSheetNames: const ['GameModes', 'Game Modes', 'Modes'],
+      requiredColumns: const [
+        'Mode',
+      ],
+    );
     if (rows.isEmpty) return false;
 
     final imported = _parseGameModesRows(rows);
@@ -866,10 +890,73 @@ class CsvImportService {
     return rows;
   }
 
-  static Future<String?> _pickCsvText() async {
-    final bytes = await _pickFileBytes(['csv']);
-    if (bytes == null || bytes.isEmpty) return null;
-    return _decodeCsvBytes(bytes);
+  static Future<List<List<dynamic>>> _pickTabularRows({
+    required List<String> candidateSheetNames,
+    required List<String> requiredColumns,
+  }) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['csv', 'xlsx', 'xls'],
+      withData: true,
+    );
+
+    if (result == null || result.files.isEmpty) return [];
+
+    final file = result.files.first;
+    final bytes = file.bytes;
+    if (bytes == null || bytes.isEmpty) return [];
+
+    final extension = (file.extension ?? '').toLowerCase();
+    if (extension == 'csv') {
+      final text = _decodeCsvBytes(bytes);
+      if (text.trim().isEmpty) return [];
+      return _parseCsvRows(text);
+    }
+
+    try {
+      final workbook = Excel.decodeBytes(bytes);
+
+      final byName = _sheetRowsByCandidateNames(workbook, candidateSheetNames);
+      if (byName != null && byName.isNotEmpty) {
+        return byName;
+      }
+
+      final best = _bestSheetRowsByHeader(workbook, requiredColumns);
+      return best ?? [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static List<List<dynamic>>? _bestSheetRowsByHeader(
+    Excel workbook,
+    List<String> requiredColumns,
+  ) {
+    List<List<dynamic>>? bestRows;
+    int bestScore = -1;
+
+    for (final sheet in workbook.tables.values) {
+      final rows = _worksheetToRows(sheet);
+      if (rows.isEmpty) continue;
+
+      final headerRowIndex = _findHeaderRowIndex(rows, requiredColumns);
+      if (headerRowIndex == -1) continue;
+
+      final header = rows[headerRowIndex].map((e) => _cleanCell(e)).toList();
+      int score = 0;
+      for (final column in requiredColumns) {
+        if (_findColumnIndex(header, [column]) != -1) {
+          score++;
+        }
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestRows = rows;
+      }
+    }
+
+    return bestRows;
   }
 
   static Future<Uint8List?> _pickFileBytes(List<String> extensions) async {
@@ -947,6 +1034,14 @@ class CsvImportService {
       );
 
       if (index != -1) return index;
+
+      final fuzzyIndex = header.indexWhere((h) {
+        final normalizedHeader = _normalizeHeader(h);
+        return normalizedHeader.contains(normalizedCandidate) ||
+            normalizedCandidate.contains(normalizedHeader);
+      });
+
+      if (fuzzyIndex != -1) return fuzzyIndex;
     }
 
     return -1;

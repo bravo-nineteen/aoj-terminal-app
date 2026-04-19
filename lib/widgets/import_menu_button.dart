@@ -28,23 +28,23 @@ class ImportMenuButton extends StatelessWidget {
         PopupMenuDivider(),
         PopupMenuItem(
           value: _ImportAction.bookingsCsv,
-          child: Text('Import Bookings CSV'),
+          child: Text('Import Bookings (CSV/Excel)'),
         ),
         PopupMenuItem(
           value: _ImportAction.ticketsCsv,
-          child: Text('Import Tickets CSV'),
+          child: Text('Import Tickets (CSV/Excel)'),
         ),
         PopupMenuItem(
           value: _ImportAction.membersCsv,
-          child: Text('Import Members CSV'),
+          child: Text('Import Members (CSV/Excel)'),
         ),
         PopupMenuItem(
           value: _ImportAction.scheduleCsv,
-          child: Text('Import Schedule CSV'),
+          child: Text('Import Schedule (CSV/Excel)'),
         ),
         PopupMenuItem(
           value: _ImportAction.gameModesCsv,
-          child: Text('Import Game Modes CSV'),
+          child: Text('Import Game Modes (CSV/Excel)'),
         ),
         PopupMenuDivider(),
         PopupMenuItem(
@@ -103,32 +103,32 @@ class ImportMenuButton extends StatelessWidget {
 
         case _ImportAction.bookingsCsv:
           ok = await CsvImportService.importBookingsCsv(event);
-          successMessage = 'Bookings CSV imported successfully.';
-          failureMessage = 'Bookings CSV import failed.';
+          successMessage = 'Bookings imported successfully.';
+          failureMessage = 'Bookings import failed.';
           break;
 
         case _ImportAction.ticketsCsv:
           ok = await CsvImportService.importTicketsCsv(event);
-          successMessage = 'Tickets CSV imported successfully.';
-          failureMessage = 'Tickets CSV import failed.';
+          successMessage = 'Tickets imported successfully.';
+          failureMessage = 'Tickets import failed.';
           break;
 
         case _ImportAction.membersCsv:
           ok = await CsvImportService.importMembersCsv(event);
-          successMessage = 'Members CSV imported successfully.';
-          failureMessage = 'Members CSV import failed.';
+          successMessage = 'Members imported successfully.';
+          failureMessage = 'Members import failed.';
           break;
 
         case _ImportAction.scheduleCsv:
           ok = await CsvImportService.importScheduleCsv(event);
-          successMessage = 'Schedule CSV imported successfully.';
-          failureMessage = 'Schedule CSV import failed.';
+          successMessage = 'Schedule imported successfully.';
+          failureMessage = 'Schedule import failed.';
           break;
 
         case _ImportAction.gameModesCsv:
           ok = await CsvImportService.importGameModesCsv(event);
-          successMessage = 'Game modes CSV imported successfully.';
-          failureMessage = 'Game modes CSV import failed.';
+          successMessage = 'Game modes imported successfully.';
+          failureMessage = 'Game modes import failed.';
           break;
 
         case _ImportAction.fieldMap:
@@ -215,7 +215,9 @@ class ImportMenuButton extends StatelessWidget {
         return AlertDialog(
           backgroundColor: const Color(0xFF1A221B),
           title: Text(
-            result.success ? 'Workbook Import Complete' : 'Workbook Import Failed',
+            result.success
+                ? 'Workbook Import Complete'
+                : 'Workbook Import Failed',
             style: const TextStyle(color: Colors.white),
           ),
           content: SingleChildScrollView(
