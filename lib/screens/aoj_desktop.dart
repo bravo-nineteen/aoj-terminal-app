@@ -329,7 +329,11 @@ class _AOJDesktopState extends State<AOJDesktop> {
     if (lower.contains('failed host lookup') ||
         lower.contains('name or service not known') ||
         lower.contains('temporary failure in name resolution')) {
-      return 'Could not reach Supabase host. Check internet/DNS and SUPABASE_URL.';
+      final host = SupabaseService.resolvedSupabaseHost;
+      if (host.isEmpty) {
+        return 'Could not reach Supabase host. Check internet/DNS and SUPABASE_URL.';
+      }
+      return 'Could not reach Supabase host ($host). Check internet/DNS and SUPABASE_URL.';
     }
     return raw.length > 120 ? '${raw.substring(0, 120)}...' : raw;
   }

@@ -8,13 +8,46 @@ const String _kFallbackSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'
     '.1ychTDnuRxtOFY9SquXtg8RkzX0UxvyXENU1ncAaFO4';
 
 class SupabaseService {
-  static String _normalizeSupabaseUrl(String rawUrl) {
-    var value = rawUrl.trim();
+  static String? _resolvedSupabaseUrl;
 
-    // Handle values copied with surrounding quotes from shell commands.
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.substring(1, value.length - 1).trim();
+  static String get resolvedSupabaseUrl => _resolvedSupabaseUrl ?? '';
+
+  static String get resolvedSupabaseHost {
+    final uri = Uri.tryParse(resolvedSupabaseUrl);
+    return uri?.host ?? '';
+  }
+
+  static String _stripOuterQuotes(String value) {
+    var current = value.trim();
+    while (current.length >= 2) {
+      final startsWithQuote =
+          current.startsWith('"') || current.startsWith("'") || current.startsWith('`');
+      final endsWithQuote =
+          current.endsWith('"') || current.endsWith("'") || current.endsWith('`');
+      if (!startsWithQuote || !endsWithQuote) break;
+      current = current.substring(1, current.length - 1).trim();
+    }
+    return current;
+  }
+
+  static String _normalizeSupabaseUrl(String rawUrl) {
+    var value = rawUrl.replaceAll('\r', ' ').replaceAll('\n', ' ').trim();
+
+    // Support accidentally pasting the full define segment.
+    final defineMatch = RegExp(r'(?i)supabase_url\s*=\s*([^\s]+)')
+        .firstMatch(value);
+    if (defineMatch != null) {
+      value = defineMatch.group(1) ?? value;
+    }
+
+    value = _stripOuterQuotes(value)
+        .replaceAll(RegExp(r'[,;]+$'), '')
+        .trim();
+
+    if (value.startsWith('https://https://')) {
+      value = value.substring('https://'.length);
+    } else if (value.startsWith('http://http://')) {
+      value = value.substring('http://'.length);
     }
 
     if (!value.startsWith('http://') && !value.startsWith('https://')) {
@@ -40,6 +73,7 @@ class SupabaseService {
     final resolvedUrl = _normalizeSupabaseUrl(
       envUrl.isNotEmpty ? envUrl : _kFallbackSupabaseUrl,
     );
+    _resolvedSupabaseUrl = resolvedUrl;
 
     final resolvedAnonKey =
         envAnonKey.isNotEmpty ? envAnonKey : _kFallbackSupabaseAnonKey;

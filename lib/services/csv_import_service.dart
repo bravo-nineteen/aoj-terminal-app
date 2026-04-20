@@ -190,12 +190,13 @@ class CsvImportService {
     final rows = await _pickTabularRows(
       candidateSheetNames: const ['Bookings', 'Booking'],
       requiredColumns: const [
-        'Name',
-        'Event',
-        'Status',
-        'Total',
-        'Booking Date',
         'Booking ID',
+        'Booking Date',
+        'Name',
+        'First Name',
+        'Last Name',
+        'E-mail',
+        'Total',
       ],
     );
     if (rows.isEmpty) return false;
@@ -221,6 +222,7 @@ class CsvImportService {
         'Status',
         'Ticket Price',
         'Ticket Spaces',
+        'Ticket Total',
       ],
     );
     if (rows.isEmpty) return false;
@@ -318,12 +320,13 @@ class CsvImportService {
     if (rows.isEmpty) return [];
 
     final headerRowIndex = _findHeaderRowIndex(rows, const [
-      'Name',
-      'Event',
-      'Status',
-      'Total',
-      'Booking Date',
       'Booking ID',
+      'Booking Date',
+      'Name',
+      'First Name',
+      'Last Name',
+      'E-mail',
+      'Total',
     ]);
     if (headerRowIndex == -1) return [];
 
@@ -346,13 +349,18 @@ class CsvImportService {
       'First Name',
       'FirstName',
       'Given Name',
-      'Name',
     ]);
     final lastNameIndex = _findColumnIndex(header, [
       'Last Name',
       'LastName',
       'Surname',
       'Family Name',
+    ]);
+    final fullNameIndex = _findColumnIndex(header, [
+      'Name',
+      'Full Name',
+      'Booking Name',
+      'Customer Name',
     ]);
     final emailIndex = _findColumnIndex(header, [
       'Email',
@@ -382,6 +390,8 @@ class CsvImportService {
     final transactionIdIndex = _findColumnIndex(header, [
       'Transaction ID',
       'TransactionID',
+      'Transaction',
+      'Transaction No',
       'Payment ID',
     ]);
     final paymentMethodIndex = _findColumnIndex(header, [
@@ -389,6 +399,7 @@ class CsvImportService {
       'Payment Method',
       'Method',
       'Gateway Used',
+      'Gateway',
     ]);
     final paymentStatusIndex = _findColumnIndex(header, [
       'Payment Status',
@@ -443,8 +454,14 @@ class CsvImportService {
     for (final row in dataRows) {
       if (row.isEmpty) continue;
 
-      final firstName = _cellAt(row, firstNameIndex);
-      final lastName = _cellAt(row, lastNameIndex);
+      final fullName = _cellAt(row, fullNameIndex);
+      final splitName = _splitFullName(fullName);
+      final firstName = _cellAt(row, firstNameIndex).isEmpty
+        ? splitName.$1
+        : _cellAt(row, firstNameIndex);
+      final lastName = _cellAt(row, lastNameIndex).isEmpty
+        ? splitName.$2
+        : _cellAt(row, lastNameIndex);
       final email = _cellAt(row, emailIndex);
       final phone = _cellAt(row, phoneIndex);
       final bookingId = _cellAt(row, bookingIdIndex);
@@ -539,6 +556,7 @@ class CsvImportService {
       'Status',
       'Ticket Price',
       'Ticket Spaces',
+      'Ticket Total',
     ]);
     if (headerRowIndex == -1) return [];
 
@@ -564,6 +582,7 @@ class CsvImportService {
     ]);
     final priceIndex = _findColumnIndex(header, [
       'Ticket Price',
+      'Ticket Total',
       'Price',
       'Amount',
       'Cost',
@@ -1066,6 +1085,16 @@ class CsvImportService {
   static String _cellAt(List<dynamic> row, int index) {
     if (index < 0 || index >= row.length) return '';
     return _cleanCell(row[index]);
+  }
+
+  static (String, String) _splitFullName(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return ('', '');
+
+    final parts = trimmed.split(RegExp(r'\s+'));
+    if (parts.length == 1) return (parts.first, '');
+
+    return (parts.first, parts.skip(1).join(' '));
   }
 
   static String _cleanCell(dynamic value) {
