@@ -19,6 +19,16 @@ import '../services/supabase_service.dart';
 import '../utils/booking_utils.dart';
 import '../widgets/desktop_widgets.dart';
 
+part 'sections/aoj_desktop_accounting_section.dart';
+part 'sections/aoj_desktop_booking_editor_section.dart';
+part 'sections/aoj_desktop_bookings_section.dart';
+part 'sections/aoj_desktop_event_section.dart';
+part 'sections/aoj_desktop_game_modes_section.dart';
+part 'sections/aoj_desktop_members_section.dart';
+part 'sections/aoj_desktop_props_section.dart';
+part 'sections/aoj_desktop_schedule_section.dart';
+part 'sections/aoj_desktop_system_section.dart';
+
 class AOJDesktop extends StatefulWidget {
   const AOJDesktop({super.key});
 
@@ -110,6 +120,11 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
   bool showPropControlPage = false;
   String propControlStatus = 'PROP CONSOLE OFFLINE';
+
+  void _refresh([VoidCallback? updates]) {
+    if (!mounted) return;
+    setState(updates ?? () {});
+  }
 
   final List<String> paymentMethods = const [
     'Cash',
@@ -1749,169 +1764,26 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
   Widget _buildWindowBody(DesktopWindowData window) {
     if (window.id.startsWith('booking_editor::')) {
-      final primaryId = window.id.replaceFirst('booking_editor::', '');
-      final event = activeEvent;
-      final group = _findBookingGroupByPrimaryId(primaryId);
-
-      if (event == null || group == null) {
-        return const Center(
-          child: Text('BOOKING NO LONGER AVAILABLE'),
-        );
-      }
-
-      return BookingEditorPanel(
-        accent: window.accent,
-        event: event,
-        group: group,
-        membershipLevel: _membershipLevelForGroup(event, group),
-        paymentStatuses: paymentStatuses,
-        checkInStatuses: checkInStatuses,
-        onToggleCheckIn: _toggleCheckInForGroup,
-        onEditContact: _showEditContactDialog,
-        onDeleteGroup: _deleteBookingGroup,
-        onAddTicket: _showAddTicketDialog,
-        onAddPayment: _showAddPaymentDialog,
-        onDeletePayment: _deletePaymentFromGroup,
-        onAddSale: _showAddSaleDialog,
-        onDeleteSale: _deleteSaleFromGroup,
-        onSaveGroup: _saveGroupedBooking,
-        onSave: _saveLocalState,
-        onRefresh: () => setState(() {}),
-        onOpenTicketEditor: _openTicketEditorWindow,
-      );
+      return _buildBookingEditorSection(window);
     }
 
     switch (window.id) {
       case 'system':
-        return SystemPanel(
-          accent: window.accent,
-          appState: appState,
-          activeEvent: activeEvent,
-          systemStatus: systemStatus,
-          exportStatus: exportStatus,
-          syncStatus: syncStatus,
-          onCreateEvent: _createEvent,
-          onExportEvent: _exportActiveEventJson,
-          onExportBookings: _exportBookingsCsv,
-          onImportWorkbook: _importWorkbookXlsx,
-          onImportBookings: _importBookingsCsv,
-          onImportTickets: _importTicketsCsv,
-          onImportMembers: _importMembersCsv,
-          onImportSchedule: _importScheduleCsv,
-          onImportGameModes: _importGameModesCsv,
-          onImportFieldMap: _importFieldMap,
-          onSyncPush: _syncPush,
-          onSyncPull: _syncPull,
-        );
+        return _buildSystemSection(window);
       case 'event':
-        return EventPanel(
-          accent: window.accent,
-          appState: appState,
-          event: activeEvent,
-          onSetActiveEvent: _setActiveEvent,
-          onDeleteEvent: _deleteActiveEvent,
-          onSave: _saveLocalState,
-          onRefresh: () => setState(() {}),
-        );
+        return _buildEventSection(window);
       case 'bookings':
-        return BookingsPanel(
-          accent: window.accent,
-          appState: appState,
-          event: activeEvent,
-          groups: _groupedBookingsForActiveEvent(),
-          selectedBookingIndex: selectedBookingIndex,
-          checkInStatuses: checkInStatuses,
-          onSetActiveEvent: (value) async {
-            await _setActiveEvent(value);
-            setState(() {
-              selectedBookingIndex = 0;
-            });
-          },
-          onSearchChanged: (v) {
-            setState(() {
-              bookingSearch = v;
-              selectedBookingIndex = 0;
-            });
-          },
-          onSelectBooking: (index) {
-            setState(() {
-              selectedBookingIndex = index;
-            });
-          },
-          onQuickSetCheckInStatus: _quickSetCheckInStatus,
-          onOpenBookingEditor: _openBookingEditorWindow,
-        );
+        return _buildBookingsSection(window);
       case 'accounts':
-        return AccountingPanel(
-          accent: window.accent,
-          event: activeEvent,
-          onExportFullCsv: _exportActiveEventFullCsv,
-          onAddExpense: _showAddExpenseDialog,
-          onDeleteExpense: _deleteExpenseFromActiveEvent,
-        );
+        return _buildAccountingSection(window);
       case 'members':
-        return MembersPanel(
-          accent: window.accent,
-          event: activeEvent,
-          selectedMember: selectedMember,
-          selectedMemberIndex: selectedMemberIndex,
-          membershipLevels: membershipLevels,
-          onAddMember: _addManualMember,
-          onDeleteMember: _deleteSelectedMember,
-          onSelectMember: (index) {
-            setState(() {
-              selectedMemberIndex = index;
-            });
-          },
-          onSave: _saveLocalState,
-          onRefresh: () => setState(() {}),
-        );
+        return _buildMembersSection(window);
       case 'schedule':
-        return SchedulePanel(
-          accent: window.accent,
-          event: activeEvent,
-        );
+        return _buildScheduleSection(window);
       case 'props':
-        return PropsPanel(
-          accent: window.accent,
-          event: activeEvent,
-          propIpController: propIpController,
-          showPropControlPage: showPropControlPage,
-          propControlStatus: propControlStatus,
-          onOpenPropControlPage: _openPropControlPage,
-          onClosePropControlPage: _closePropControlPage,
-          normalizedPropUrl: _normalizedPropUrl,
-          onPageStarted: () {
-            if (!mounted) return;
-            setState(() {
-              propControlStatus = 'CONNECTING TO PROP';
-            });
-          },
-          onPageFinished: () {
-            if (!mounted) return;
-            setState(() {
-              propControlStatus = 'PROP CONSOLE LINKED';
-            });
-          },
-          onWebError: (message) {
-            if (!mounted) return;
-            setState(() {
-              propControlStatus = message;
-            });
-          },
-        );
+        return _buildPropsSection(window);
       case 'game_modes':
-        return GameModesPanel(
-          accent: window.accent,
-          event: activeEvent,
-          modes: _filteredGameModes(),
-          onSearchChanged: (v) {
-            setState(() {
-              gameModeSearch = v;
-            });
-          },
-          onImportGameModes: _importGameModesCsv,
-        );
+        return _buildGameModesSection(window);
       default:
         return const SizedBox.shrink();
     }
