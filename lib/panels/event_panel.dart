@@ -68,6 +68,32 @@ class _EventPanelState extends State<EventPanel> {
     await _saveAndRefresh();
   }
 
+  Future<void> _addLunchOption(EventRecord event) async {
+    event.lunchOptions.add(
+      LunchOptionRecord(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        name: '',
+        fee: '0',
+      ),
+    );
+    await _saveAndRefresh();
+  }
+
+  Future<void> _removeLunchOption(EventRecord event, String optionId) async {
+    event.lunchOptions.removeWhere((o) => o.id == optionId);
+    for (final booking in event.bookings) {
+      booking.lunchOrderIds.removeWhere((id) => id == optionId);
+    }
+    await _saveAndRefresh();
+  }
+
+  String _lunchOptionsSummary(EventRecord event) {
+    if (event.lunchOptions.isEmpty) return '—';
+    return event.lunchOptions
+        .map((o) => '${o.name.isEmpty ? 'Unnamed' : o.name} (¥ ${MoneyUtils.formatMoney(_parseMoney(o.fee))})')
+        .join(', ');
+  }
+
   double _ticketRevenue(EventRecord event) {
     return BookingUtils.eventTicketValue(event);
   }
@@ -346,6 +372,94 @@ class _EventPanelState extends State<EventPanel> {
                               await _setEventTicketCostPerPerson(event, v);
                             },
                           ),
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              color: const Color(0x66121813),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.08),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Expanded(
+                                      child: Text(
+                                        'LUNCH OPTIONS',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed: () => _addLunchOption(event),
+                                      icon: const Icon(Icons.add, size: 18),
+                                      tooltip: 'Add lunch option',
+                                    ),
+                                  ],
+                                ),
+                                if (event.lunchOptions.isEmpty)
+                                  const Padding(
+                                    padding: EdgeInsets.only(top: 4),
+                                    child: Text('No lunch options yet.'),
+                                  )
+                                else
+                                  ...event.lunchOptions.map((option) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            flex: 3,
+                                            child: PersistentEditField(
+                                              label: 'Option Name',
+                                              value: option.name,
+                                              onChanged: (v) async {
+                                                option.name = v;
+                                                await _saveAndRefresh();
+                                              },
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            flex: 2,
+                                            child: PersistentEditField(
+                                              label: 'Fee (JPY)',
+                                              value: option.fee,
+                                              keyboardType: const TextInputType.numberWithOptions(
+                                                decimal: true,
+                                              ),
+                                              onChanged: (v) async {
+                                                option.fee =
+                                                    v.trim().isEmpty ? '0' : v;
+                                                await _saveAndRefresh();
+                                              },
+                                            ),
+                                          ),
+                                          IconButton(
+                                            onPressed: () => _removeLunchOption(
+                                              event,
+                                              option.id,
+                                            ),
+                                            icon: const Icon(
+                                              Icons.delete_outline,
+                                              size: 18,
+                                            ),
+                                            tooltip: 'Delete option',
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                              ],
+                            ),
+                          ),
                           PersistentEditField(
                             label: 'Notes',
                             value: event.notes,
@@ -376,6 +490,10 @@ class _EventPanelState extends State<EventPanel> {
                             label: 'Ticket Cost Per Person',
                             value:
                                 '¥ ${MoneyUtils.formatMoney(_ticketCostPerPersonNumber(event))}',
+                          ),
+                          _buildReadOnlyRow(
+                            label: 'Lunch Options',
+                            value: _lunchOptionsSummary(event),
                           ),
                           _buildReadOnlyRow(
                             label: 'Notes',
@@ -418,6 +536,10 @@ class _EventPanelState extends State<EventPanel> {
                                   .toString(),
                             ),
                             InfoLine(
+                              'Lunch Orders Total',
+                              '¥ ${MoneyUtils.formatMoney(BookingUtils.eventLunchTotal(event))}',
+                            ),
+                            InfoLine(
                               'Training Requests',
                               BookingUtils.trainingGroups(event)
                                   .length
@@ -442,44 +564,129 @@ class _EventPanelState extends State<EventPanel> {
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: _buildRosterCard(
-                            title: 'Training Roster',
-                            names: trainingNames,
-                            emptyText: 'NO TRAINING REQUESTS',
-                            topExtra: _isEditing
-                                ? PersistentEditField(
-                                    label: 'Trainer',
-                                    value: event.trainingTrainer,
-                                    onChanged: (v) async {
-                                      event.trainingTrainer = v;
-                                      await _saveAndRefresh();
-                                    },
-                                  )
-                                : Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 9,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(10),
-                                      color:
-                                          Colors.white.withValues(alpha: 0.03),
-                                      border: Border.all(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.06),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      event.trainingTrainer.trim().isEmpty
-                                          ? 'Trainer: —'
-                                          : 'Trainer: ${event.trainingTrainer}',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: _buildRosterCard(
+                                  title: 'Training Roster',
+                                  names: trainingNames,
+                                  emptyText: 'NO TRAINING REQUESTS',
+                                  topExtra: _isEditing
+                                      ? PersistentEditField(
+                                          label: 'Trainer',
+                                          value: event.trainingTrainer,
+                                          onChanged: (v) async {
+                                            event.trainingTrainer = v;
+                                            await _saveAndRefresh();
+                                          },
+                                        )
+                                      : Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 9,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            color: Colors.white
+                                                .withValues(alpha: 0.03),
+                                            border: Border.all(
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.06),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            event.trainingTrainer
+                                                    .trim()
+                                                    .isEmpty
+                                                ? 'Trainer: —'
+                                                : 'Trainer: ${event.trainingTrainer}',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              SizedBox(
+                                height: 170,
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(14),
+                                    color: const Color(0xCC101511),
+                                    border: Border.all(
+                                      color: widget.accent
+                                          .withValues(alpha: 0.30),
                                     ),
                                   ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Lunch Breakdown',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800,
+                                          color: widget.accent,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Expanded(
+                                        child: Builder(
+                                          builder: (context) {
+                                            final breakdown =
+                                                BookingUtils.lunchBreakdown(
+                                              event,
+                                            );
+                                            if (breakdown.isEmpty) {
+                                              return const Center(
+                                                child: Text('NO LUNCH ORDERS'),
+                                              );
+                                            }
+                                            return ListView.separated(
+                                              itemCount: breakdown.length,
+                                              separatorBuilder: (_, __) =>
+                                                  const SizedBox(height: 4),
+                                              itemBuilder: (context, index) {
+                                                final item = breakdown[index];
+                                                return Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: Text(
+                                                        '${item.option.name.isEmpty ? 'Unnamed' : item.option.name} x ${item.count}',
+                                                        style: const TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      '¥ ${MoneyUtils.formatMoney(item.total)}',
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                );
+                                              },
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],

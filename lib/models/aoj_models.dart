@@ -79,6 +79,7 @@ class EventRecord {
   String notes;
   String ticketCostPerPerson;
   String trainingTrainer;
+  List<LunchOptionRecord> lunchOptions;
   String? fieldMapBase64;
   List<BookingRecord> bookings;
   List<TicketRecord> tickets;
@@ -96,6 +97,7 @@ class EventRecord {
     required this.notes,
     required this.ticketCostPerPerson,
     required this.trainingTrainer,
+    required this.lunchOptions,
     required this.fieldMapBase64,
     required this.bookings,
     required this.tickets,
@@ -114,6 +116,7 @@ class EventRecord {
         'notes': notes,
         'ticketCostPerPerson': ticketCostPerPerson,
         'trainingTrainer': trainingTrainer,
+        'lunchOptions': lunchOptions.map((e) => e.toJson()).toList(),
         'fieldMapBase64': fieldMapBase64,
         'bookings': bookings.map((e) => e.toJson()).toList(),
         'tickets': tickets.map((e) => e.toJson()).toList(),
@@ -133,6 +136,9 @@ class EventRecord {
       notes: json['notes']?.toString() ?? '',
       ticketCostPerPerson: json['ticketCostPerPerson']?.toString() ?? '0',
       trainingTrainer: json['trainingTrainer']?.toString() ?? '',
+        lunchOptions: (json['lunchOptions'] as List<dynamic>? ?? [])
+          .map((e) => LunchOptionRecord.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
       fieldMapBase64: json['fieldMapBase64']?.toString(),
       bookings: (json['bookings'] as List<dynamic>? ?? [])
           .map((e) => BookingRecord.fromJson(Map<String, dynamic>.from(e)))
@@ -176,6 +182,7 @@ class BookingRecord {
   bool needsTraining;
   String guestNames;
   String languagePreference;
+  List<String> lunchOrderIds;
   List<String> ticketIds;
   List<SaleRecord> sales;
   List<PaymentRecord> payments;
@@ -200,6 +207,7 @@ class BookingRecord {
     required this.needsTraining,
     required this.guestNames,
     required this.languagePreference,
+    required this.lunchOrderIds,
     required this.ticketIds,
     required this.sales,
     required this.payments,
@@ -227,6 +235,7 @@ class BookingRecord {
         'needsTraining': needsTraining,
         'guestNames': guestNames,
         'languagePreference': languagePreference,
+        'lunchOrderIds': lunchOrderIds,
         'ticketIds': ticketIds,
         'sales': sales.map((e) => e.toJson()).toList(),
         'payments': payments.map((e) => e.toJson()).toList(),
@@ -253,6 +262,9 @@ class BookingRecord {
       needsTraining: json['needsTraining'] == true,
       guestNames: json['guestNames']?.toString() ?? '',
       languagePreference: json['languagePreference']?.toString() ?? '',
+        lunchOrderIds: (json['lunchOrderIds'] as List<dynamic>? ?? [])
+          .map((e) => e.toString())
+          .toList(),
       ticketIds: (json['ticketIds'] as List<dynamic>? ?? [])
           .map((e) => e.toString())
           .toList(),
@@ -551,6 +563,32 @@ class GameModeRecord {
   factory GameModeRecord.fromJson(Map<String, dynamic> json) {
     return GameModeRecord(
       data: Map<String, String>.from(json['data'] as Map? ?? {}),
+    );
+  }
+}
+
+class LunchOptionRecord {
+  String id;
+  String name;
+  String fee;
+
+  LunchOptionRecord({
+    required this.id,
+    required this.name,
+    required this.fee,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'fee': fee,
+      };
+
+  factory LunchOptionRecord.fromJson(Map<String, dynamic> json) {
+    return LunchOptionRecord(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      fee: json['fee']?.toString() ?? '0',
     );
   }
 }

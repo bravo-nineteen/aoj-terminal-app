@@ -45,6 +45,7 @@ class SupabaseService {
             'notes': e.notes,
             'ticket_cost_per_person': e.ticketCostPerPerson,
             'training_trainer': e.trainingTrainer,
+            'lunch_options': e.lunchOptions.map((o) => o.toJson()).toList(),
             'field_map_base64': e.fieldMapBase64,
             'game_modes': e.gameModes.map((g) => g.toJson()).toList(),
           },
@@ -98,6 +99,7 @@ class SupabaseService {
             'needs_training': b.needsTraining,
             'guest_names': b.guestNames,
             'language_preference': b.languagePreference,
+            'lunch_order_ids': b.lunchOrderIds,
             'ticket_ids': b.ticketIds,
             'sales': b.sales.map((s) => s.toJson()).toList(),
             'payments': b.payments.map((p) => p.toJson()).toList(),
@@ -268,6 +270,12 @@ class SupabaseService {
           )
           .toList();
 
+      final lunchOptions = (row['lunch_options'] as List<dynamic>? ?? [])
+          .map(
+            (o) => LunchOptionRecord.fromJson(Map<String, dynamic>.from(o as Map)),
+          )
+          .toList();
+
       final bookings = bookingRows.map((b) {
         return BookingRecord(
           id: b['id'] as String? ?? '',
@@ -289,6 +297,9 @@ class SupabaseService {
           needsTraining: b['needs_training'] as bool? ?? false,
           guestNames: b['guest_names'] as String? ?? '',
           languagePreference: b['language_preference'] as String? ?? '',
+            lunchOrderIds: (b['lunch_order_ids'] as List<dynamic>? ?? [])
+              .map((e) => e.toString())
+              .toList(),
           ticketIds: (b['ticket_ids'] as List<dynamic>? ?? [])
               .map((e) => e.toString())
               .toList(),
@@ -375,6 +386,7 @@ class SupabaseService {
           notes: row['notes'] as String? ?? '',
           ticketCostPerPerson: row['ticket_cost_per_person'] as String? ?? '0',
           trainingTrainer: row['training_trainer'] as String? ?? '',
+          lunchOptions: lunchOptions,
           fieldMapBase64: row['field_map_base64'] as String?,
           bookings: bookings,
           tickets: tickets,
@@ -452,6 +464,12 @@ class SupabaseService {
       ),
       trainingTrainer:
           _preferString(local.trainingTrainer, cloud.trainingTrainer),
+      lunchOptions: _mergeById(
+        local.lunchOptions,
+        cloud.lunchOptions,
+        (x) => x.id,
+        _mergeLunchOption,
+      ),
       fieldMapBase64:
           _preferStringNullable(local.fieldMapBase64, cloud.fieldMapBase64),
       bookings: _mergeById(
@@ -512,6 +530,7 @@ class SupabaseService {
         local.languagePreference,
         cloud.languagePreference,
       ),
+      lunchOrderIds: _mergeUniqueStrings(local.lunchOrderIds, cloud.lunchOrderIds),
       ticketIds: _mergeUniqueStrings(local.ticketIds, cloud.ticketIds),
       sales: _mergeById(local.sales, cloud.sales, (x) => x.id, _mergeSale),
       payments: _mergeById(
@@ -532,6 +551,15 @@ class SupabaseService {
       price: _preferString(local.price, cloud.price),
       spaces: _preferString(local.spaces, cloud.spaces),
       status: _preferString(local.status, cloud.status),
+    );
+  }
+
+  static LunchOptionRecord _mergeLunchOption(
+      LunchOptionRecord local, LunchOptionRecord cloud) {
+    return LunchOptionRecord(
+      id: local.id,
+      name: _preferString(local.name, cloud.name),
+      fee: _preferString(local.fee, cloud.fee),
     );
   }
 

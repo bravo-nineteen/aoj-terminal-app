@@ -408,6 +408,57 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                     child: ListView(
                       children: [
                         _sectionCard(
+                          title: 'Lunch Orders',
+                          child: widget.event.lunchOptions.isEmpty
+                              ? const Text('NO LUNCH OPTIONS CONFIGURED')
+                              : Column(
+                                  children: [
+                                    ...widget.event.lunchOptions.map((option) {
+                                      final selected = group.primary
+                                          .lunchOrderIds
+                                          .contains(option.id);
+                                      return CheckboxListTile(
+                                        value: selected,
+                                        contentPadding: EdgeInsets.zero,
+                                        dense: true,
+                                        controlAffinity:
+                                            ListTileControlAffinity.leading,
+                                        title: Text(
+                                          option.name.isEmpty
+                                              ? 'Unnamed Lunch Option'
+                                              : option.name,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          '¥ ${MoneyUtils.formatMoney(MoneyUtils.parseMoney(option.fee))}',
+                                          style: const TextStyle(fontSize: 11),
+                                        ),
+                                        onChanged: (checked) async {
+                                          final ids = group.primary.lunchOrderIds;
+                                          if (checked == true) {
+                                            if (!ids.contains(option.id)) {
+                                              ids.add(option.id);
+                                            }
+                                          } else {
+                                            ids.remove(option.id);
+                                          }
+                                          await _markDirtyAndSaveGroup();
+                                        },
+                                      );
+                                    }),
+                                    const SizedBox(height: 6),
+                                    SummaryLine(
+                                      label: 'Lunch Total',
+                                      value:
+                                          '¥ ${MoneyUtils.formatMoney(BookingUtils.lunchTotalForGroup(widget.event, group))} (pass-through)',
+                                    ),
+                                  ],
+                                ),
+                        ),
+                        _sectionCard(
                           title: 'Tickets',
                           trailing: ElevatedButton.icon(
                             onPressed: () => widget.onOpenTicketEditor(group),

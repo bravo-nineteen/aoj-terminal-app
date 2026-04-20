@@ -519,6 +519,7 @@ class CsvImportService {
           needsTraining: _looksTrue(_cellAt(row, trainingIndex)),
           guestNames: _cellAt(row, guestNamesIndex),
           languagePreference: _cellAt(row, languageIndex),
+          lunchOrderIds: [],
           ticketIds: [],
           sales: [],
           payments: importedPayments,

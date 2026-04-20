@@ -17,6 +17,7 @@ create table if not exists events (
   notes                 text not null default '',
   ticket_cost_per_person text not null default '0',
   training_trainer      text not null default '',
+  lunch_options         jsonb not null default '[]',
   field_map_base64      text,
   game_modes            jsonb not null default '[]',
   updated_at            timestamptz not null default now()
@@ -44,6 +45,7 @@ create table if not exists bookings (
   needs_training      boolean not null default false,
   guest_names         text not null default '',
   language_preference text not null default '',
+  lunch_order_ids     jsonb not null default '[]',
   ticket_ids          jsonb not null default '[]',
   sales               jsonb not null default '[]',
   payments            jsonb not null default '[]',

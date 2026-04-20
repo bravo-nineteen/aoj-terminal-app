@@ -465,6 +465,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
       notes: '',
       ticketCostPerPerson: '0',
       trainingTrainer: '',
+      lunchOptions: [],
       fieldMapBase64: null,
       bookings: [],
       tickets: [],
@@ -1356,6 +1357,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
       row.needsTraining = group.primary.needsTraining;
       row.guestNames = group.primary.guestNames;
       row.languagePreference = group.primary.languagePreference;
+        row.lunchOrderIds = List<String>.from(group.primary.lunchOrderIds);
       row.sales = group.primary.sales
           .map((s) => SaleRecord(id: s.id, product: s.product, price: s.price))
           .toList();
