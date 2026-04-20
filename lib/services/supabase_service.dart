@@ -8,21 +8,38 @@ const String _kFallbackSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'
     '.1ychTDnuRxtOFY9SquXtg8RkzX0UxvyXENU1ncAaFO4';
 
 class SupabaseService {
+  static String _normalizeSupabaseUrl(String rawUrl) {
+    var value = rawUrl.trim();
+
+    // Handle values copied with surrounding quotes from shell commands.
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.substring(1, value.length - 1).trim();
+    }
+
+    if (!value.startsWith('http://') && !value.startsWith('https://')) {
+      value = 'https://$value';
+    }
+
+    final parsed = Uri.tryParse(value);
+    if (parsed == null || parsed.host.isEmpty) {
+      throw ArgumentError('Invalid SUPABASE_URL: $rawUrl');
+    }
+
+    return Uri(
+      scheme: parsed.scheme,
+      host: parsed.host,
+      port: parsed.hasPort ? parsed.port : null,
+    ).toString();
+  }
+
   static Future<void> initialize() async {
     const envUrl = String.fromEnvironment('SUPABASE_URL');
     const envAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
-    var resolvedUrl = envUrl.isNotEmpty ? envUrl : _kFallbackSupabaseUrl;
-    resolvedUrl = resolvedUrl.trim();
-    if (!resolvedUrl.startsWith('http://') &&
-        !resolvedUrl.startsWith('https://')) {
-      resolvedUrl = 'https://$resolvedUrl';
-    }
-
-    final uri = Uri.tryParse(resolvedUrl);
-    if (uri == null || uri.host.isEmpty) {
-      throw ArgumentError('Invalid SUPABASE_URL: $resolvedUrl');
-    }
+    final resolvedUrl = _normalizeSupabaseUrl(
+      envUrl.isNotEmpty ? envUrl : _kFallbackSupabaseUrl,
+    );
 
     final resolvedAnonKey =
         envAnonKey.isNotEmpty ? envAnonKey : _kFallbackSupabaseAnonKey;

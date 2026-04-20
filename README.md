@@ -13,3 +13,6 @@ The app supports Supabase-based sync merge between devices.
 For production, pass credentials via dart-defines:
 
 `--dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=...`
+
+Use the project base URL only (for example, `https://your-project-id.supabase.co`).
+Do not include API path suffixes like `/rest/v1`.
