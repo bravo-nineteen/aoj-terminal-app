@@ -310,10 +310,30 @@ class _AOJDesktopState extends State<AOJDesktop> {
     }
   }
 
+  void _showSyncMessage(String message) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  String _formatSyncError(Object error) {
+    final raw = error.toString().replaceAll('\n', ' ').trim();
+    if (raw.isEmpty) return 'Unknown error';
+    return raw.length > 120 ? '${raw.substring(0, 120)}...' : raw;
+  }
+
   Future<void> _syncPush() async {
-    setState(() => syncStatus = 'SYNCING…');
+    setState(() => syncStatus = 'SYNCING TO CLOUD...');
+    _showSyncMessage('Sync started: pushing merge to Supabase...');
     try {
-      final merged = await SupabaseService.syncMergeAppState(appState);
+      final merged = await SupabaseService.syncMergeAppState(appState)
+          .timeout(const Duration(seconds: 30));
       await AppStateService.save(merged);
       if (mounted) {
         setState(() {
@@ -322,15 +342,25 @@ class _AOJDesktopState extends State<AOJDesktop> {
           systemStatus = 'SYNCED WITH CLOUD';
         });
       }
+      _showSyncMessage('Sync complete: push merge succeeded.');
     } catch (e) {
-      if (mounted) setState(() => syncStatus = 'SYNC FAILED');
+      final errorText = _formatSyncError(e);
+      if (mounted) {
+        setState(() {
+          syncStatus = 'SYNC FAILED: $errorText';
+          systemStatus = 'SYNC ERROR';
+        });
+      }
+      _showSyncMessage('Sync failed: $errorText');
     }
   }
 
   Future<void> _syncPull() async {
-    setState(() => syncStatus = 'SYNCING…');
+    setState(() => syncStatus = 'SYNCING FROM CLOUD...');
+    _showSyncMessage('Sync started: pulling and merging from Supabase...');
     try {
-      final merged = await SupabaseService.syncMergeAppState(appState);
+      final merged = await SupabaseService.syncMergeAppState(appState)
+          .timeout(const Duration(seconds: 30));
       await AppStateService.save(merged);
       if (mounted) {
         setState(() {
@@ -342,8 +372,16 @@ class _AOJDesktopState extends State<AOJDesktop> {
           systemStatus = 'SYNCED WITH CLOUD';
         });
       }
+      _showSyncMessage('Sync complete: pull merge succeeded.');
     } catch (e) {
-      if (mounted) setState(() => syncStatus = 'SYNC FAILED');
+      final errorText = _formatSyncError(e);
+      if (mounted) {
+        setState(() {
+          syncStatus = 'SYNC FAILED: $errorText';
+          systemStatus = 'SYNC ERROR';
+        });
+      }
+      _showSyncMessage('Sync failed: $errorText');
     }
   }
 
