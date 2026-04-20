@@ -451,9 +451,10 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                                     }),
                                     const SizedBox(height: 6),
                                     SummaryLine(
-                                      label: 'Lunch Total',
-                                      value:
-                                          '¥ ${MoneyUtils.formatMoney(BookingUtils.lunchTotalForGroup(widget.event, group))} (pass-through)',
+                                      label: 'Lunch Selections',
+                                      value: group.primary.lunchOrderIds
+                                          .length
+                                          .toString(),
                                     ),
                                   ],
                                 ),

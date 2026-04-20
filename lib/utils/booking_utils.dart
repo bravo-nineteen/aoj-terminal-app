@@ -9,8 +9,6 @@ class LunchBreakdownItem {
     required this.option,
     required this.count,
   });
-
-  double get total => MoneyUtils.parseMoney(option.fee) * count;
 }
 
 class BookingUtils {
@@ -242,17 +240,6 @@ class BookingUtils {
     return eventTicketValue(event) - eventTicketCostTotal(event) + eventSalesValue(event);
   }
 
-  static double lunchTotalForGroup(EventRecord event, BookingGroup group) {
-    final byId = {
-      for (final option in event.lunchOptions) option.id: option,
-    };
-    return group.primary.lunchOrderIds.fold<double>(0.0, (sum, optionId) {
-      final option = byId[optionId];
-      if (option == null) return sum;
-      return sum + MoneyUtils.parseMoney(option.fee);
-    });
-  }
-
   static List<LunchBreakdownItem> lunchBreakdown(EventRecord event) {
     final counts = <String, int>{
       for (final option in event.lunchOptions) option.id: 0,
@@ -275,10 +262,6 @@ class BookingUtils {
         )
         .where((item) => item.count > 0)
         .toList();
-  }
-
-  static double eventLunchTotal(EventRecord event) {
-    return lunchBreakdown(event).fold<double>(0.0, (sum, item) => sum + item.total);
   }
 
   static void recalculateAllTotals(EventRecord event) {

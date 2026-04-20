@@ -120,6 +120,11 @@ class _EventPanelState extends State<EventPanel> {
         _salesRevenue(event);
   }
 
+  int _lunchOrderCount(EventRecord event) {
+    return BookingUtils.lunchBreakdown(event)
+        .fold<int>(0, (sum, item) => sum + item.count);
+  }
+
   Widget _buildReadOnlyRow({
     required String label,
     required String value,
@@ -536,8 +541,8 @@ class _EventPanelState extends State<EventPanel> {
                                   .toString(),
                             ),
                             InfoLine(
-                              'Lunch Orders Total',
-                              '¥ ${MoneyUtils.formatMoney(BookingUtils.eventLunchTotal(event))}',
+                              'Lunch Orders',
+                              _lunchOrderCount(event).toString(),
                             ),
                             InfoLine(
                               'Training Requests',
@@ -665,14 +670,6 @@ class _EventPanelState extends State<EventPanel> {
                                                           fontWeight:
                                                               FontWeight.w600,
                                                         ),
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      '¥ ${MoneyUtils.formatMoney(item.total)}',
-                                                      style: const TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w800,
                                                       ),
                                                     ),
                                                   ],
