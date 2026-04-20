@@ -44,11 +44,20 @@ fi
 
 mkdir -p "${MIGRATIONS_DIR}"
 
-if ! find "${MIGRATIONS_DIR}" -maxdepth 1 -type f -name '*aoj_events*.sql' | grep -q .; then
+latest_migration="$(find "${MIGRATIONS_DIR}" -maxdepth 1 -type f -name '*_aoj_events.sql' | sort | tail -n1 || true)"
+
+if [[ -z "${latest_migration}" ]]; then
   ts="$(date +%Y%m%d%H%M%S)"
   migration_file="${MIGRATIONS_DIR}/${ts}_aoj_events.sql"
   cp "${SQL_FILE}" "${migration_file}"
   echo "Created migration: ${migration_file}"
+elif ! cmp -s "${SQL_FILE}" "${latest_migration}"; then
+  ts="$(date +%Y%m%d%H%M%S)"
+  migration_file="${MIGRATIONS_DIR}/${ts}_aoj_events.sql"
+  cp "${SQL_FILE}" "${migration_file}"
+  echo "Detected SQL changes. Created migration: ${migration_file}"
+else
+  echo "No SQL changes detected for aoj_events migration."
 fi
 
 (
@@ -58,5 +67,9 @@ fi
   else
     supabase_cmd link --project-ref "${SUPABASE_PROJECT_REF}"
   fi
-  supabase_cmd db push
+  if [[ -n "${SUPABASE_DB_PASSWORD:-}" ]]; then
+    supabase_cmd db push --yes --password "${SUPABASE_DB_PASSWORD}"
+  else
+    supabase_cmd db push --yes
+  fi
 )

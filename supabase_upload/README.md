@@ -33,8 +33,10 @@ Run scripts
 
 How sync works now
 - db_push.sh auto-initializes a local supabase folder if missing.
-- db_push.sh auto-creates a migration from create_aoj_events_table.sql if no aoj_events migration exists yet.
+- db_push.sh auto-creates a migration from create_aoj_events_table.sql.
+- db_push.sh creates a new timestamped migration whenever create_aoj_events_table.sql changes.
 - db_push.sh runs link and db push from repository root, which Supabase CLI expects.
+- db_push.sh uses non-interactive push (--yes) to avoid hanging at a Y/n prompt.
 
 Notes
 - upload_event_json.sh requires JSON with at least id and name fields.
