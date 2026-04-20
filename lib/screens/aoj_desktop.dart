@@ -325,6 +325,12 @@ class _AOJDesktopState extends State<AOJDesktop> {
   String _formatSyncError(Object error) {
     final raw = error.toString().replaceAll('\n', ' ').trim();
     if (raw.isEmpty) return 'Unknown error';
+    final lower = raw.toLowerCase();
+    if (lower.contains('failed host lookup') ||
+        lower.contains('name or service not known') ||
+        lower.contains('temporary failure in name resolution')) {
+      return 'Could not reach Supabase host. Check internet/DNS and SUPABASE_URL.';
+    }
     return raw.length > 120 ? '${raw.substring(0, 120)}...' : raw;
   }
 

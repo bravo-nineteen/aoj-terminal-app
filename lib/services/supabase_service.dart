@@ -12,7 +12,18 @@ class SupabaseService {
     const envUrl = String.fromEnvironment('SUPABASE_URL');
     const envAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
-    final resolvedUrl = envUrl.isNotEmpty ? envUrl : _kFallbackSupabaseUrl;
+    var resolvedUrl = envUrl.isNotEmpty ? envUrl : _kFallbackSupabaseUrl;
+    resolvedUrl = resolvedUrl.trim();
+    if (!resolvedUrl.startsWith('http://') &&
+        !resolvedUrl.startsWith('https://')) {
+      resolvedUrl = 'https://$resolvedUrl';
+    }
+
+    final uri = Uri.tryParse(resolvedUrl);
+    if (uri == null || uri.host.isEmpty) {
+      throw ArgumentError('Invalid SUPABASE_URL: $resolvedUrl');
+    }
+
     final resolvedAnonKey =
         envAnonKey.isNotEmpty ? envAnonKey : _kFallbackSupabaseAnonKey;
 
@@ -23,6 +34,31 @@ class SupabaseService {
   }
 
   static SupabaseClient get _db => Supabase.instance.client;
+
+  static bool _isHostLookupError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('failed host lookup') ||
+        message.contains('name or service not known') ||
+        message.contains('temporary failure in name resolution');
+  }
+
+  static Future<T> _withHostLookupRetry<T>(Future<T> Function() action) async {
+    Object? lastError;
+    for (int attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await action();
+      } catch (e) {
+        lastError = e;
+        final isRetryable = _isHostLookupError(e);
+        final isLast = attempt == 2;
+        if (!isRetryable || isLast) {
+          rethrow;
+        }
+        await Future<void>.delayed(Duration(milliseconds: 700 * (attempt + 1)));
+      }
+    }
+    throw lastError ?? StateError('Unknown host lookup failure');
+  }
 
   // ─── Push ─────────────────────────────────────────────────────────────────
 
@@ -210,9 +246,9 @@ class SupabaseService {
 
   /// Pulls, merges, and pushes so each device converges to one merged state.
   static Future<AppStateData> syncMergeAppState(AppStateData localState) async {
-    final cloudState = await pullAppState();
+    final cloudState = await _withHostLookupRetry(() => pullAppState());
     final merged = _mergeAppState(localState, cloudState);
-    await pushAppState(merged);
+    await _withHostLookupRetry(() => pushAppState(merged));
     return merged;
   }
 
