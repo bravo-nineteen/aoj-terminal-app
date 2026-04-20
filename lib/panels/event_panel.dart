@@ -125,6 +125,110 @@ class _EventPanelState extends State<EventPanel> {
         .fold<int>(0, (sum, item) => sum + item.count);
   }
 
+  List<_LunchOrderPerson> _lunchOrdersByPerson(EventRecord event) {
+    final optionsById = <String, LunchOptionRecord>{
+      for (final option in event.lunchOptions) option.id: option,
+    };
+
+    final rows = <_LunchOrderPerson>[];
+    for (final group in BookingUtils.groupedBookingsForEvent(event)) {
+      if (group.primary.lunchOrderIds.isEmpty) continue;
+
+      final selectedOptions = group.primary.lunchOrderIds
+          .map((id) => optionsById[id])
+          .whereType<LunchOptionRecord>()
+          .toList();
+
+      if (selectedOptions.isEmpty) continue;
+
+      final totalFee = selectedOptions.fold<double>(
+        0.0,
+        (sum, option) => sum + _parseMoney(option.fee),
+      );
+
+      rows.add(
+        _LunchOrderPerson(
+          personName: group.displayName,
+          orderNames: selectedOptions
+              .map((o) => o.name.trim().isEmpty ? 'Unnamed' : o.name.trim())
+              .toList(),
+          totalFee: totalFee,
+        ),
+      );
+    }
+
+    rows.sort(
+      (a, b) => a.personName.toLowerCase().compareTo(b.personName.toLowerCase()),
+    );
+    return rows;
+  }
+
+  Future<void> _showLunchBreakdownDetails(EventRecord event) async {
+    final rows = _lunchOrdersByPerson(event);
+    if (rows.isEmpty) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Lunch Orders'),
+          content: SizedBox(
+            width: 560,
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: rows.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final row = rows[index];
+                return Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: const Color(0x66121813),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        row.personName,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        row.orderNames.join(', '),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Total fee: ¥ ${MoneyUtils.formatMoney(row.totalFee)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildReadOnlyRow({
     required String label,
     required String value,
@@ -618,68 +722,87 @@ class _EventPanelState extends State<EventPanel> {
                               const SizedBox(height: 10),
                               SizedBox(
                                 height: 170,
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(14),
-                                    color: const Color(0xCC101511),
-                                    border: Border.all(
-                                      color: widget.accent
-                                          .withValues(alpha: 0.30),
-                                    ),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Lunch Breakdown',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w800,
-                                          color: widget.accent,
-                                        ),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(14),
+                                  onTap: () => _showLunchBreakdownDetails(event),
+                                  child: Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(14),
+                                      color: const Color(0xCC101511),
+                                      border: Border.all(
+                                        color: widget.accent
+                                            .withValues(alpha: 0.30),
                                       ),
-                                      const SizedBox(height: 8),
-                                      Expanded(
-                                        child: Builder(
-                                          builder: (context) {
-                                            final breakdown =
-                                                BookingUtils.lunchBreakdown(
-                                              event,
-                                            );
-                                            if (breakdown.isEmpty) {
-                                              return const Center(
-                                                child: Text('NO LUNCH ORDERS'),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(
+                                              'Lunch Breakdown',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w800,
+                                                color: widget.accent,
+                                              ),
+                                            ),
+                                            const Spacer(),
+                                            Text(
+                                              'Tap for details',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.white
+                                                    .withValues(alpha: 0.65),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Expanded(
+                                          child: Builder(
+                                            builder: (context) {
+                                              final breakdown =
+                                                  BookingUtils.lunchBreakdown(
+                                                event,
                                               );
-                                            }
-                                            return ListView.separated(
-                                              itemCount: breakdown.length,
-                                              separatorBuilder: (_, __) =>
-                                                  const SizedBox(height: 4),
-                                              itemBuilder: (context, index) {
-                                                final item = breakdown[index];
-                                                return Row(
-                                                  children: [
-                                                    Expanded(
-                                                      child: Text(
-                                                        '${item.option.name.isEmpty ? 'Unnamed' : item.option.name} x ${item.count}',
-                                                        style: const TextStyle(
-                                                          fontSize: 12,
-                                                          fontWeight:
-                                                              FontWeight.w600,
+                                              if (breakdown.isEmpty) {
+                                                return const Center(
+                                                  child: Text('NO LUNCH ORDERS'),
+                                                );
+                                              }
+                                              return ListView.separated(
+                                                itemCount: breakdown.length,
+                                                separatorBuilder: (_, __) =>
+                                                    const SizedBox(height: 4),
+                                                itemBuilder: (context, index) {
+                                                  final item =
+                                                      breakdown[index];
+                                                  return Row(
+                                                    children: [
+                                                      Expanded(
+                                                        child: Text(
+                                                          '${item.option.name.isEmpty ? 'Unnamed' : item.option.name} x ${item.count}',
+                                                          style:
+                                                              const TextStyle(
+                                                            fontSize: 12,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
                                                         ),
                                                       ),
-                                                    ),
-                                                  ],
-                                                );
-                                              },
-                                            );
-                                          },
+                                                    ],
+                                                  );
+                                                },
+                                              );
+                                            },
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
@@ -696,4 +819,16 @@ class _EventPanelState extends State<EventPanel> {
       ),
     );
   }
+}
+
+class _LunchOrderPerson {
+  final String personName;
+  final List<String> orderNames;
+  final double totalFee;
+
+  const _LunchOrderPerson({
+    required this.personName,
+    required this.orderNames,
+    required this.totalFee,
+  });
 }
