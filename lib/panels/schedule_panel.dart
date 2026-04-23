@@ -5,28 +5,64 @@ import 'package:flutter/material.dart';
 
 import '../models/aoj_models.dart';
 
-class SchedulePanel extends StatelessWidget {
+class SchedulePanel extends StatefulWidget {
   final Color accent;
   final EventRecord? event;
+  final Future<void> Function() onSave;
+  final VoidCallback onRefresh;
 
   const SchedulePanel({
     super.key,
     required this.accent,
     required this.event,
+    required this.onSave,
+    required this.onRefresh,
   });
 
+  @override
+  State<SchedulePanel> createState() => _SchedulePanelState();
+}
+
+class _SchedulePanelState extends State<SchedulePanel> {
+  bool _isEditing = false;
+
   Uint8List? _fieldMapBytes() {
-    if (event == null || event!.fieldMapBase64 == null) return null;
+    if (widget.event == null || widget.event!.fieldMapBase64 == null) {
+      return null;
+    }
     try {
-      return base64Decode(event!.fieldMapBase64!);
+      return base64Decode(widget.event!.fieldMapBase64!);
     } catch (_) {
       return null;
     }
   }
 
+  Future<void> _addRow() async {
+    widget.event!.schedule.add(
+      ScheduleRecord(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        time: '',
+        activity: '',
+        location: '',
+        notes: '',
+      ),
+    );
+    await widget.onSave();
+    widget.onRefresh();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _deleteRow(int index) async {
+    widget.event!.schedule.removeAt(index);
+    await widget.onSave();
+    widget.onRefresh();
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final fieldMapBytes = _fieldMapBytes();
+    final event = widget.event;
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -42,46 +78,161 @@ class SchedulePanel extends StatelessWidget {
                   Expanded(
                     flex: 6,
                     child: Container(
-                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(18),
                         color: const Color(0xCC101511),
-                        border:
-                            Border.all(color: accent.withValues(alpha: 0.35)),
+                        border: Border.all(
+                            color: widget.accent.withValues(alpha: 0.35)),
                       ),
-                      child: event!.schedule.isEmpty
-                          ? const Center(child: Text('NO SCHEDULE IMPORTED'))
-                          : ListView.builder(
-                              itemCount: event!.schedule.length,
-                              itemBuilder: (context, index) {
-                                final row = event!.schedule[index];
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 8),
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    color: Colors.white.withValues(alpha: 0.03),
-                                    border: Border.all(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.06)),
+                      child: Column(
+                        children: [
+                          // Header bar with edit toggle + add button
+                          Container(
+                            padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+                            decoration: BoxDecoration(
+                              borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(18)),
+                              color:
+                                  widget.accent.withValues(alpha: 0.10),
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: widget.accent.withValues(alpha: 0.25),
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'SCHEDULE',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w800,
+                                      color: widget.accent,
+                                    ),
                                   ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: row.data.entries.map((entry) {
-                                      return Padding(
-                                        padding:
-                                            const EdgeInsets.only(bottom: 4),
-                                        child: Text(
-                                          '${entry.key}: ${entry.value}',
-                                          style: const TextStyle(fontSize: 11),
+                                ),
+                                if (_isEditing)
+                                  IconButton(
+                                    tooltip: 'Add row',
+                                    onPressed: _addRow,
+                                    icon: const Icon(Icons.add, size: 18),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                  ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  tooltip: _isEditing
+                                      ? 'Done editing'
+                                      : 'Edit schedule',
+                                  onPressed: () {
+                                    setState(() {
+                                      _isEditing = !_isEditing;
+                                    });
+                                  },
+                                  icon: Icon(
+                                    _isEditing
+                                        ? Icons.check_circle_outline
+                                        : Icons.edit_outlined,
+                                    size: 18,
+                                    color: widget.accent,
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: event.schedule.isEmpty
+                                ? Center(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Text('NO SCHEDULE'),
+                                        if (_isEditing) ...[
+                                          const SizedBox(height: 10),
+                                          TextButton.icon(
+                                            onPressed: _addRow,
+                                            icon: const Icon(Icons.add,
+                                                size: 16),
+                                            label:
+                                                const Text('Add first entry'),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    padding: const EdgeInsets.all(10),
+                                    itemCount: event.schedule.length,
+                                    itemBuilder: (context, index) {
+                                      final row = event.schedule[index];
+                                      if (_isEditing) {
+                                        return _ScheduleEditRow(
+                                          key: ValueKey(row.id),
+                                          row: row,
+                                          accent: widget.accent,
+                                          onDelete: () => _deleteRow(index),
+                                          onSave: () async {
+                                            await widget.onSave();
+                                          },
+                                        );
+                                      }
+                                      // Read-only display
+                                      final headerTime =
+                                          row.time.trim().isNotEmpty
+                                              ? row.time.trim()
+                                              : 'Time TBC';
+                                      final headerTitle =
+                                          row.activity.trim().isNotEmpty
+                                              ? row.activity.trim()
+                                              : 'Untitled Activity';
+                                      return Container(
+                                        margin:
+                                            const EdgeInsets.only(bottom: 8),
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          color: Colors.white
+                                              .withValues(alpha: 0.03),
+                                          border: Border.all(
+                                            color: Colors.white
+                                                .withValues(alpha: 0.06),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '$headerTime - $headerTitle',
+                                              style: const TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            if (row.notes.trim().isNotEmpty) ...[
+                                              const SizedBox(height: 6),
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    left: 12),
+                                                child: Text(
+                                                  row.notes.trim(),
+                                                  style: const TextStyle(
+                                                      fontSize: 11),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
                                         ),
                                       );
-                                    }).toList(),
+                                    },
                                   ),
-                                );
-                              },
-                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -91,8 +242,8 @@ class SchedulePanel extends StatelessWidget {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(18),
                         color: const Color(0xCC101511),
-                        border:
-                            Border.all(color: accent.withValues(alpha: 0.35)),
+                        border: Border.all(
+                            color: widget.accent.withValues(alpha: 0.35)),
                       ),
                       child: fieldMapBytes == null
                           ? const Center(child: Text('NO FIELD MAP'))
@@ -108,6 +259,132 @@ class SchedulePanel extends StatelessWidget {
                 ],
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Inline editing row for a single schedule entry.
+class _ScheduleEditRow extends StatefulWidget {
+  final ScheduleRecord row;
+  final Color accent;
+  final VoidCallback onDelete;
+  final Future<void> Function() onSave;
+
+  const _ScheduleEditRow({
+    super.key,
+    required this.row,
+    required this.accent,
+    required this.onDelete,
+    required this.onSave,
+  });
+
+  @override
+  State<_ScheduleEditRow> createState() => _ScheduleEditRowState();
+}
+
+class _ScheduleEditRowState extends State<_ScheduleEditRow> {
+  late final TextEditingController _timeCtrl;
+  late final TextEditingController _activityCtrl;
+  late final TextEditingController _notesCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _timeCtrl = TextEditingController(text: widget.row.time);
+    _activityCtrl = TextEditingController(text: widget.row.activity);
+    _notesCtrl = TextEditingController(text: widget.row.notes);
+  }
+
+  @override
+  void dispose() {
+    _timeCtrl.dispose();
+    _activityCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _commit() async {
+    widget.row.time = _timeCtrl.text.trim();
+    widget.row.activity = _activityCtrl.text.trim();
+    widget.row.notes = _notesCtrl.text.trim();
+    await widget.onSave();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        color: widget.accent.withValues(alpha: 0.06),
+        border: Border.all(color: widget.accent.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: _timeCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Time',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  ),
+                  style: const TextStyle(fontSize: 12),
+                  onEditingComplete: _commit,
+                  onTapOutside: (_) => _commit(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 5,
+                child: TextField(
+                  controller: _activityCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Activity',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  ),
+                  style: const TextStyle(fontSize: 12),
+                  onEditingComplete: _commit,
+                  onTapOutside: (_) => _commit(),
+                ),
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                tooltip: 'Delete row',
+                onPressed: widget.onDelete,
+                icon: const Icon(Icons.delete_outline, size: 16),
+                color: Colors.redAccent.withValues(alpha: 0.8),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _notesCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Notes',
+              isDense: true,
+              border: OutlineInputBorder(),
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            ),
+            style: const TextStyle(fontSize: 11),
+            maxLines: 2,
+            onTapOutside: (_) => _commit(),
+          ),
         ],
       ),
     );

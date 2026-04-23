@@ -115,9 +115,14 @@ class _EventPanelState extends State<EventPanel> {
   }
 
   double _estimatedProfit(EventRecord event) {
+    final manualExpensesTotal = event.expenses.fold<double>(
+      0.0,
+      (sum, e) => sum + _parseMoney(e.amount),
+    );
     return _ticketRevenue(event) -
         _ticketCostTotal(event) +
-        _salesRevenue(event);
+        _salesRevenue(event) -
+        manualExpensesTotal;
   }
 
   int _lunchOrderCount(EventRecord event) {
@@ -681,14 +686,77 @@ class _EventPanelState extends State<EventPanel> {
                                   names: trainingNames,
                                   emptyText: 'NO TRAINING REQUESTS',
                                   topExtra: _isEditing
-                                      ? PersistentEditField(
-                                          label: 'Trainer',
-                                          value: event.trainingTrainer,
-                                          onChanged: (v) async {
-                                            event.trainingTrainer = v;
-                                            await _saveAndRefresh();
-                                          },
-                                        )
+                                      ? (event.members.isEmpty
+                                          ? PersistentEditField(
+                                              label: 'Trainer',
+                                              value: event.trainingTrainer,
+                                              onChanged: (v) async {
+                                                event.trainingTrainer = v;
+                                                await _saveAndRefresh();
+                                              },
+                                            )
+                                          : Container(
+                                              margin: const EdgeInsets.only(
+                                                  bottom: 8),
+                                              child:
+                                                  DropdownButtonFormField<
+                                                      String>(
+                                                value: event.members.any(
+                                                  (m) =>
+                                                      m.fullName.trim() ==
+                                                      event.trainingTrainer
+                                                          .trim(),
+                                                )
+                                                    ? event.trainingTrainer
+                                                        .trim()
+                                                    : null,
+                                                decoration:
+                                                    const InputDecoration(
+                                                  labelText: 'Trainer',
+                                                  border:
+                                                      OutlineInputBorder(),
+                                                  isDense: true,
+                                                  contentPadding:
+                                                      EdgeInsets.symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 10,
+                                                  ),
+                                                ),
+                                                items: [
+                                                  const DropdownMenuItem<
+                                                      String>(
+                                                    value: null,
+                                                    child: Text('— None —'),
+                                                  ),
+                                                  ...event.members.map(
+                                                    (m) {
+                                                      final name =
+                                                          m.fullName
+                                                              .trim();
+                                                      return DropdownMenuItem<
+                                                          String>(
+                                                        value: name.isEmpty
+                                                            ? m.id
+                                                            : name,
+                                                        child: Text(
+                                                          name.isEmpty
+                                                              ? 'Unnamed'
+                                                              : name,
+                                                          overflow:
+                                                              TextOverflow
+                                                                  .ellipsis,
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+                                                ],
+                                                onChanged: (v) async {
+                                                  event.trainingTrainer =
+                                                      v ?? '';
+                                                  await _saveAndRefresh();
+                                                },
+                                              ),
+                                            ))
                                       : Container(
                                           width: double.infinity,
                                           padding: const EdgeInsets.symmetric(

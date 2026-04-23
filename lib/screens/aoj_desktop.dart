@@ -134,6 +134,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     'Wire Transfer',
     'PayPal',
     'Imported',
+    'Refund',
   ];
 
   final List<String> paymentStatuses = const [
@@ -506,15 +507,84 @@ class _AOJDesktopState extends State<AOJDesktop> {
     await _saveLocalState();
   }
 
+  void _showImportResultDialog(WorkbookImportResult result) {
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(result.success ? 'Import Complete' : 'Import Failed'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (result.bookingsImported > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text('Bookings: ${result.bookingsImported}'),
+                  ),
+                if (result.ticketsImported > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text('Tickets: ${result.ticketsImported}'),
+                  ),
+                if (result.membersImported > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text('Members: ${result.membersImported}'),
+                  ),
+                if (result.scheduleImported > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text('Schedule rows: ${result.scheduleImported}'),
+                  ),
+                if (result.gameModesImported > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text('Game modes: ${result.gameModesImported}'),
+                  ),
+                if (result.missingSheets.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Sheets not found: ${result.missingSheets.join(", ")}',
+                    style: const TextStyle(color: Colors.orangeAccent),
+                  ),
+                ],
+                if (!result.success)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: Text(
+                      'No supported sheets found in the workbook.',
+                      style: TextStyle(color: Colors.redAccent),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _importWorkbookXlsx() async {
     final event = activeEvent;
     if (event == null) return;
 
     final result = await CsvImportService.importWorkbookXlsx(event);
+    if (!mounted) return;
+
     if (!result.success) {
       setState(() {
         systemStatus = 'WORKBOOK IMPORT FAILED';
       });
+      _showImportResultDialog(result);
       return;
     }
 
@@ -522,10 +592,11 @@ class _AOJDesktopState extends State<AOJDesktop> {
       selectedBookingIndex = event.bookings.isNotEmpty ? 0 : null;
       selectedMemberIndex = event.members.isNotEmpty ? 0 : null;
       systemStatus =
-          'WORKBOOK IMPORTED: ${result.totalImported} ITEMS / ${result.importedSheets.join(", ")}';
+          'WORKBOOK IMPORTED: ${result.totalImported} ITEMS';
     });
 
     await _saveLocalState();
+    _showImportResultDialog(result);
   }
 
   Future<void> _importBookingsCsv() async {
@@ -533,10 +604,12 @@ class _AOJDesktopState extends State<AOJDesktop> {
     if (event == null) return;
     final ok = await CsvImportService.importBookingsCsv(event);
     if (!ok) return;
+    final count = event.bookings.length;
     setState(() {
       selectedBookingIndex = 0;
-      systemStatus = 'BOOKINGS IMPORTED';
+      systemStatus = 'BOOKINGS IMPORTED: $count';
     });
+    if (mounted) _showSyncMessage('Bookings imported: $count rows.');
     await _saveLocalState();
   }
 
@@ -545,9 +618,11 @@ class _AOJDesktopState extends State<AOJDesktop> {
     if (event == null) return;
     final ok = await CsvImportService.importTicketsCsv(event);
     if (!ok) return;
+    final count = event.tickets.length;
     setState(() {
-      systemStatus = 'TICKETS IMPORTED';
+      systemStatus = 'TICKETS IMPORTED: $count';
     });
+    if (mounted) _showSyncMessage('Tickets imported: $count rows.');
     await _saveLocalState();
   }
 
@@ -556,10 +631,12 @@ class _AOJDesktopState extends State<AOJDesktop> {
     if (event == null) return;
     final ok = await CsvImportService.importMembersCsv(event);
     if (!ok) return;
+    final count = event.members.length;
     setState(() {
       selectedMemberIndex = event.members.isNotEmpty ? 0 : null;
-      systemStatus = 'MEMBERS IMPORTED';
+      systemStatus = 'MEMBERS IMPORTED: $count';
     });
+    if (mounted) _showSyncMessage('Members imported: $count rows.');
     await _saveLocalState();
   }
 
@@ -568,9 +645,11 @@ class _AOJDesktopState extends State<AOJDesktop> {
     if (event == null) return;
     final ok = await CsvImportService.importScheduleCsv(event);
     if (!ok) return;
+    final count = event.schedule.length;
     setState(() {
-      systemStatus = 'SCHEDULE IMPORTED';
+      systemStatus = 'SCHEDULE IMPORTED: $count rows';
     });
+    if (mounted) _showSyncMessage('Schedule imported: $count rows.');
     await _saveLocalState();
   }
 
@@ -579,9 +658,11 @@ class _AOJDesktopState extends State<AOJDesktop> {
     if (event == null) return;
     final ok = await CsvImportService.importGameModesCsv(event);
     if (!ok) return;
+    final count = event.gameModes.length;
     setState(() {
-      systemStatus = 'GAME MODES IMPORTED';
+      systemStatus = 'GAME MODES IMPORTED: $count';
     });
+    if (mounted) _showSyncMessage('Game modes imported: $count.');
     await _saveLocalState();
   }
 
@@ -609,6 +690,16 @@ class _AOJDesktopState extends State<AOJDesktop> {
     final event = activeEvent;
     if (event == null) return;
     final status = await ExportService.exportActiveEventFullCsv(event);
+    setState(() {
+      exportStatus = status;
+      systemStatus = status;
+    });
+  }
+
+  Future<void> _exportEventSummary() async {
+    final event = activeEvent;
+    if (event == null) return;
+    final status = await ExportService.exportEventSummary(event);
     setState(() {
       exportStatus = status;
       systemStatus = status;
@@ -1110,6 +1201,35 @@ class _AOJDesktopState extends State<AOJDesktop> {
     setState(() {
       systemStatus = 'CHECK-IN STATUS UPDATED';
     });
+  }
+
+  Future<void> _quickSetPaymentStatus(
+    BookingGroup group,
+    String status,
+  ) async {
+    group.primary.paymentStatus = status;
+    await _saveGroupedBooking(group);
+    setState(() {
+      systemStatus = 'PAYMENT STATUS UPDATED';
+    });
+  }
+
+  Future<void> _checkInAllBookings() async {
+    final event = activeEvent;
+    if (event == null) return;
+    int count = 0;
+    for (final booking in event.bookings) {
+      if (booking.checkInStatus != 'Cancelled' &&
+          booking.checkInStatus != 'No Show') {
+        booking.checkInStatus = 'Checked In';
+        count++;
+      }
+    }
+    setState(() {
+      systemStatus = 'ALL CHECKED IN ($count)';
+    });
+    _showSyncMessage('$count bookings checked in.');
+    await _saveLocalState();
   }
 
   Future<void> _openBookingEditorWindow(BookingGroup group) async {

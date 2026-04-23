@@ -30,10 +30,11 @@ class BookingUtils {
   }
 
   static double paymentsTotal(BookingGroup group) {
-    return group.primary.payments.fold<double>(
-      0.0,
-      (sum, payment) => sum + MoneyUtils.parseMoney(payment.amount),
-    );
+    return group.primary.payments.fold<double>(0.0, (sum, payment) {
+      final amount = MoneyUtils.parseMoney(payment.amount);
+      if (payment.method.trim().toLowerCase() == 'refund') return sum - amount;
+      return sum + amount;
+    });
   }
 
   static double grandTotal(BookingGroup group) {

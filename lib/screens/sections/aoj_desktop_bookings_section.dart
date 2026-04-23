@@ -9,6 +9,7 @@ extension _AojDesktopBookingsSection on _AOJDesktopState {
       groups: _groupedBookingsForActiveEvent(),
       selectedBookingIndex: selectedBookingIndex,
       checkInStatuses: checkInStatuses,
+      paymentStatuses: paymentStatuses,
       onSetActiveEvent: (value) async {
         await _setActiveEvent(value);
         _refresh(() {
@@ -27,6 +28,8 @@ extension _AojDesktopBookingsSection on _AOJDesktopState {
         });
       },
       onQuickSetCheckInStatus: _quickSetCheckInStatus,
+      onQuickSetPaymentStatus: _quickSetPaymentStatus,
+      onCheckInAll: _checkInAllBookings,
       onOpenBookingEditor: _openBookingEditorWindow,
     );
   }

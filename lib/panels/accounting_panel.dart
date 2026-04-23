@@ -11,6 +11,7 @@ class AccountingPanel extends StatelessWidget {
   final Future<void> Function() onExportFullCsv;
   final Future<void> Function() onAddExpense;
   final Future<void> Function(String expenseId) onDeleteExpense;
+  final Future<void> Function() onExportSummary;
 
   const AccountingPanel({
     super.key,
@@ -19,6 +20,7 @@ class AccountingPanel extends StatelessWidget {
     required this.onExportFullCsv,
     required this.onAddExpense,
     required this.onDeleteExpense,
+    required this.onExportSummary,
   });
 
   @override
@@ -75,6 +77,7 @@ class AccountingPanel extends StatelessWidget {
                 'PAYMENT • ${payment.method}${payment.note.isEmpty ? '' : ' • ${payment.note}'}',
             amount: amount,
             isDeletable: false,
+            isRefund: payment.method.trim().toLowerCase() == 'refund',
           ),
         );
 
@@ -256,10 +259,22 @@ class AccountingPanel extends StatelessWidget {
                       const SizedBox(height: 14),
                       Align(
                         alignment: Alignment.centerRight,
-                        child: ElevatedButton.icon(
-                          onPressed: onExportFullCsv,
-                          icon: const Icon(Icons.download_outlined),
-                          label: const Text('EXPORT FULL EVENT CSV'),
+                        child: Wrap(
+                          spacing: 8,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: onExportSummary,
+                              icon: const Icon(
+                                  Icons.summarize_outlined,
+                                  size: 16),
+                              label: const Text('EVENT SUMMARY'),
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: onExportFullCsv,
+                              icon: const Icon(Icons.download_outlined),
+                              label: const Text('EXPORT FULL EVENT CSV'),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -356,6 +371,20 @@ class _LedgerCard extends StatelessWidget {
                     ),
                     itemBuilder: (context, index) {
                       final line = lines[index];
+                      final titleStyle = TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: line.isRefund ? Colors.blueAccent : null,
+                      );
+                      final subtitleStyle = TextStyle(
+                        fontSize: 11,
+                        color: line.isRefund
+                            ? Colors.blueAccent.withValues(alpha: 0.7)
+                            : null,
+                      );
+                      final amountText = line.isRefund
+                          ? '(REFUND) ¥ ${MoneyUtils.formatMoney(line.amount)}'
+                          : '¥ ${MoneyUtils.formatMoney(line.amount)}';
                       return ListTile(
                         dense: true,
                         contentPadding: const EdgeInsets.symmetric(
@@ -366,25 +395,25 @@ class _LedgerCard extends StatelessWidget {
                           line.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: titleStyle,
                         ),
                         subtitle: Text(
                           line.subtitle,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11),
+                          style: subtitleStyle,
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              '¥ ${MoneyUtils.formatMoney(line.amount)}',
-                              style: const TextStyle(
+                              amountText,
+                              style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
+                                color: line.isRefund
+                                    ? Colors.blueAccent
+                                    : null,
                               ),
                             ),
                             if (line.isDeletable && onDeleteLine != null) ...[
@@ -452,6 +481,7 @@ class _LedgerLine {
   final String subtitle;
   final double amount;
   final bool isDeletable;
+  final bool isRefund;
 
   const _LedgerLine({
     required this.id,
@@ -459,5 +489,6 @@ class _LedgerLine {
     required this.subtitle,
     required this.amount,
     required this.isDeletable,
+    this.isRefund = false,
   });
 }

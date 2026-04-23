@@ -5,6 +5,8 @@ extension _AojDesktopScheduleSection on _AOJDesktopState {
     return SchedulePanel(
       accent: window.accent,
       event: activeEvent,
+      onSave: _saveLocalState,
+      onRefresh: () => _refresh(),
     );
   }
 }

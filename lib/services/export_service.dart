@@ -386,6 +386,84 @@ class ExportService {
     return '';
   }
 
+  static Future<String> exportEventSummary(EventRecord event) async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final safeName = _safeFileName(event.name);
+      final file = File('${dir.path}/${safeName}_summary.txt');
+
+      final groups = BookingUtils.groupedBookingsForEvent(event);
+      final checkedIn =
+          groups.where((g) => g.primary.checkInStatus == 'Checked In').length;
+      final ticketsTotal = groups.fold<double>(
+          0, (s, g) => s + BookingUtils.ticketsTotal(g));
+      final salesTotal =
+          groups.fold<double>(0, (s, g) => s + BookingUtils.salesTotal(g));
+      final grandTotal =
+          groups.fold<double>(0, (s, g) => s + BookingUtils.grandTotal(g));
+      final payments =
+          groups.fold<double>(0, (s, g) => s + BookingUtils.paymentsTotal(g));
+      final outstanding =
+          groups.fold<double>(0, (s, g) => s + BookingUtils.balance(g));
+      double cardFees = 0;
+      for (final g in groups) {
+        for (final p in g.primary.payments) {
+          final amt = _toDouble(p.amount);
+          if (amt > 0 && _isCardMethod(p.method)) cardFees += amt * 0.04;
+        }
+      }
+      final manualExpenses =
+          event.expenses.fold<double>(0, (s, e) => s + _toDouble(e.amount));
+      final totalDeductions = cardFees + manualExpenses;
+      final net = payments - totalDeductions;
+
+      final buf = StringBuffer();
+      buf.writeln('EVENT SUMMARY');
+      buf.writeln('=============');
+      buf.writeln('Name:   ${event.name}');
+      buf.writeln('Venue:  ${event.venue}');
+      buf.writeln('Date:   ${event.date}  ${event.time}');
+      buf.writeln('');
+      buf.writeln('ATTENDANCE');
+      buf.writeln('Bookings:   ${groups.length}');
+      buf.writeln('Checked In: $checkedIn');
+      buf.writeln('');
+      buf.writeln('FINANCIALS');
+      buf.writeln('Ticket Value:       ¥ ${ticketsTotal.toStringAsFixed(0)}');
+      buf.writeln('Sales Value:        ¥ ${salesTotal.toStringAsFixed(0)}');
+      buf.writeln('Gross Event Value:  ¥ ${grandTotal.toStringAsFixed(0)}');
+      buf.writeln('Payments Recorded:  ¥ ${payments.toStringAsFixed(0)}');
+      buf.writeln('Outstanding:        ¥ ${outstanding.toStringAsFixed(0)}');
+      buf.writeln('Card Fees (4%):     ¥ ${cardFees.toStringAsFixed(0)}');
+      buf.writeln('Manual Expenses:    ¥ ${manualExpenses.toStringAsFixed(0)}');
+      buf.writeln('Total Deductions:   ¥ ${totalDeductions.toStringAsFixed(0)}');
+      buf.writeln('Net After Deducts:  ¥ ${net.toStringAsFixed(0)}');
+
+      if (event.schedule.isNotEmpty) {
+        buf.writeln('');
+        buf.writeln('SCHEDULE');
+        for (final row in event.schedule) {
+          buf.writeln(
+              '  ${row.time.isEmpty ? '' : '${row.time} - '}${row.activity}');
+          if (row.notes.isNotEmpty) buf.writeln('    ${row.notes}');
+        }
+      }
+
+      await file.writeAsString(buf.toString(), flush: true);
+
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: 'AOJ event summary: ${event.name}',
+        ),
+      );
+
+      return 'EXPORTED EVENT SUMMARY';
+    } catch (_) {
+      return 'EVENT SUMMARY EXPORT FAILED';
+    }
+  }
+
   static bool _isCardMethod(String raw) {
     final value = raw.trim().toLowerCase();
     return value.contains('credit') ||

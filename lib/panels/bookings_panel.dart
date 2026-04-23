@@ -11,10 +11,13 @@ class BookingsPanel extends StatefulWidget {
   final List<BookingGroup> groups;
   final int? selectedBookingIndex;
   final List<String> checkInStatuses;
+  final List<String> paymentStatuses;
   final Future<void> Function(String?) onSetActiveEvent;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<int> onSelectBooking;
   final Future<void> Function(BookingGroup, String) onQuickSetCheckInStatus;
+  final Future<void> Function(BookingGroup, String) onQuickSetPaymentStatus;
+  final Future<void> Function() onCheckInAll;
   final Future<void> Function(BookingGroup) onOpenBookingEditor;
 
   const BookingsPanel({
@@ -25,10 +28,13 @@ class BookingsPanel extends StatefulWidget {
     required this.groups,
     required this.selectedBookingIndex,
     required this.checkInStatuses,
+    required this.paymentStatuses,
     required this.onSetActiveEvent,
     required this.onSearchChanged,
     required this.onSelectBooking,
     required this.onQuickSetCheckInStatus,
+    required this.onQuickSetPaymentStatus,
+    required this.onCheckInAll,
     required this.onOpenBookingEditor,
   });
 
@@ -38,6 +44,7 @@ class BookingsPanel extends StatefulWidget {
 
 class _BookingsPanelState extends State<BookingsPanel> {
   final TextEditingController _searchController = TextEditingController();
+  bool _checkInMode = false;
 
   @override
   void didUpdateWidget(covariant BookingsPanel oldWidget) {
@@ -111,6 +118,17 @@ class _BookingsPanelState extends State<BookingsPanel> {
     }
   }
 
+  List<String> _lunchNamesForGroup(BookingGroup group) {
+    final event = widget.event;
+    if (event == null || group.primary.lunchOrderIds.isEmpty) return [];
+    final optionsById = {for (final o in event.lunchOptions) o.id: o};
+    return group.primary.lunchOrderIds
+        .map((id) => optionsById[id])
+        .whereType<LunchOptionRecord>()
+        .map((o) => o.name.trim().isEmpty ? 'Lunch' : o.name.trim())
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -156,6 +174,39 @@ class _BookingsPanelState extends State<BookingsPanel> {
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: widget.event == null
+                    ? null
+                    : () async {
+                        await widget.onCheckInAll();
+                        if (mounted) setState(() {});
+                      },
+                icon: const Icon(Icons.how_to_reg_outlined, size: 16),
+                label: const Text('ALL IN'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 10),
+                ),
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                tooltip: _checkInMode
+                    ? 'Standard view'
+                    : 'Check-in mode',
+                onPressed: () => setState(() {
+                  _checkInMode = !_checkInMode;
+                }),
+                icon: Icon(
+                  _checkInMode
+                      ? Icons.list_alt_outlined
+                      : Icons.door_front_door_outlined,
+                  size: 20,
+                  color: _checkInMode
+                      ? widget.accent
+                      : null,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
@@ -199,7 +250,145 @@ class _BookingsPanelState extends State<BookingsPanel> {
                           final total = BookingUtils.grandTotal(group);
                           final balance = BookingUtils.balance(group);
                           final hasOutstanding = balance > 0;
+                          final lunchNames = _lunchNamesForGroup(group);
 
+                          if (_checkInMode) {
+                            // ── Check-in mode: large card ──
+                            final isCheckedIn =
+                                checkInStatus == 'Checked In';
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                color: isCheckedIn
+                                    ? Colors.green.withValues(alpha: 0.10)
+                                    : Colors.transparent,
+                                border: Border.all(
+                                  color: isCheckedIn
+                                      ? Colors.greenAccent
+                                          .withValues(alpha: 0.40)
+                                      : Colors.white.withValues(alpha: 0.06),
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 10),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            membershipLevel.isNotEmpty
+                                                ? '${group.displayName} ($membershipLevel)'
+                                                : group.displayName,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Row(
+                                            children: [
+                                              if (hasOutstanding)
+                                                Text(
+                                                  'BAL ¥ ${MoneyUtils.formatMoney(balance)}',
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: Colors.redAccent,
+                                                  ),
+                                                )
+                                              else
+                                                Text(
+                                                  paymentStatus,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: _paymentColor(
+                                                        paymentStatus),
+                                                  ),
+                                                ),
+                                              if (lunchNames.isNotEmpty) ...
+                                                lunchNames.map(
+                                                  (n) => Container(
+                                                    margin: const EdgeInsets
+                                                        .only(left: 6),
+                                                    padding:
+                                                        const EdgeInsets
+                                                            .symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.amber
+                                                          .withValues(
+                                                              alpha: 0.15),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              999),
+                                                      border: Border.all(
+                                                        color: Colors.amber
+                                                            .withValues(
+                                                                alpha: 0.4),
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                      n,
+                                                      style: const TextStyle(
+                                                        fontSize: 10,
+                                                        color: Colors.amber,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: isCheckedIn
+                                            ? Colors.green.withValues(
+                                                alpha: 0.30)
+                                            : widget.accent
+                                                .withValues(alpha: 0.85),
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 12),
+                                      ),
+                                      onPressed: () async {
+                                        final next = isCheckedIn
+                                            ? 'Not Checked In'
+                                            : 'Checked In';
+                                        await widget
+                                            .onQuickSetCheckInStatus(
+                                                group, next);
+                                        if (mounted) setState(() {});
+                                      },
+                                      child: Text(
+                                        isCheckedIn
+                                            ? 'UNDO CHECK-IN'
+                                            : 'CHECK IN',
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+
+                          // ── Standard mode ──
                           return Container(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
@@ -241,7 +430,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                               fontWeight: FontWeight.w800,
                                             ),
                                           ),
-                                          const SizedBox(height: 4),
+                                          const SizedBox(height: 2),
                                           Row(
                                             children: [
                                               const Text(
@@ -251,7 +440,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                                   color: Color(0xFFAFB7AD),
                                                 ),
                                               ),
-                                              const SizedBox(width: 6),
+                                              const SizedBox(width: 4),
                                               DropdownButtonHideUnderline(
                                                 child: DropdownButton<String>(
                                                   value: widget.checkInStatuses
@@ -304,6 +493,110 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                               ),
                                             ],
                                           ),
+                                          Row(
+                                            children: [
+                                              const Text(
+                                                'Payment:',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  color: Color(0xFFAFB7AD),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 4),
+                                              DropdownButtonHideUnderline(
+                                                child: DropdownButton<String>(
+                                                  value: widget.paymentStatuses
+                                                          .contains(
+                                                              paymentStatus)
+                                                      ? paymentStatus
+                                                      : widget.paymentStatuses
+                                                          .first,
+                                                  isDense: true,
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: _paymentColor(
+                                                        paymentStatus),
+                                                  ),
+                                                  dropdownColor:
+                                                      const Color(0xFF1A211C),
+                                                  items: widget.paymentStatuses
+                                                      .map(
+                                                        (e) => DropdownMenuItem<
+                                                            String>(
+                                                          value: e,
+                                                          child: Text(
+                                                            e,
+                                                            style: TextStyle(
+                                                              color:
+                                                                  _paymentColor(
+                                                                      e),
+                                                              fontSize: 11,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w800,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      )
+                                                      .toList(),
+                                                  onChanged: (value) async {
+                                                    if (value == null) return;
+                                                    await widget
+                                                        .onQuickSetPaymentStatus(
+                                                      group,
+                                                      value,
+                                                    );
+                                                    if (mounted) {
+                                                      setState(() {});
+                                                    }
+                                                  },
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          if (lunchNames.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                  top: 3),
+                                              child: Wrap(
+                                                spacing: 4,
+                                                children: lunchNames
+                                                    .map(
+                                                      (n) => Container(
+                                                        padding: const EdgeInsets
+                                                            .symmetric(
+                                                          horizontal: 6,
+                                                          vertical: 2,
+                                                        ),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: Colors.amber
+                                                              .withValues(
+                                                                  alpha: 0.12),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                                      999),
+                                                          border: Border.all(
+                                                            color: Colors.amber
+                                                                .withValues(
+                                                                    alpha: 0.35),
+                                                          ),
+                                                        ),
+                                                        child: Text(
+                                                          n,
+                                                          style:
+                                                              const TextStyle(
+                                                            fontSize: 10,
+                                                            color: Colors.amber,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    )
+                                                    .toList(),
+                                              ),
+                                            ),
                                         ],
                                       ),
                                     ),
@@ -321,53 +614,32 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                             ),
                                           ),
                                           const SizedBox(height: 4),
-                                          Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.end,
-                                            children: [
-                                              Text(
-                                                paymentStatus,
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w800,
-                                                  color: _paymentColor(
-                                                      paymentStatus),
+                                          if (hasOutstanding)
+                                            Container(
+                                              padding: const EdgeInsets
+                                                  .symmetric(
+                                                horizontal: 6,
+                                                vertical: 3,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.red
+                                                    .withValues(alpha: 0.18),
+                                                borderRadius:
+                                                    BorderRadius.circular(999),
+                                                border: Border.all(
+                                                  color: Colors.redAccent
+                                                      .withValues(alpha: 0.35),
                                                 ),
                                               ),
-                                              if (hasOutstanding) ...[
-                                                const SizedBox(width: 6),
-                                                Container(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                    horizontal: 6,
-                                                    vertical: 3,
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.red
-                                                        .withValues(
-                                                            alpha: 0.18),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            999),
-                                                    border: Border.all(
-                                                      color: Colors.redAccent
-                                                          .withValues(
-                                                              alpha: 0.35),
-                                                    ),
-                                                  ),
-                                                  child: Text(
-                                                    'BAL ¥ ${MoneyUtils.formatMoney(balance)}',
-                                                    style: const TextStyle(
-                                                      fontSize: 10,
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      color: Colors.redAccent,
-                                                    ),
-                                                  ),
+                                              child: Text(
+                                                'BAL ¥ ${MoneyUtils.formatMoney(balance)}',
+                                                style: const TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Colors.redAccent,
                                                 ),
-                                              ],
-                                            ],
-                                          ),
+                                              ),
+                                            ),
                                         ],
                                       ),
                                     ),

@@ -8,6 +8,7 @@ extension _AojDesktopAccountingSection on _AOJDesktopState {
       onExportFullCsv: _exportActiveEventFullCsv,
       onAddExpense: _showAddExpenseDialog,
       onDeleteExpense: _deleteExpenseFromActiveEvent,
+      onExportSummary: _exportEventSummary,
     );
   }
 }
