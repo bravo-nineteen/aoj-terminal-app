@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/aoj_models.dart';
+import '../services/batch_import_service.dart';
 import '../services/csv_import_service.dart';
 
 class ImportMenuButton extends StatelessWidget {
@@ -21,6 +22,11 @@ class ImportMenuButton extends StatelessWidget {
       surfaceTintColor: Colors.transparent,
       onSelected: (action) => _handleImport(context, action),
       itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: _ImportAction.multipleFiles,
+          child: Text('Import Multiple Files (CSV/XLSX)'),
+        ),
+        PopupMenuDivider(),
         PopupMenuItem(
           value: _ImportAction.workbook,
           child: Text('Import Workbook (.xlsx)'),
@@ -130,6 +136,25 @@ class ImportMenuButton extends StatelessWidget {
 
     try {
       switch (action) {
+        case _ImportAction.multipleFiles:
+          final batchResult =
+              await BatchImportService.importMultipleFiles(event);
+          ok = batchResult.anySuccess;
+          successMessage =
+              'Imported ${batchResult.totalImported} items from ${batchResult.successMessages.length} files.';
+          failureMessage = batchResult.errorMessages.isNotEmpty
+              ? batchResult.errorMessages.join('\n')
+              : 'No files imported.';
+          if (context.mounted &&
+              (batchResult.successMessages.isNotEmpty ||
+                  batchResult.errorMessages.isNotEmpty)) {
+            Navigator.of(context, rootNavigator: true).pop();
+            if (batchResult.anySuccess) onImportComplete?.call();
+            await _showBatchResultDialog(context, batchResult);
+            return;
+          }
+          break;
+
         case _ImportAction.workbook:
           workbookResult = await CsvImportService.importWorkbookXlsx(event);
           ok = workbookResult.success;
@@ -293,8 +318,95 @@ class ImportMenuButton extends StatelessWidget {
       case _ImportAction.scheduleCsv:
       case _ImportAction.gameModesCsv:
       case _ImportAction.fieldMap:
+      case _ImportAction.multipleFiles:
         return 'Import from Google Sheets';
     }
+  }
+
+  Future<void> _showBatchResultDialog(
+    BuildContext context,
+    BatchImportResult result,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1A221B),
+          title: Text(
+            result.anySuccess
+                ? 'Batch Import Complete'
+                : 'Batch Import Results',
+            style: const TextStyle(color: Colors.white),
+          ),
+          content: SingleChildScrollView(
+            child: DefaultTextStyle(
+              style: const TextStyle(color: Colors.white70, height: 1.4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (result.bookingsImported > 0)
+                    _summaryRow('Bookings', result.bookingsImported),
+                  if (result.ticketsImported > 0)
+                    _summaryRow('Tickets', result.ticketsImported),
+                  if (result.membersImported > 0)
+                    _summaryRow('Members', result.membersImported),
+                  if (result.scheduleImported > 0)
+                    _summaryRow('Schedule', result.scheduleImported),
+                  if (result.gameModesImported > 0)
+                    _summaryRow('Game Modes', result.gameModesImported),
+                  if (result.totalImported > 0) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      'Total imported: ${result.totalImported}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                  if (result.successMessages.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Files processed:',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    ...result.successMessages.map((msg) => Text('✓ $msg')),
+                  ],
+                  if (result.errorMessages.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Issues:',
+                      style: TextStyle(
+                        color: Colors.orangeAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    ...result.errorMessages.map(
+                      (msg) => Text(
+                        '⚠ $msg',
+                        style: const TextStyle(color: Colors.orangeAccent),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(_).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<String?> _promptForSourceUrl(
@@ -486,6 +598,7 @@ class ImportMenuButton extends StatelessWidget {
 }
 
 enum _ImportAction {
+  multipleFiles,
   workbook,
   workbookGoogle,
   bookingsCsv,

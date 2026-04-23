@@ -107,7 +107,7 @@ class CsvImportService {
       'booking',
     ]);
     if (bookingsRows != null && bookingsRows.isNotEmpty) {
-      final imported = _parseBookingsRows(bookingsRows, event.name);
+      final imported = parseBookingsRows(bookingsRows, event.name);
       event.bookings
         ..clear()
         ..addAll(imported);
@@ -125,7 +125,7 @@ class CsvImportService {
       'ticket',
     ]);
     if (ticketsRows != null && ticketsRows.isNotEmpty) {
-      final imported = _parseTicketsRows(ticketsRows);
+      final imported = parseTicketsRows(ticketsRows);
       event.tickets
         ..clear()
         ..addAll(imported);
@@ -143,7 +143,7 @@ class CsvImportService {
       'member',
     ]);
     if (membersRows != null && membersRows.isNotEmpty) {
-      final imported = _parseMembersRows(membersRows);
+      final imported = parseMembersRows(membersRows);
       event.members
         ..clear()
         ..addAll(imported);
@@ -163,7 +163,7 @@ class CsvImportService {
       'timeline',
     ]);
     if (scheduleRows != null && scheduleRows.isNotEmpty) {
-      final imported = _parseScheduleRows(scheduleRows);
+      final imported = parseScheduleRows(scheduleRows);
       event.schedule
         ..clear()
         ..addAll(imported);
@@ -183,7 +183,7 @@ class CsvImportService {
       'modes',
     ]);
     if (gameModesRows != null && gameModesRows.isNotEmpty) {
-      final imported = _parseGameModesRows(gameModesRows);
+      final imported = parseGameModesRows(gameModesRows);
       event.gameModes
         ..clear()
         ..addAll(imported);
@@ -231,7 +231,7 @@ class CsvImportService {
     );
     if (rows.isEmpty) return false;
 
-    final imported = _parseBookingsRows(rows, event.name);
+    final imported = parseBookingsRows(rows, event.name);
 
     event.bookings
       ..clear()
@@ -263,7 +263,7 @@ class CsvImportService {
 
     if (rows.isEmpty) return false;
 
-    final imported = _parseBookingsRows(rows, event.name);
+    final imported = parseBookingsRows(rows, event.name);
 
     event.bookings
       ..clear()
@@ -289,7 +289,7 @@ class CsvImportService {
     );
     if (rows.isEmpty) return false;
 
-    final imported = _parseTicketsRows(rows);
+    final imported = parseTicketsRows(rows);
 
     event.tickets
       ..clear()
@@ -320,7 +320,7 @@ class CsvImportService {
 
     if (rows.isEmpty) return false;
 
-    final imported = _parseTicketsRows(rows);
+    final imported = parseTicketsRows(rows);
 
     event.tickets
       ..clear()
@@ -345,7 +345,7 @@ class CsvImportService {
     );
     if (rows.isEmpty) return false;
 
-    final imported = _parseMembersRows(rows);
+    final imported = parseMembersRows(rows);
 
     event.members
       ..clear()
@@ -371,7 +371,7 @@ class CsvImportService {
     );
     if (rows.isEmpty) return false;
 
-    final imported = _parseMembersRows(rows);
+    final imported = parseMembersRows(rows);
 
     event.members
       ..clear()
@@ -390,7 +390,7 @@ class CsvImportService {
     );
     if (rows.isEmpty) return false;
 
-    final imported = _parseScheduleRows(rows);
+    final imported = parseScheduleRows(rows);
 
     event.schedule
       ..clear()
@@ -413,7 +413,7 @@ class CsvImportService {
     );
     if (rows.isEmpty) return false;
 
-    final imported = _parseScheduleRows(rows);
+    final imported = parseScheduleRows(rows);
 
     event.schedule
       ..clear()
@@ -431,7 +431,7 @@ class CsvImportService {
     );
     if (rows.isEmpty) return false;
 
-    final imported = _parseGameModesRows(rows);
+    final imported = parseGameModesRows(rows);
 
     event.gameModes
       ..clear()
@@ -453,7 +453,7 @@ class CsvImportService {
     );
     if (rows.isEmpty) return false;
 
-    final imported = _parseGameModesRows(rows);
+    final imported = parseGameModesRows(rows);
 
     event.gameModes
       ..clear()
@@ -477,7 +477,7 @@ class CsvImportService {
     return true;
   }
 
-  static List<BookingRecord> _parseBookingsRows(
+  static List<BookingRecord> parseBookingsRows(
     List<List<dynamic>> rows,
     String fallbackEventName,
   ) {
@@ -722,7 +722,7 @@ class CsvImportService {
     return imported;
   }
 
-  static List<TicketRecord> _parseTicketsRows(List<List<dynamic>> rows) {
+  static List<TicketRecord> parseTicketsRows(List<List<dynamic>> rows) {
     if (rows.isEmpty) return [];
 
     final headerRowIndex = _findHeaderRowIndex(rows, const [
@@ -865,7 +865,7 @@ class CsvImportService {
     ].join('|');
   }
 
-  static List<MemberRecord> _parseMembersRows(List<List<dynamic>> rows) {
+  static List<MemberRecord> parseMembersRows(List<List<dynamic>> rows) {
     if (rows.isEmpty) return [];
 
     final headerRowIndex = _findHeaderRowIndex(rows, const [
@@ -1001,7 +1001,7 @@ class CsvImportService {
     return importedMembers;
   }
 
-  static List<ScheduleRecord> _parseScheduleRows(List<List<dynamic>> rows) {
+  static List<ScheduleRecord> parseScheduleRows(List<List<dynamic>> rows) {
     if (rows.isEmpty) return [];
 
     final headerRowIndex = _findHeaderRowIndex(rows, const [
@@ -1076,7 +1076,7 @@ class CsvImportService {
     return importedSchedule;
   }
 
-  static List<GameModeRecord> _parseGameModesRows(List<List<dynamic>> rows) {
+  static List<GameModeRecord> parseGameModesRows(List<List<dynamic>> rows) {
     if (rows.isEmpty) return [];
 
     final headerRowIndex = rows.indexWhere(
@@ -1163,7 +1163,7 @@ class CsvImportService {
     if (bytes == null || bytes.isEmpty) return [];
 
     final extension = (file.extension ?? '').toLowerCase();
-    return _tabularRowsFromBytes(
+    return tabularRowsFromBytes(
       bytes: bytes,
       extensionHint: extension,
       candidateSheetNames: candidateSheetNames,
@@ -1171,7 +1171,7 @@ class CsvImportService {
     );
   }
 
-  static List<List<dynamic>> _tabularRowsFromBytes({
+  static List<List<dynamic>> tabularRowsFromBytes({
     required Uint8List bytes,
     required String extensionHint,
     required List<String> candidateSheetNames,
@@ -1284,7 +1284,7 @@ class CsvImportService {
     }
 
     final format = _formatHintFromUri(uri);
-    return _tabularRowsFromBytes(
+    return tabularRowsFromBytes(
       bytes: response.bodyBytes,
       extensionHint: format,
       candidateSheetNames: candidateSheetNames,
