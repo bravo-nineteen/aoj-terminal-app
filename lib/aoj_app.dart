@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'screens/aoj_desktop.dart';
 
 class AOJApp extends StatelessWidget {
-  const AOJApp({super.key});
+  const AOJApp({super.key, this.startupError});
+
+  final String? startupError;
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +22,7 @@ class AOJApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const AOJDesktop(),
+      home: AOJDesktop(startupError: startupError),
     );
   }
 }

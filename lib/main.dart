@@ -4,6 +4,13 @@ import 'services/supabase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SupabaseService.initialize();
-  runApp(const AOJApp());
+  String? startupError;
+
+  try {
+    await SupabaseService.initialize();
+  } catch (e) {
+    startupError = e.toString();
+  }
+
+  runApp(AOJApp(startupError: startupError));
 }

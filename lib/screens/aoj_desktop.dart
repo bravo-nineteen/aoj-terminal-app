@@ -30,7 +30,9 @@ part 'sections/aoj_desktop_schedule_section.dart';
 part 'sections/aoj_desktop_system_section.dart';
 
 class AOJDesktop extends StatefulWidget {
-  const AOJDesktop({super.key});
+  const AOJDesktop({super.key, this.startupError});
+
+  final String? startupError;
 
   @override
   State<AOJDesktop> createState() => _AOJDesktopState();
@@ -1634,6 +1636,53 @@ class _AOJDesktopState extends State<AOJDesktop> {
                   ),
                 ),
               ),
+              if (widget.startupError != null && widget.startupError!.trim().isNotEmpty)
+                Positioned(
+                  top: 14,
+                  right: 14,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Material(
+                      color: const Color(0xFF2A1712),
+                      elevation: 10,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.warning_amber_rounded,
+                                  size: 18,
+                                  color: Color(0xFFF5B27B),
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Startup warning',
+                                  style: TextStyle(
+                                    color: Color(0xFFFFD8BF),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              widget.startupError!,
+                              maxLines: 4,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Color(0xFFFFD8BF)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               Positioned(
                 left: 0,
                 right: 0,
