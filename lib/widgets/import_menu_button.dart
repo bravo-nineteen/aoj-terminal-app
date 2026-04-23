@@ -25,26 +25,50 @@ class ImportMenuButton extends StatelessWidget {
           value: _ImportAction.workbook,
           child: Text('Import Workbook (.xlsx)'),
         ),
+        PopupMenuItem(
+          value: _ImportAction.workbookGoogle,
+          child: Text('Import Workbook (Google Sheets URL)'),
+        ),
         PopupMenuDivider(),
         PopupMenuItem(
           value: _ImportAction.bookingsCsv,
           child: Text('Import Bookings (CSV/Excel)'),
         ),
         PopupMenuItem(
+          value: _ImportAction.bookingsGoogle,
+          child: Text('Import Bookings (Google Sheets URL)'),
+        ),
+        PopupMenuItem(
           value: _ImportAction.ticketsCsv,
           child: Text('Import Tickets (CSV/Excel)'),
+        ),
+        PopupMenuItem(
+          value: _ImportAction.ticketsGoogle,
+          child: Text('Import Tickets (Google Sheets URL)'),
         ),
         PopupMenuItem(
           value: _ImportAction.membersCsv,
           child: Text('Import Members (CSV/Excel)'),
         ),
         PopupMenuItem(
+          value: _ImportAction.membersGoogle,
+          child: Text('Import Members (Google Sheets URL)'),
+        ),
+        PopupMenuItem(
           value: _ImportAction.scheduleCsv,
           child: Text('Import Schedule (CSV/Excel)'),
         ),
         PopupMenuItem(
+          value: _ImportAction.scheduleGoogle,
+          child: Text('Import Schedule (Google Sheets URL)'),
+        ),
+        PopupMenuItem(
           value: _ImportAction.gameModesCsv,
           child: Text('Import Game Modes (CSV/Excel)'),
+        ),
+        PopupMenuItem(
+          value: _ImportAction.gameModesGoogle,
+          child: Text('Import Game Modes (Google Sheets URL)'),
         ),
         PopupMenuDivider(),
         PopupMenuItem(
@@ -83,7 +107,19 @@ class ImportMenuButton extends StatelessWidget {
     BuildContext context,
     _ImportAction action,
   ) async {
-    final messenger = ScaffoldMessenger.of(context);
+    String? sourceUrl;
+    if (_isGoogleUrlAction(action)) {
+      sourceUrl = await _promptForSourceUrl(
+        context,
+        title: _googleActionTitle(action),
+        hintText: action == _ImportAction.workbookGoogle
+            ? 'Paste Google Sheets URL'
+            : 'Paste sheet URL or CSV export URL',
+      );
+      if (sourceUrl == null) return;
+    }
+
+    if (!context.mounted) return;
 
     _showLoadingDialog(context);
 
@@ -101,10 +137,28 @@ class ImportMenuButton extends StatelessWidget {
           failureMessage = 'Workbook import failed.';
           break;
 
+        case _ImportAction.workbookGoogle:
+          workbookResult = await CsvImportService.importWorkbookFromUrl(
+            event,
+            sourceUrl!,
+          );
+          ok = workbookResult.success;
+          successMessage = 'Workbook imported successfully.';
+          failureMessage =
+              'Workbook import failed. Verify the sheet is shared to Anyone with the link.';
+          break;
+
         case _ImportAction.bookingsCsv:
           ok = await CsvImportService.importBookingsCsv(event);
           successMessage = 'Bookings imported successfully.';
           failureMessage = 'Bookings import failed.';
+          break;
+
+        case _ImportAction.bookingsGoogle:
+          ok = await CsvImportService.importBookingsFromUrl(event, sourceUrl!);
+          successMessage = 'Bookings imported successfully.';
+          failureMessage =
+              'Bookings import failed. Verify the source link is publicly accessible.';
           break;
 
         case _ImportAction.ticketsCsv:
@@ -113,10 +167,24 @@ class ImportMenuButton extends StatelessWidget {
           failureMessage = 'Tickets import failed.';
           break;
 
+        case _ImportAction.ticketsGoogle:
+          ok = await CsvImportService.importTicketsFromUrl(event, sourceUrl!);
+          successMessage = 'Tickets imported successfully.';
+          failureMessage =
+              'Tickets import failed. Verify the source link is publicly accessible.';
+          break;
+
         case _ImportAction.membersCsv:
           ok = await CsvImportService.importMembersCsv(event);
           successMessage = 'Members imported successfully.';
           failureMessage = 'Members import failed.';
+          break;
+
+        case _ImportAction.membersGoogle:
+          ok = await CsvImportService.importMembersFromUrl(event, sourceUrl!);
+          successMessage = 'Members imported successfully.';
+          failureMessage =
+              'Members import failed. Verify the source link is publicly accessible.';
           break;
 
         case _ImportAction.scheduleCsv:
@@ -125,10 +193,24 @@ class ImportMenuButton extends StatelessWidget {
           failureMessage = 'Schedule import failed.';
           break;
 
+        case _ImportAction.scheduleGoogle:
+          ok = await CsvImportService.importScheduleFromUrl(event, sourceUrl!);
+          successMessage = 'Schedule imported successfully.';
+          failureMessage =
+              'Schedule import failed. Verify the source link is publicly accessible.';
+          break;
+
         case _ImportAction.gameModesCsv:
           ok = await CsvImportService.importGameModesCsv(event);
           successMessage = 'Game modes imported successfully.';
           failureMessage = 'Game modes import failed.';
+          break;
+
+        case _ImportAction.gameModesGoogle:
+          ok = await CsvImportService.importGameModesFromUrl(event, sourceUrl!);
+          successMessage = 'Game modes imported successfully.';
+          failureMessage =
+              'Game modes import failed. Verify the source link is publicly accessible.';
           break;
 
         case _ImportAction.fieldMap:
@@ -146,15 +228,18 @@ class ImportMenuButton extends StatelessWidget {
       Navigator.of(context, rootNavigator: true).pop();
     }
 
+    if (!context.mounted) return;
+
     if (ok) {
       onImportComplete?.call();
 
-      if (action == _ImportAction.workbook &&
+      if ((action == _ImportAction.workbook ||
+              action == _ImportAction.workbookGoogle) &&
           workbookResult != null &&
           context.mounted) {
         await _showWorkbookSummaryDialog(context, workbookResult);
       } else {
-        messenger.showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(successMessage),
             backgroundColor: Colors.green.shade700,
@@ -162,12 +247,13 @@ class ImportMenuButton extends StatelessWidget {
         );
       }
     } else {
-      if (action == _ImportAction.workbook &&
+      if ((action == _ImportAction.workbook ||
+              action == _ImportAction.workbookGoogle) &&
           workbookResult != null &&
           context.mounted) {
         await _showWorkbookSummaryDialog(context, workbookResult);
       } else {
-        messenger.showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(failureMessage),
             backgroundColor: Colors.red.shade700,
@@ -175,6 +261,84 @@ class ImportMenuButton extends StatelessWidget {
         );
       }
     }
+  }
+
+  bool _isGoogleUrlAction(_ImportAction action) {
+    return action == _ImportAction.workbookGoogle ||
+        action == _ImportAction.bookingsGoogle ||
+        action == _ImportAction.ticketsGoogle ||
+        action == _ImportAction.membersGoogle ||
+        action == _ImportAction.scheduleGoogle ||
+        action == _ImportAction.gameModesGoogle;
+  }
+
+  String _googleActionTitle(_ImportAction action) {
+    switch (action) {
+      case _ImportAction.workbookGoogle:
+        return 'Import Workbook from Google Sheets';
+      case _ImportAction.bookingsGoogle:
+        return 'Import Bookings from Google Sheets';
+      case _ImportAction.ticketsGoogle:
+        return 'Import Tickets from Google Sheets';
+      case _ImportAction.membersGoogle:
+        return 'Import Members from Google Sheets';
+      case _ImportAction.scheduleGoogle:
+        return 'Import Schedule from Google Sheets';
+      case _ImportAction.gameModesGoogle:
+        return 'Import Game Modes from Google Sheets';
+      case _ImportAction.workbook:
+      case _ImportAction.bookingsCsv:
+      case _ImportAction.ticketsCsv:
+      case _ImportAction.membersCsv:
+      case _ImportAction.scheduleCsv:
+      case _ImportAction.gameModesCsv:
+      case _ImportAction.fieldMap:
+        return 'Import from Google Sheets';
+    }
+  }
+
+  Future<String?> _promptForSourceUrl(
+    BuildContext context, {
+    required String title,
+    required String hintText,
+  }) async {
+    final controller = TextEditingController();
+
+    final value = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1A221B),
+          title: Text(title, style: const TextStyle(color: Colors.white)),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            minLines: 1,
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: hintText,
+              hintStyle: const TextStyle(color: Colors.white38),
+            ),
+            style: const TextStyle(color: Colors.white),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(
+                controller.text.trim(),
+              ),
+              child: const Text('Import'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (value == null || value.trim().isEmpty) return null;
+    return value.trim();
   }
 
   void _showLoadingDialog(BuildContext context) {
@@ -323,10 +487,16 @@ class ImportMenuButton extends StatelessWidget {
 
 enum _ImportAction {
   workbook,
+  workbookGoogle,
   bookingsCsv,
+  bookingsGoogle,
   ticketsCsv,
+  ticketsGoogle,
   membersCsv,
+  membersGoogle,
   scheduleCsv,
+  scheduleGoogle,
   gameModesCsv,
+  gameModesGoogle,
   fieldMap,
 }

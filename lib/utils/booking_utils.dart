@@ -12,6 +12,8 @@ class LunchBreakdownItem {
 }
 
 class BookingUtils {
+  static String _norm(String value) => value.trim().toLowerCase();
+
   static double ticketsTotal(BookingGroup group) {
     return group.tickets
         .where(ticketIsActive)
@@ -58,22 +60,29 @@ class BookingUtils {
       final primary = rows.first;
 
       final ticketIds = <String>{};
+      final bookingIds = <String>{};
       for (final row in rows) {
         ticketIds.addAll(row.ticketIds);
+        final rowBookingId = _norm(row.bookingId);
+        if (rowBookingId.isNotEmpty) bookingIds.add(rowBookingId);
       }
+
+      final primaryName = _norm(primary.fullName);
 
       final tickets = event.tickets.where((ticket) {
         if (ticketIds.contains(ticket.id)) return true;
 
-        if (primary.bookingId.isNotEmpty && ticket.bookingId.isNotEmpty) {
-          if (primary.bookingId.trim().toLowerCase() ==
-              ticket.bookingId.trim().toLowerCase()) {
-            return true;
-          }
+        final ticketBookingId = _norm(ticket.bookingId);
+        if (ticketBookingId.isNotEmpty && bookingIds.contains(ticketBookingId)) {
+          return true;
         }
 
-        return ticket.bookingName.trim().toLowerCase() ==
-            primary.fullName.trim().toLowerCase();
+        // Fallback to name match only when neither side has booking IDs.
+        if (ticketBookingId.isEmpty && bookingIds.isEmpty) {
+          return _norm(ticket.bookingName) == primaryName;
+        }
+
+        return false;
       }).toList();
 
       return BookingGroup(
@@ -92,16 +101,17 @@ class BookingUtils {
   }
 
   static String bookingGroupKey(BookingRecord booking) {
-    final bookingId = booking.bookingId.trim().toLowerCase();
-    final email = booking.email.trim().toLowerCase();
-    final phone = booking.phone.trim().toLowerCase();
-    final name = booking.fullName.trim().toLowerCase();
-    final eventName = booking.event.trim().toLowerCase();
+    final bookingId = _norm(booking.bookingId);
+    final email = _norm(booking.email);
+    final phone = _norm(booking.phone);
+    final name = _norm(booking.fullName);
 
-    if (bookingId.isNotEmpty) return 'booking:$eventName:$bookingId';
-    if (email.isNotEmpty) return 'email:$eventName:$email';
-    if (phone.isNotEmpty) return 'phone:$eventName:$phone';
-    return 'name:$eventName:$name';
+    // Group inside one EventRecord only; including event text can split
+    // identical bookings when imported rows contain inconsistent event names.
+    if (bookingId.isNotEmpty) return 'booking:$bookingId';
+    if (email.isNotEmpty) return 'email:$email';
+    if (phone.isNotEmpty) return 'phone:$phone';
+    return 'name:$name';
   }
 
   static void linkTicketsToBookings(EventRecord event) {
@@ -111,16 +121,17 @@ class BookingUtils {
 
     for (final ticket in event.tickets) {
       final matches = event.bookings.where((booking) {
-        final bookingName = booking.fullName.trim().toLowerCase();
-        final ticketName = ticket.bookingName.trim().toLowerCase();
+        final bookingName = _norm(booking.fullName);
+        final ticketName = _norm(ticket.bookingName);
+        final ticketBookingId = _norm(ticket.bookingId);
+        final bookingBookingId = _norm(booking.bookingId);
 
-        if (ticket.bookingId.isNotEmpty && booking.bookingId.isNotEmpty) {
-          if (ticket.bookingId.trim().toLowerCase() ==
-              booking.bookingId.trim().toLowerCase()) {
-            return true;
-          }
+        // If ticket has bookingId, only use bookingId matching.
+        if (ticketBookingId.isNotEmpty) {
+          return bookingBookingId.isNotEmpty && ticketBookingId == bookingBookingId;
         }
 
+        // Fallback to name matching only when ticket has no bookingId.
         return bookingName == ticketName;
       }).toList();
 

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/aoj_models.dart';
 import '../utils/booking_utils.dart';
@@ -58,6 +59,35 @@ class CsvImportService {
       );
     }
 
+    return _importWorkbookFromBytes(event, bytes);
+  }
+
+  static Future<WorkbookImportResult> importWorkbookFromUrl(
+    EventRecord event,
+    String sourceUrl,
+  ) async {
+    final bytes = await _downloadBytesFromUrl(sourceUrl, preferXlsx: true);
+    if (bytes == null || bytes.isEmpty) {
+      return const WorkbookImportResult(
+        success: false,
+        bookingsImported: 0,
+        ticketsImported: 0,
+        membersImported: 0,
+        scheduleImported: 0,
+        gameModesImported: 0,
+        missingSheets: [],
+        importedSheets: [],
+        notes: ['Failed to download workbook from URL.'],
+      );
+    }
+
+    return _importWorkbookFromBytes(event, bytes);
+  }
+
+  static WorkbookImportResult _importWorkbookFromBytes(
+    EventRecord event,
+    Uint8List bytes,
+  ) {
     final excel = Excel.decodeBytes(bytes);
 
     final missingSheets = <String>[];
@@ -213,6 +243,38 @@ class CsvImportService {
     return imported.isNotEmpty;
   }
 
+  static Future<bool> importBookingsFromUrl(
+    EventRecord event,
+    String sourceUrl,
+  ) async {
+    final rows = await _downloadTabularRowsFromUrl(
+      sourceUrl: sourceUrl,
+      candidateSheetNames: const ['Bookings', 'Booking'],
+      requiredColumns: const [
+        'Booking ID',
+        'Booking Date',
+        'Name',
+        'First Name',
+        'Last Name',
+        'E-mail',
+        'Total',
+      ],
+    );
+
+    if (rows.isEmpty) return false;
+
+    final imported = _parseBookingsRows(rows, event.name);
+
+    event.bookings
+      ..clear()
+      ..addAll(imported);
+
+    BookingUtils.linkTicketsToBookings(event);
+    BookingUtils.recalculateAllTotals(event);
+
+    return imported.isNotEmpty;
+  }
+
   static Future<bool> importTicketsCsv(EventRecord event) async {
     final rows = await _pickTabularRows(
       candidateSheetNames: const ['Tickets', 'Ticket'],
@@ -239,8 +301,65 @@ class CsvImportService {
     return imported.isNotEmpty;
   }
 
+  static Future<bool> importTicketsFromUrl(
+    EventRecord event,
+    String sourceUrl,
+  ) async {
+    final rows = await _downloadTabularRowsFromUrl(
+      sourceUrl: sourceUrl,
+      candidateSheetNames: const ['Tickets', 'Ticket'],
+      requiredColumns: const [
+        'Name',
+        'Ticket Name',
+        'Status',
+        'Ticket Price',
+        'Ticket Spaces',
+        'Ticket Total',
+      ],
+    );
+
+    if (rows.isEmpty) return false;
+
+    final imported = _parseTicketsRows(rows);
+
+    event.tickets
+      ..clear()
+      ..addAll(imported);
+
+    BookingUtils.linkTicketsToBookings(event);
+    BookingUtils.recalculateAllTotals(event);
+
+    return imported.isNotEmpty;
+  }
+
   static Future<bool> importMembersCsv(EventRecord event) async {
     final rows = await _pickTabularRows(
+      candidateSheetNames: const ['Members', 'Member'],
+      requiredColumns: const [
+        'First Name',
+        'Last Name',
+        'Telephone No',
+        'Email',
+        'Membership Level',
+      ],
+    );
+    if (rows.isEmpty) return false;
+
+    final imported = _parseMembersRows(rows);
+
+    event.members
+      ..clear()
+      ..addAll(imported);
+
+    return imported.isNotEmpty;
+  }
+
+  static Future<bool> importMembersFromUrl(
+    EventRecord event,
+    String sourceUrl,
+  ) async {
+    final rows = await _downloadTabularRowsFromUrl(
+      sourceUrl: sourceUrl,
       candidateSheetNames: const ['Members', 'Member'],
       requiredColumns: const [
         'First Name',
@@ -280,8 +399,53 @@ class CsvImportService {
     return imported.isNotEmpty;
   }
 
+  static Future<bool> importScheduleFromUrl(
+    EventRecord event,
+    String sourceUrl,
+  ) async {
+    final rows = await _downloadTabularRowsFromUrl(
+      sourceUrl: sourceUrl,
+      candidateSheetNames: const ['Schedule', 'Run Sheet', 'Timeline'],
+      requiredColumns: const [
+        'Time',
+        'Activity',
+      ],
+    );
+    if (rows.isEmpty) return false;
+
+    final imported = _parseScheduleRows(rows);
+
+    event.schedule
+      ..clear()
+      ..addAll(imported);
+
+    return imported.isNotEmpty;
+  }
+
   static Future<bool> importGameModesCsv(EventRecord event) async {
     final rows = await _pickTabularRows(
+      candidateSheetNames: const ['GameModes', 'Game Modes', 'Modes'],
+      requiredColumns: const [
+        'Mode',
+      ],
+    );
+    if (rows.isEmpty) return false;
+
+    final imported = _parseGameModesRows(rows);
+
+    event.gameModes
+      ..clear()
+      ..addAll(imported);
+
+    return imported.isNotEmpty;
+  }
+
+  static Future<bool> importGameModesFromUrl(
+    EventRecord event,
+    String sourceUrl,
+  ) async {
+    final rows = await _downloadTabularRowsFromUrl(
+      sourceUrl: sourceUrl,
       candidateSheetNames: const ['GameModes', 'Game Modes', 'Modes'],
       requiredColumns: const [
         'Mode',
@@ -450,6 +614,7 @@ class CsvImportService {
     ]);
 
     final List<BookingRecord> imported = [];
+    final Set<String> seenBookingKeys = {};
 
     for (final row in dataRows) {
       if (row.isEmpty) continue;
@@ -465,6 +630,16 @@ class CsvImportService {
       final email = _cellAt(row, emailIndex);
       final phone = _cellAt(row, phoneIndex);
       final bookingId = _cellAt(row, bookingIdIndex);
+
+      final dedupeKey = _bookingDedupeKey(
+        bookingId: bookingId,
+        firstName: firstName,
+        lastName: lastName,
+        email: email,
+        phone: phone,
+      );
+      if (seenBookingKeys.contains(dedupeKey)) continue;
+      seenBookingKeys.add(dedupeKey);
 
       final looksEmpty = [
         firstName,
@@ -599,6 +774,7 @@ class CsvImportService {
     ]);
 
     final List<TicketRecord> imported = [];
+    final Set<String> seenTicketKeys = {};
 
     for (final row in dataRows) {
       if (row.isEmpty) continue;
@@ -609,6 +785,17 @@ class CsvImportService {
       if (ticketName.isEmpty && bookingName.isEmpty) continue;
 
       final cleanedPrice = _normalizeMoney(_cellAt(row, priceIndex));
+
+      final dedupeKey = _ticketDedupeKey(
+        bookingId: _cellAt(row, bookingIdIndex),
+        bookingName: bookingName,
+        ticketName: ticketName,
+        price: cleanedPrice,
+        spaces: _cellAt(row, spacesIndex),
+        status: _cellAt(row, statusIndex),
+      );
+      if (seenTicketKeys.contains(dedupeKey)) continue;
+      seenTicketKeys.add(dedupeKey);
 
       imported.add(
         TicketRecord(
@@ -628,6 +815,54 @@ class CsvImportService {
     }
 
     return imported;
+  }
+
+  static String _bookingDedupeKey({
+    required String bookingId,
+    required String firstName,
+    required String lastName,
+    required String email,
+    required String phone,
+  }) {
+    final normalizedBookingId = bookingId.trim().toLowerCase();
+    if (normalizedBookingId.isNotEmpty) return 'booking:$normalizedBookingId';
+
+    final normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail.isNotEmpty) return 'email:$normalizedEmail';
+
+    final normalizedPhone = phone
+        .replaceAll(RegExp(r'\s+'), '')
+        .trim()
+        .toLowerCase();
+    final normalizedName =
+        '${firstName.trim().toLowerCase()}|${lastName.trim().toLowerCase()}';
+
+    return 'namephone:$normalizedName:$normalizedPhone';
+  }
+
+  static String _ticketDedupeKey({
+    required String bookingId,
+    required String bookingName,
+    required String ticketName,
+    required String price,
+    required String spaces,
+    required String status,
+  }) {
+    final normalizedBookingId = bookingId.trim().toLowerCase();
+    final normalizedBookingName = bookingName.trim().toLowerCase();
+    final normalizedTicketName = ticketName.trim().toLowerCase();
+    final normalizedPrice = price.trim();
+    final normalizedSpaces = spaces.trim();
+    final normalizedStatus = status.trim().toLowerCase();
+
+    return [
+      normalizedBookingId,
+      normalizedBookingName,
+      normalizedTicketName,
+      normalizedPrice,
+      normalizedSpaces,
+      normalizedStatus,
+    ].join('|');
   }
 
   static List<MemberRecord> _parseMembersRows(List<List<dynamic>> rows) {
@@ -918,16 +1153,31 @@ class CsvImportService {
       type: FileType.custom,
       allowedExtensions: const ['csv', 'xlsx', 'xls'],
       withData: true,
+      withReadStream: true,
     );
 
     if (result == null || result.files.isEmpty) return [];
 
     final file = result.files.first;
-    final bytes = file.bytes;
+    final bytes = await _readPlatformFileBytes(file);
     if (bytes == null || bytes.isEmpty) return [];
 
     final extension = (file.extension ?? '').toLowerCase();
-    if (extension == 'csv') {
+    return _tabularRowsFromBytes(
+      bytes: bytes,
+      extensionHint: extension,
+      candidateSheetNames: candidateSheetNames,
+      requiredColumns: requiredColumns,
+    );
+  }
+
+  static List<List<dynamic>> _tabularRowsFromBytes({
+    required Uint8List bytes,
+    required String extensionHint,
+    required List<String> candidateSheetNames,
+    required List<String> requiredColumns,
+  }) {
+    if (extensionHint == 'csv') {
       final text = _decodeCsvBytes(bytes);
       if (text.trim().isEmpty) return [];
       return _parseCsvRows(text);
@@ -942,10 +1192,16 @@ class CsvImportService {
       }
 
       final best = _bestSheetRowsByHeader(workbook, requiredColumns);
-      return best ?? [];
+      if (best != null && best.isNotEmpty) {
+        return best;
+      }
     } catch (_) {
-      return [];
+      // Fall back to CSV parse below.
     }
+
+    final text = _decodeCsvBytes(bytes);
+    if (text.trim().isEmpty) return [];
+    return _parseCsvRows(text);
   }
 
   static List<List<dynamic>>? _bestSheetRowsByHeader(
@@ -984,14 +1240,173 @@ class CsvImportService {
       type: FileType.custom,
       allowedExtensions: extensions,
       withData: true,
+      withReadStream: true,
     );
 
     if (result == null || result.files.isEmpty) return null;
 
-    final bytes = result.files.first.bytes;
+    final bytes = await _readPlatformFileBytes(result.files.first);
     if (bytes == null || bytes.isEmpty) return null;
 
     return bytes;
+  }
+
+  static Future<Uint8List?> _readPlatformFileBytes(PlatformFile file) async {
+    if (file.bytes != null && file.bytes!.isNotEmpty) return file.bytes;
+
+    final stream = file.readStream;
+    if (stream == null) return null;
+
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in stream) {
+      builder.add(chunk);
+    }
+    final bytes = builder.takeBytes();
+    if (bytes.isEmpty) return null;
+    return bytes;
+  }
+
+  static Future<List<List<dynamic>>> _downloadTabularRowsFromUrl({
+    required String sourceUrl,
+    required List<String> candidateSheetNames,
+    required List<String> requiredColumns,
+  }) async {
+    final uri = _resolveDownloadUri(sourceUrl, preferXlsx: false);
+    if (uri == null) return [];
+
+    final response = await http.get(uri);
+    if (response.statusCode < 200 || response.statusCode >= 300) return [];
+
+    final responseBody = utf8.decode(response.bodyBytes, allowMalformed: true)
+        .toLowerCase();
+    if (_looksLikeGoogleSignInPage(uri, responseBody)) {
+      return [];
+    }
+
+    final format = _formatHintFromUri(uri);
+    return _tabularRowsFromBytes(
+      bytes: response.bodyBytes,
+      extensionHint: format,
+      candidateSheetNames: candidateSheetNames,
+      requiredColumns: requiredColumns,
+    );
+  }
+
+  static Future<Uint8List?> _downloadBytesFromUrl(
+    String sourceUrl, {
+    required bool preferXlsx,
+  }) async {
+    final uri = _resolveDownloadUri(sourceUrl, preferXlsx: preferXlsx);
+    if (uri == null) return null;
+
+    final response = await http.get(uri);
+    if (response.statusCode < 200 || response.statusCode >= 300) return null;
+
+    final responseBody = utf8.decode(response.bodyBytes, allowMalformed: true)
+      .toLowerCase();
+    if (_looksLikeGoogleSignInPage(uri, responseBody)) return null;
+
+    return response.bodyBytes;
+  }
+
+  static Uri? _resolveDownloadUri(String sourceUrl, {required bool preferXlsx}) {
+    final raw = sourceUrl.trim();
+    if (raw.isEmpty) return null;
+
+    final parsed = Uri.tryParse(raw);
+    if (parsed == null) return null;
+
+    if (parsed.host.toLowerCase().contains('docs.google.com') &&
+        parsed.path.contains('/spreadsheets/')) {
+      return _googleSheetsExportUri(parsed, preferXlsx: preferXlsx);
+    }
+
+    if (parsed.host.toLowerCase().contains('drive.google.com')) {
+      final driveFileUri = _googleDriveFileExportUri(parsed);
+      if (driveFileUri != null) return driveFileUri;
+    }
+
+    return parsed;
+  }
+
+  static Uri? _googleDriveFileExportUri(Uri source) {
+    final segments = source.pathSegments;
+
+    final dIndex = segments.indexOf('d');
+    if (dIndex != -1 && dIndex + 1 < segments.length) {
+      final fileId = segments[dIndex + 1];
+      if (fileId.isNotEmpty) {
+        return Uri.https('drive.google.com', '/uc', {
+          'export': 'download',
+          'id': fileId,
+        });
+      }
+    }
+
+    final fileIdFromQuery = source.queryParameters['id'];
+    if (fileIdFromQuery != null && fileIdFromQuery.isNotEmpty) {
+      return Uri.https('drive.google.com', '/uc', {
+        'export': 'download',
+        'id': fileIdFromQuery,
+      });
+    }
+
+    return null;
+  }
+
+  static Uri? _googleSheetsExportUri(Uri source, {required bool preferXlsx}) {
+    final segments = source.pathSegments;
+    final dIndex = segments.indexOf('d');
+    if (dIndex == -1 || dIndex + 1 >= segments.length) {
+      return source;
+    }
+
+    final spreadsheetId = segments[dIndex + 1];
+    if (spreadsheetId.isEmpty) return source;
+
+    String? gid = source.queryParameters['gid'];
+    final fragment = source.fragment;
+    if ((gid == null || gid.isEmpty) && fragment.isNotEmpty) {
+      for (final part in fragment.split('&')) {
+        if (part.startsWith('gid=')) {
+          gid = part.substring(4);
+          break;
+        }
+      }
+    }
+
+    final format = preferXlsx ? 'xlsx' : 'csv';
+    return Uri.https(
+      'docs.google.com',
+      '/spreadsheets/d/$spreadsheetId/export',
+      {
+        'format': format,
+        if (!preferXlsx && gid != null && gid.isNotEmpty) 'gid': gid,
+      },
+    );
+  }
+
+  static String _formatHintFromUri(Uri uri) {
+    final queryFormat = uri.queryParameters['format']?.toLowerCase();
+    if (queryFormat == 'csv' || queryFormat == 'xlsx' || queryFormat == 'xls') {
+      return queryFormat!;
+    }
+
+    final path = uri.path.toLowerCase();
+    if (path.endsWith('.csv')) return 'csv';
+    if (path.endsWith('.xlsx')) return 'xlsx';
+    if (path.endsWith('.xls')) return 'xls';
+    return '';
+  }
+
+  static bool _looksLikeGoogleSignInPage(Uri uri, String bodyLower) {
+    final host = uri.host.toLowerCase();
+    if (!host.contains('google.com')) return false;
+
+    return bodyLower.contains('servicelogin') ||
+        bodyLower.contains('accounts.google.com') ||
+        bodyLower.contains('sign in') ||
+        bodyLower.contains('ログイン');
   }
 
   static List<List<dynamic>> _parseCsvRows(String csvText) {

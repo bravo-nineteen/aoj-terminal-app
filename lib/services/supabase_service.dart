@@ -33,9 +33,23 @@ class SupabaseService {
   static String _normalizeSupabaseUrl(String rawUrl) {
     var value = rawUrl.replaceAll('\r', ' ').replaceAll('\n', ' ').trim();
 
+    // Support accidentally pasting a full command and extract first URL token.
+    for (final token in value.split(RegExp(r'\s+'))) {
+      final lower = token.toLowerCase();
+      final httpsIndex = lower.indexOf('https://');
+      final httpIndex = lower.indexOf('http://');
+      final startIndex = httpsIndex >= 0 ? httpsIndex : httpIndex;
+      if (startIndex >= 0) {
+        value = token.substring(startIndex);
+        break;
+      }
+    }
+
     // Support accidentally pasting the full define segment.
-    final defineMatch = RegExp(r'(?i)supabase_url\s*=\s*([^\s]+)')
-        .firstMatch(value);
+    final defineMatch = RegExp(
+      r'supabase_url\s*=\s*([^\s]+)',
+      caseSensitive: false,
+    ).firstMatch(value);
     if (defineMatch != null) {
       value = defineMatch.group(1) ?? value;
     }
@@ -66,12 +80,27 @@ class SupabaseService {
     ).toString();
   }
 
+  static bool _isPlaceholderSupabaseUrl(String value) {
+    final normalized = _stripOuterQuotes(value).trim().toLowerCase();
+    if (normalized.isEmpty) return true;
+    if (normalized == '...') return true;
+    if (normalized == 'supabase_url') return true;
+    if (normalized == 'your_supabase_url') return true;
+    if (normalized.contains('your-project-id')) return true;
+    if (normalized.contains('your_project_ref')) return true;
+    if (normalized.contains('your-project-ref')) return true;
+    return false;
+  }
+
   static Future<void> initialize() async {
     const envUrl = String.fromEnvironment('SUPABASE_URL');
     const envAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
+    final effectiveUrlInput =
+        _isPlaceholderSupabaseUrl(envUrl) ? _kFallbackSupabaseUrl : envUrl;
+
     final resolvedUrl = _normalizeSupabaseUrl(
-      envUrl.isNotEmpty ? envUrl : _kFallbackSupabaseUrl,
+      effectiveUrlInput.isNotEmpty ? effectiveUrlInput : _kFallbackSupabaseUrl,
     );
     _resolvedSupabaseUrl = resolvedUrl;
 
