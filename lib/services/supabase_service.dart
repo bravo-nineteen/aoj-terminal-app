@@ -92,16 +92,35 @@ class SupabaseService {
     return false;
   }
 
+  static bool _isPlaceholderSupabaseHost(String host) {
+    final normalized = host.trim().toLowerCase();
+    if (normalized.isEmpty) return true;
+    if (normalized == 'localhost') return true;
+    if (normalized == 'supabase') return true;
+    if (normalized == 'supabase_url') return true;
+    if (normalized.contains('your-project-id')) return true;
+    if (normalized.contains('your_project_ref')) return true;
+    if (normalized.contains('your-project-ref')) return true;
+    if (!normalized.contains('.')) return true;
+    return false;
+  }
+
   static Future<void> initialize() async {
     const envUrl = String.fromEnvironment('SUPABASE_URL');
     const envAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 
-    final effectiveUrlInput =
+    var effectiveUrlInput =
         _isPlaceholderSupabaseUrl(envUrl) ? _kFallbackSupabaseUrl : envUrl;
 
-    final resolvedUrl = _normalizeSupabaseUrl(
-      effectiveUrlInput.isNotEmpty ? effectiveUrlInput : _kFallbackSupabaseUrl,
-    );
+    if (effectiveUrlInput.isEmpty) {
+      effectiveUrlInput = _kFallbackSupabaseUrl;
+    }
+
+    var resolvedUrl = _normalizeSupabaseUrl(effectiveUrlInput);
+    final resolvedHost = Uri.tryParse(resolvedUrl)?.host ?? '';
+    if (_isPlaceholderSupabaseHost(resolvedHost)) {
+      resolvedUrl = _kFallbackSupabaseUrl;
+    }
     _resolvedSupabaseUrl = resolvedUrl;
 
     final resolvedAnonKey =

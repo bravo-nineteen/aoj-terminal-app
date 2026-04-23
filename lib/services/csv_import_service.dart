@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -464,13 +465,15 @@ class CsvImportService {
 
   static Future<bool> importFieldMap(EventRecord event) async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
+      type: FileType.custom,
+      allowedExtensions: const ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'],
       withData: true,
+      withReadStream: true,
     );
 
     if (result == null || result.files.isEmpty) return false;
 
-    final bytes = result.files.first.bytes;
+    final bytes = await _readPlatformFileBytes(result.files.first);
     if (bytes == null || bytes.isEmpty) return false;
 
     event.fieldMapBase64 = base64Encode(bytes);
@@ -1255,15 +1258,27 @@ class CsvImportService {
     if (file.bytes != null && file.bytes!.isNotEmpty) return file.bytes;
 
     final stream = file.readStream;
-    if (stream == null) return null;
-
-    final builder = BytesBuilder(copy: false);
-    await for (final chunk in stream) {
-      builder.add(chunk);
+    if (stream != null) {
+      final builder = BytesBuilder(copy: false);
+      await for (final chunk in stream) {
+        builder.add(chunk);
+      }
+      final bytes = builder.takeBytes();
+      if (bytes.isNotEmpty) return bytes;
     }
-    final bytes = builder.takeBytes();
-    if (bytes.isEmpty) return null;
-    return bytes;
+
+    // Cloud-backed files (for example Google Drive mirrored files on Windows)
+    // may expose only a path and no in-memory bytes/read stream.
+    final filePath = file.path;
+    if (filePath != null && filePath.isNotEmpty) {
+      final fsFile = File(filePath);
+      if (await fsFile.exists()) {
+        final bytes = await fsFile.readAsBytes();
+        if (bytes.isNotEmpty) return bytes;
+      }
+    }
+
+    return null;
   }
 
   static Future<List<List<dynamic>>> _downloadTabularRowsFromUrl({
