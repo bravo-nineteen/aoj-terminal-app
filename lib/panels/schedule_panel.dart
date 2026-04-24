@@ -485,6 +485,12 @@ class _ScheduleEditRowState extends State<_ScheduleEditRow> {
 
   @override
   Widget build(BuildContext context) {
+    final gameModeTitles = widget.gameModes
+        .map((m) => m.title)
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
@@ -512,17 +518,12 @@ class _ScheduleEditRowState extends State<_ScheduleEditRow> {
                   value: '',
                   child: Text('None'),
                 ),
-                ...widget.gameModes
-                    .map((m) => m.title)
-                    .toSet()
-                    .toList()
-                  ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()))
-                    .map(
-                      (title) => DropdownMenuItem<String>(
-                        value: title,
-                        child: Text(title),
-                      ),
-                    ),
+                ...gameModeTitles.map(
+                  (title) => DropdownMenuItem<String>(
+                    value: title,
+                    child: Text(title),
+                  ),
+                ),
               ],
               onChanged: (value) async {
                 setState(() {

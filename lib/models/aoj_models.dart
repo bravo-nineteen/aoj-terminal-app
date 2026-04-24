@@ -499,6 +499,7 @@ class ScheduleRecord {
   String activity;
   String location;
   String notes;
+  String gameModeTitle;
 
   ScheduleRecord({
     required this.id,
@@ -506,6 +507,7 @@ class ScheduleRecord {
     required this.activity,
     required this.location,
     required this.notes,
+    this.gameModeTitle = '',
   });
 
   Map<String, String> get data => {
@@ -514,6 +516,7 @@ class ScheduleRecord {
         'Activity': activity,
         'Location': location,
         'Notes': notes,
+      'GameModeTitle': gameModeTitle,
       };
 
   Map<String, dynamic> toJson() => {
@@ -522,6 +525,7 @@ class ScheduleRecord {
         'activity': activity,
         'location': location,
         'notes': notes,
+      'gameModeTitle': gameModeTitle,
       };
 
   factory ScheduleRecord.fromJson(Map<String, dynamic> json) {
