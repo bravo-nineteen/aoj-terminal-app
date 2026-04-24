@@ -5,13 +5,15 @@ import '../utils/booking_utils.dart';
 import '../utils/money_utils.dart';
 import '../widgets/ui_components.dart';
 
-class AccountingPanel extends StatelessWidget {
+class AccountingPanel extends StatefulWidget {
   final Color accent;
   final EventRecord? event;
   final Future<void> Function() onExportFullCsv;
   final Future<void> Function() onAddExpense;
   final Future<void> Function(String expenseId) onDeleteExpense;
   final Future<void> Function() onExportSummary;
+  final Future<void> Function(String body) onAddAccountingNote;
+  final Future<void> Function(String expenseId, String body) onAddExpenseNote;
 
   const AccountingPanel({
     super.key,
@@ -21,11 +23,147 @@ class AccountingPanel extends StatelessWidget {
     required this.onAddExpense,
     required this.onDeleteExpense,
     required this.onExportSummary,
+    required this.onAddAccountingNote,
+    required this.onAddExpenseNote,
   });
 
   @override
+  State<AccountingPanel> createState() => _AccountingPanelState();
+}
+
+class _AccountingPanelState extends State<AccountingPanel> {
+  bool _notesExpanded = false;
+
+  Future<void> _promptAddAccountingNote() async {
+    final ctrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Accounting Note'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            hintText: 'Enter note…',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && ctrl.text.trim().isNotEmpty) {
+      await widget.onAddAccountingNote(ctrl.text.trim());
+    }
+  }
+
+  Future<void> _showExpenseNotes(ExpenseRecord expense) async {
+    final accent = widget.accent;
+    final ctrl = TextEditingController();
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text(
+            'Notes — ${expense.item.isEmpty ? 'Expense' : expense.item}',
+          ),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (expense.notes.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: Text('No notes yet.'),
+                  )
+                else
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 240),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: expense.notes.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final n = expense.notes[i];
+                        return ListTile(
+                          dense: true,
+                          title: Text(n.body),
+                          subtitle: Text(
+                            '${n.author.isEmpty ? 'Unknown' : n.author}  •  ${_formatDate(n.createdAt)}',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                const Divider(),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: ctrl,
+                        decoration: const InputDecoration(
+                          hintText: 'Add a note…',
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accent,
+                        foregroundColor: Colors.white,
+                      ),
+                      onPressed: () async {
+                        final body = ctrl.text.trim();
+                        if (body.isEmpty) return;
+                        ctrl.clear();
+                        Navigator.pop(ctx);
+                        await widget.onAddExpenseNote(expense.id, body);
+                      },
+                      child: const Text('Add'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _formatDate(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.day}/${dt.month}/${dt.year} '
+          '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (event == null) {
+    if (widget.event == null) {
       return const Padding(
         padding: EdgeInsets.all(16),
         child: Column(
@@ -40,7 +178,7 @@ class AccountingPanel extends StatelessWidget {
       );
     }
 
-    final groups = BookingUtils.groupedBookingsForEvent(event!);
+    final groups = BookingUtils.groupedBookingsForEvent(widget.event!);
 
     final incomeLines = <_LedgerLine>[];
     final deductionLines = <_LedgerLine>[];
@@ -62,7 +200,7 @@ class AccountingPanel extends StatelessWidget {
 
       ticketsTotal += BookingUtils.ticketsTotal(group);
       salesTotal += BookingUtils.salesTotal(group);
-      grandTotal += BookingUtils.grandTotal(group);
+      grandTotal += BookingUtils.grandTotal(group, widget.event);
       paymentsRecorded += BookingUtils.paymentsTotal(group);
 
       for (final payment in group.primary.payments) {
@@ -113,7 +251,7 @@ class AccountingPanel extends StatelessWidget {
       }
     }
 
-    for (final expense in event!.expenses) {
+    for (final expense in widget.event!.expenses) {
       final amount = _toDouble(expense.amount);
       if (amount <= 0) continue;
 
@@ -126,13 +264,34 @@ class AccountingPanel extends StatelessWidget {
               'MANUAL EXPENSE • ${expense.category.isEmpty ? 'General' : expense.category}${expense.note.isEmpty ? '' : ' • ${expense.note}'}',
           amount: amount,
           isDeletable: true,
+          expense: expense,
         ),
       );
     }
 
-    final totalDeductions = cardFees + manualExpensesTotal;
+    // Lunch cost deduction — lunch fees collected inflate revenue but are pass-through costs
+    double lunchCostTotal = 0;
+    for (final group in groups) {
+      lunchCostTotal += BookingUtils.lunchTotal(group, widget.event!);
+    }
+    if (lunchCostTotal > 0) {
+      deductionLines.insert(
+        0,
+        _LedgerLine(
+          id: 'lunch_costs',
+          title: 'Lunch Costs',
+          subtitle: 'LUNCH DEDUCTION • pass-through collected from bookings',
+          amount: lunchCostTotal,
+          isDeletable: false,
+        ),
+      );
+    }
+
+    final totalDeductions = cardFees + manualExpensesTotal + lunchCostTotal;
     final netAfterAllDeductions = paymentsRecorded - totalDeductions;
     final outstandingBalance = grandTotal - paymentsRecorded;
+    final accent = widget.accent;
+    final accountingNotes = widget.event!.accountingNotes;
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -158,6 +317,7 @@ class AccountingPanel extends StatelessWidget {
                           emptyText: 'NO INCOME LINES',
                           lines: incomeLines,
                           onDeleteLine: null,
+                          onViewExpenseNotes: null,
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -169,16 +329,88 @@ class AccountingPanel extends StatelessWidget {
                           lines: deductionLines,
                           onDeleteLine: (line) async {
                             if (!line.isDeletable) return;
-                            await onDeleteExpense(line.id);
+                            await widget.onDeleteExpense(line.id);
+                          },
+                          onViewExpenseNotes: (line) async {
+                            if (line.expense == null) return;
+                            await _showExpenseNotes(line.expense!);
                           },
                           headerAction: ElevatedButton.icon(
-                            onPressed: onAddExpense,
+                            onPressed: widget.onAddExpense,
                             icon: const Icon(Icons.add, size: 16),
                             label: const Text('ADD EXPENSE'),
                           ),
                         ),
                       ),
                     ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                // ── Accounting Notes ──────────────────────────────────────
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: const Color(0xCC101511),
+                    border:
+                        Border.all(color: accent.withValues(alpha: 0.30)),
+                  ),
+                  child: Theme(
+                    data: Theme.of(context)
+                        .copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      initiallyExpanded: _notesExpanded,
+                      onExpansionChanged: (v) =>
+                          setState(() => _notesExpanded = v),
+                      leading:
+                          Icon(Icons.sticky_note_2_outlined, color: accent),
+                      title: Text(
+                        'ACCOUNTING NOTES  (${accountingNotes.length})',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: accent,
+                        ),
+                      ),
+                      trailing: TextButton.icon(
+                        onPressed: _promptAddAccountingNote,
+                        icon: const Icon(Icons.add, size: 14),
+                        label: const Text('Add Note',
+                            style: TextStyle(fontSize: 12)),
+                      ),
+                      children: [
+                        if (accountingNotes.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Text('No notes yet.',
+                                style: TextStyle(fontSize: 12)),
+                          )
+                        else
+                          ConstrainedBox(
+                            constraints:
+                                const BoxConstraints(maxHeight: 150),
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
+                              itemCount: accountingNotes.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (_, i) {
+                                final n = accountingNotes[i];
+                                return ListTile(
+                                  dense: true,
+                                  title: Text(n.body,
+                                      style: const TextStyle(fontSize: 12)),
+                                  subtitle: Text(
+                                    '${n.author.isEmpty ? 'Unknown' : n.author}  •  ${_formatDate(n.createdAt)}',
+                                    style: const TextStyle(fontSize: 10),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -263,14 +495,14 @@ class AccountingPanel extends StatelessWidget {
                           spacing: 8,
                           children: [
                             ElevatedButton.icon(
-                              onPressed: onExportSummary,
+                              onPressed: widget.onExportSummary,
                               icon: const Icon(
                                   Icons.summarize_outlined,
                                   size: 16),
                               label: const Text('EVENT SUMMARY'),
                             ),
                             ElevatedButton.icon(
-                              onPressed: onExportFullCsv,
+                              onPressed: widget.onExportFullCsv,
                               icon: const Icon(Icons.download_outlined),
                               label: const Text('EXPORT FULL EVENT CSV'),
                             ),
@@ -312,6 +544,7 @@ class _LedgerCard extends StatelessWidget {
   final String emptyText;
   final Widget? headerAction;
   final Future<void> Function(_LedgerLine line)? onDeleteLine;
+  final Future<void> Function(_LedgerLine line)? onViewExpenseNotes;
 
   const _LedgerCard({
     required this.title,
@@ -319,6 +552,7 @@ class _LedgerCard extends StatelessWidget {
     required this.lines,
     required this.emptyText,
     required this.onDeleteLine,
+    required this.onViewExpenseNotes,
     this.headerAction,
   });
 
@@ -425,6 +659,34 @@ class _LedgerCard extends StatelessWidget {
                                 tooltip: 'Delete expense',
                               ),
                             ],
+                            if (line.expense != null &&
+                                onViewExpenseNotes != null)
+                              Stack(
+                                alignment: Alignment.topRight,
+                                children: [
+                                  IconButton(
+                                    onPressed: () =>
+                                        onViewExpenseNotes!(line),
+                                    icon: const Icon(
+                                        Icons.sticky_note_2_outlined,
+                                        size: 18),
+                                    tooltip: 'Expense notes',
+                                  ),
+                                  if (line.expense!.notes.isNotEmpty)
+                                    Positioned(
+                                      top: 6,
+                                      right: 6,
+                                      child: Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: BoxDecoration(
+                                          color: accent,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                           ],
                         ),
                       );
@@ -482,6 +744,7 @@ class _LedgerLine {
   final double amount;
   final bool isDeletable;
   final bool isRefund;
+  final ExpenseRecord? expense;
 
   const _LedgerLine({
     required this.id,
@@ -490,5 +753,6 @@ class _LedgerLine {
     required this.amount,
     required this.isDeletable,
     this.isRefund = false,
+    this.expense,
   });
 }

@@ -658,18 +658,19 @@ class CsvImportService {
       final rawTotal = _normalizeMoney(_cellAt(row, totalIndex));
       final rawTotalPaid = _normalizeMoney(_cellAt(row, totalPaidIndex));
       final rawPaymentMethod = _cellAt(row, paymentMethodIndex);
+      final normalizedPaymentMethod = _normalizePaymentMethod(rawPaymentMethod);
       final rawPaymentStatus = _cellAt(row, paymentStatusIndex);
       final rawCheckInStatus = _cellAt(row, checkInStatusIndex);
 
       final resolvedPaymentStatus = _resolvePaymentStatus(
-        paymentMethod: rawPaymentMethod,
+        paymentMethod: normalizedPaymentMethod,
         paymentStatus: rawPaymentStatus,
         total: rawTotal,
         totalPaid: rawTotalPaid,
       );
 
       final resolvedTotalPaid = _resolveTotalPaid(
-        paymentMethod: rawPaymentMethod,
+        paymentMethod: normalizedPaymentMethod,
         paymentStatus: rawPaymentStatus,
         total: rawTotal,
         totalPaid: rawTotalPaid,
@@ -682,7 +683,9 @@ class CsvImportService {
           PaymentRecord(
             id: _makeId('payment', imported.length),
             amount: resolvedTotalPaid,
-            method: rawPaymentMethod.isEmpty ? 'Imported' : rawPaymentMethod,
+            method: normalizedPaymentMethod.isEmpty
+                ? 'Imported'
+                : normalizedPaymentMethod,
             note: 'Imported from booking file',
             date: _cellAt(row, bookingDateIndex).isEmpty
                 ? DateTime.now().toIso8601String()
@@ -706,7 +709,7 @@ class CsvImportService {
           total: rawTotal,
           totalPaid: resolvedTotalPaid,
           transactionId: _cellAt(row, transactionIdIndex),
-          paymentMethod: rawPaymentMethod,
+            paymentMethod: normalizedPaymentMethod,
           paymentStatus: resolvedPaymentStatus,
           checkInStatus:
               rawCheckInStatus.isEmpty ? 'Not Checked In' : rawCheckInStatus,
@@ -1619,6 +1622,26 @@ class CsvImportService {
         value.contains('mastercard') ||
         value.contains('amex') ||
         value.contains('クレジット');
+  }
+
+  static String _normalizePaymentMethod(String raw) {
+    final trimmed = raw.trim();
+    final value = trimmed.toLowerCase();
+
+    if (trimmed.isEmpty) return '';
+    if (value.contains('refund')) return 'Refund';
+    if (_isCardPayment(trimmed)) return 'Credit Card';
+    if (value.contains('cash')) return 'Cash';
+    if (value.contains('coupon')) return 'Coupon';
+    if (value.contains('qr') || value.contains('paypay') || value.contains('line pay')) {
+      return 'QR Code';
+    }
+    if (value.contains('wire') || value.contains('bank') || value.contains('transfer')) {
+      return 'Wire Transfer';
+    }
+    if (value.contains('paypal')) return 'PayPal';
+
+    return trimmed;
   }
 
   static bool _looksPaid(String raw) {

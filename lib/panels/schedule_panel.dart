@@ -25,16 +25,46 @@ class SchedulePanel extends StatefulWidget {
 
 class _SchedulePanelState extends State<SchedulePanel> {
   bool _isEditing = false;
+  Uint8List? _cachedFieldMapBytes;
+  String? _cachedFieldMapBase64;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshFieldMapCache();
+  }
+
+  @override
+  void didUpdateWidget(covariant SchedulePanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.event?.fieldMapBase64 != widget.event?.fieldMapBase64) {
+      _refreshFieldMapCache();
+    }
+  }
+
+  void _refreshFieldMapCache() {
+    final fieldMapBase64 = widget.event?.fieldMapBase64;
+    if (fieldMapBase64 == null) {
+      _cachedFieldMapBase64 = null;
+      _cachedFieldMapBytes = null;
+      return;
+    }
+
+    if (_cachedFieldMapBase64 == fieldMapBase64) return;
+
+    _cachedFieldMapBase64 = fieldMapBase64;
+    try {
+      _cachedFieldMapBytes = base64Decode(fieldMapBase64);
+    } catch (_) {
+      _cachedFieldMapBytes = null;
+    }
+  }
 
   Uint8List? _fieldMapBytes() {
     if (widget.event == null || widget.event!.fieldMapBase64 == null) {
       return null;
     }
-    try {
-      return base64Decode(widget.event!.fieldMapBase64!);
-    } catch (_) {
-      return null;
-    }
+    return _cachedFieldMapBytes;
   }
 
   Future<void> _addRow() async {

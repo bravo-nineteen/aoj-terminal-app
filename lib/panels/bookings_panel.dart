@@ -247,8 +247,8 @@ class _BookingsPanelState extends State<BookingsPanel> {
                               group.primary.checkInStatus.trim().isEmpty
                                   ? 'Not Checked In'
                                   : group.primary.checkInStatus.trim();
-                          final total = BookingUtils.grandTotal(group);
-                          final balance = BookingUtils.balance(group);
+                          final total = BookingUtils.grandTotal(group, widget.event);
+                          final balance = BookingUtils.balance(group, widget.event);
                           final hasOutstanding = balance > 0;
                           final lunchNames = _lunchNamesForGroup(group);
 

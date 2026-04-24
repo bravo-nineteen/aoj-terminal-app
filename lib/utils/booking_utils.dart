@@ -39,12 +39,23 @@ class BookingUtils {
     });
   }
 
-  static double grandTotal(BookingGroup group) {
-    return ticketsTotal(group) + salesTotal(group);
+  /// Sum of lunch fees for a booking group based on the event's lunch options.
+  static double lunchTotal(BookingGroup group, EventRecord event) {
+    final feeById = <String, double>{
+      for (final opt in event.lunchOptions)
+        opt.id: MoneyUtils.parseMoney(opt.fee),
+    };
+    final unique = group.primary.lunchOrderIds.toSet();
+    return unique.fold<double>(0.0, (sum, id) => sum + (feeById[id] ?? 0.0));
   }
 
-  static double balance(BookingGroup group) {
-    return grandTotal(group) - paymentsTotal(group);
+  static double grandTotal(BookingGroup group, [EventRecord? event]) {
+    final lunch = event != null ? lunchTotal(group, event) : 0.0;
+    return ticketsTotal(group) + salesTotal(group) + lunch;
+  }
+
+  static double balance(BookingGroup group, [EventRecord? event]) {
+    return grandTotal(group, event) - paymentsTotal(group);
   }
 
   static List<BookingGroup> groupedBookingsForEvent(EventRecord event) {

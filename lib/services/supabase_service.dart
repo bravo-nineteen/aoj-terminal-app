@@ -183,6 +183,8 @@ class SupabaseService {
             'lunch_options': e.lunchOptions.map((o) => o.toJson()).toList(),
             'field_map_base64': e.fieldMapBase64,
             'game_modes': e.gameModes.map((g) => g.toJson()).toList(),
+            'accounting_notes':
+                e.accountingNotes.map((n) => n.toJson()).toList(),
           },
         )
         .toList();
@@ -334,6 +336,7 @@ class SupabaseService {
             'note': e.note,
             'date': e.date,
             'category': e.category,
+            'notes': e.notes.map((n) => n.toJson()).toList(),
           },
         )
         .toList();
@@ -404,6 +407,14 @@ class SupabaseService {
             (g) => GameModeRecord.fromJson(Map<String, dynamic>.from(g as Map)),
           )
           .toList();
+
+      final accountingNotes =
+          (row['accounting_notes'] as List<dynamic>? ?? [])
+              .map(
+                (n) =>
+                    NoteRecord.fromJson(Map<String, dynamic>.from(n as Map)),
+              )
+              .toList();
 
       final lunchOptions = (row['lunch_options'] as List<dynamic>? ?? [])
           .map(
@@ -507,6 +518,11 @@ class SupabaseService {
               note: e['note'] as String? ?? '',
               date: e['date'] as String? ?? '',
               category: e['category'] as String? ?? '',
+              notes: (e['notes'] as List<dynamic>? ?? [])
+                  .map((n) => NoteRecord.fromJson(
+                        Map<String, dynamic>.from(n as Map),
+                      ))
+                  .toList(),
             ),
           )
           .toList();
@@ -529,6 +545,7 @@ class SupabaseService {
           schedule: schedule,
           gameModes: gameModes,
           expenses: expenses,
+          accountingNotes: accountingNotes,
         ),
       );
     }
@@ -638,6 +655,10 @@ class SupabaseService {
         (x) => x.id,
         _mergeExpense,
       ),
+      accountingNotes: _mergeNotes(
+        local.accountingNotes,
+        cloud.accountingNotes,
+      ),
     );
   }
 
@@ -733,6 +754,7 @@ class SupabaseService {
       note: _preferString(local.note, cloud.note),
       date: _preferString(local.date, cloud.date),
       category: _preferString(local.category, cloud.category),
+      notes: _mergeNotes(local.notes, cloud.notes),
     );
   }
 
@@ -829,5 +851,61 @@ class SupabaseService {
     if (c.isEmpty) return local;
 
     return l.length >= c.length ? local : cloud;
+  }
+
+  /// Merge two note lists by id, preserving all unique notes from both.
+  static List<NoteRecord> _mergeNotes(
+    List<NoteRecord> local,
+    List<NoteRecord> cloud,
+  ) {
+    final byId = <String, NoteRecord>{};
+    for (final n in [...cloud, ...local]) {
+      byId[n.id] = n;
+    }
+    final merged = byId.values.toList();
+    merged.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return merged;
+  }
+
+  // ─── Messages ──────────────────────────────────────────────────────────────
+
+  /// Fetch all messages, optionally filtered to an event. Ordered oldest first.
+  static Future<List<MessageRecord>> fetchMessages({String? eventId}) async {
+    return _withHostLookupRetry(() async {
+      final query = _db.from('messages').select().order('created_at');
+      final List<Map<String, dynamic>> rows =
+          List<Map<String, dynamic>>.from(await query);
+      return rows
+          .where(
+            (r) => eventId == null || (r['event_id'] as String?) == eventId,
+          )
+          .map(
+            (r) => MessageRecord(
+              id: r['id'] as String? ?? '',
+              sender: r['sender'] as String? ?? '',
+              body: r['body'] as String? ?? '',
+              createdAt: (r['created_at'] as String?) ?? '',
+              eventId: r['event_id'] as String?,
+            ),
+          )
+          .toList();
+    });
+  }
+
+  /// Send a new message to the shared messages table.
+  static Future<void> sendMessage({
+    required String sender,
+    required String body,
+    String? eventId,
+  }) async {
+    await _withHostLookupRetry(() async {
+      await _db.from('messages').insert(<String, dynamic>{
+        'id': DateTime.now().microsecondsSinceEpoch.toString(),
+        'sender': sender,
+        'body': body,
+        'event_id': eventId,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    });
   }
 }

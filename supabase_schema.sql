@@ -20,6 +20,7 @@ create table if not exists events (
   lunch_options         jsonb not null default '[]',
   field_map_base64      text,
   game_modes            jsonb not null default '[]',
+  accounting_notes      jsonb not null default '[]',
   updated_at            timestamptz not null default now()
 );
 
@@ -101,7 +102,17 @@ create table if not exists expenses (
   note     text not null default '',
   date     text not null default '',
   category text not null default '',
+  notes    jsonb not null default '[]',
   updated_at timestamptz not null default now()
+);
+
+-- ── messages ─────────────────────────────────────────────────────────────────
+create table if not exists messages (
+  id         text primary key,
+  sender     text not null default '',
+  body       text not null default '',
+  event_id   text,
+  created_at timestamptz not null default now()
 );
 
 create index if not exists idx_bookings_event_id on bookings(event_id);

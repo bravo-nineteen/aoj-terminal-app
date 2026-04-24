@@ -144,9 +144,9 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
   @override
   Widget build(BuildContext context) {
     final group = widget.group;
-    final grandTotal = BookingUtils.grandTotal(group);
+    final grandTotal = BookingUtils.grandTotal(group, widget.event);
     final paid = BookingUtils.paymentsTotal(group);
-    final balance = BookingUtils.balance(group);
+    final balance = BookingUtils.balance(group, widget.event);
     final outstanding = balance > 0;
 
     return SafeArea(

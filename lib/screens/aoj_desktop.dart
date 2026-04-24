@@ -9,11 +9,13 @@ import '../panels/bookings_panel.dart';
 import '../panels/event_panel.dart';
 import '../panels/game_modes_panel.dart';
 import '../panels/members_panel.dart';
+import '../panels/messages_panel.dart';
 import '../panels/props_panel.dart';
 import '../panels/schedule_panel.dart';
 import '../panels/system_panel.dart';
 import '../services/app_state_service.dart';
 import '../services/csv_import_service.dart';
+import '../services/device_identity_service.dart';
 import '../services/export_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/booking_utils.dart';
@@ -25,6 +27,7 @@ part 'sections/aoj_desktop_bookings_section.dart';
 part 'sections/aoj_desktop_event_section.dart';
 part 'sections/aoj_desktop_game_modes_section.dart';
 part 'sections/aoj_desktop_members_section.dart';
+part 'sections/aoj_desktop_messages_section.dart';
 part 'sections/aoj_desktop_props_section.dart';
 part 'sections/aoj_desktop_schedule_section.dart';
 part 'sections/aoj_desktop_system_section.dart';
@@ -100,6 +103,13 @@ class _AOJDesktopState extends State<AOJDesktop> {
       icon: Icons.sports_esports_outlined,
       accent: Color(0xFF7A6C96),
       subtitle: 'Scenario library',
+    ),
+    DesktopAppItem(
+      id: 'messages',
+      title: 'Messages',
+      icon: Icons.chat_bubble_outline,
+      accent: Color(0xFF5A8A7A),
+      subtitle: 'Cross-device chat',
     ),
   ];
 
@@ -311,6 +321,11 @@ class _AOJDesktopState extends State<AOJDesktop> {
         systemStatus = 'AUTO-SAVED';
       });
     }
+  }
+
+  void _updateDesktopState(VoidCallback mutation) {
+    if (!mounted) return;
+    setState(mutation);
   }
 
   void _showSyncMessage(String message) {
@@ -2003,6 +2018,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
         return _buildPropsSection(window);
       case 'game_modes':
         return _buildGameModesSection(window);
+      case 'messages':
+        return _buildMessagesSection(window);
       default:
         return const SizedBox.shrink();
     }

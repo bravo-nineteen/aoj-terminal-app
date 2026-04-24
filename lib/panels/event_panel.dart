@@ -451,31 +451,6 @@ class _EventPanelState extends State<EventPanel> {
                               await _saveAndRefresh();
                             },
                           ),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: PersistentEditField(
-                                  label: 'Date',
-                                  value: event.date,
-                                  onChanged: (v) async {
-                                    event.date = v;
-                                    await _saveAndRefresh();
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: PersistentEditField(
-                                  label: 'Time',
-                                  value: event.time,
-                                  onChanged: (v) async {
-                                    event.time = v;
-                                    await _saveAndRefresh();
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
                           PersistentEditField(
                             label: 'Ticket Cost Per Person',
                             value: _eventTicketCostPerPerson(event),
@@ -484,6 +459,22 @@ class _EventPanelState extends State<EventPanel> {
                             ),
                             onChanged: (v) async {
                               await _setEventTicketCostPerPerson(event, v);
+                            },
+                          ),
+                          PersistentEditField(
+                            label: 'Date',
+                            value: event.date,
+                            onChanged: (v) async {
+                              event.date = v;
+                              await _saveAndRefresh();
+                            },
+                          ),
+                          PersistentEditField(
+                            label: 'Time',
+                            value: event.time,
+                            onChanged: (v) async {
+                              event.time = v;
+                              await _saveAndRefresh();
                             },
                           ),
                           Container(
@@ -701,7 +692,7 @@ class _EventPanelState extends State<EventPanel> {
                                               child:
                                                   DropdownButtonFormField<
                                                       String>(
-                                                value: event.members.any(
+                                                initialValue: event.members.any(
                                                   (m) =>
                                                       m.fullName.trim() ==
                                                       event.trainingTrainer

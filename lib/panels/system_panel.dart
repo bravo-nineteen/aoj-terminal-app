@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/aoj_models.dart';
+import '../services/device_identity_service.dart';
 import '../widgets/ui_components.dart';
 
 class SystemPanel extends StatefulWidget {
@@ -51,16 +52,47 @@ class SystemPanel extends StatefulWidget {
 
 class _SystemPanelState extends State<SystemPanel> {
   late final TextEditingController _eventController;
+  late final TextEditingController _usernameController;
+  String _savedUsername = '';
 
   @override
   void initState() {
     super.initState();
     _eventController = TextEditingController();
+    _usernameController = TextEditingController();
+    _loadUsername();
+  }
+
+  Future<void> _loadUsername() async {
+    final u = await DeviceIdentityService.getUsername();
+    if (mounted) {
+      setState(() {
+        _savedUsername = u;
+        _usernameController.text = u;
+      });
+    }
+  }
+
+  Future<void> _saveUsername() async {
+    final u = _usernameController.text.trim();
+    await DeviceIdentityService.setUsername(u);
+    if (mounted) {
+      setState(() => _savedUsername = u);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            u.isEmpty ? 'Username cleared.' : 'Username set to "$u".',
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
   void dispose() {
     _eventController.dispose();
+    _usernameController.dispose();
     super.dispose();
   }
 
@@ -123,8 +155,44 @@ class _SystemPanelState extends State<SystemPanel> {
             ],
           ),
           const SizedBox(height: 14),
-          Expanded(
-            child: SingleChildScrollView(
+          // ── Device Identity ────────────────────────────────────────────────
+          Row(
+            children: [
+              SizedBox(
+                width: 260,
+                child: TextField(
+                  controller: _usernameController,
+                  decoration: InputDecoration(
+                    labelText: 'Device Username',
+                    hintText: 'e.g. Admin-1',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: _savedUsername.isNotEmpty
+                        ? const Icon(Icons.check_circle,
+                            color: Colors.green, size: 18)
+                        : null,
+                  ),
+                  onSubmitted: (_) => _saveUsername(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: _saveUsername,
+                child: const Text('SAVE USERNAME'),
+              ),
+              const SizedBox(width: 8),
+              if (_savedUsername.isNotEmpty)
+                Text(
+                  'Active: $_savedUsername',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: widget.accent,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Expanded(child: SingleChildScrollView(
               child: isNarrow
                   ? Column(
                       children: [

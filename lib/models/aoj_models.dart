@@ -87,6 +87,7 @@ class EventRecord {
   List<ScheduleRecord> schedule;
   List<GameModeRecord> gameModes;
   List<ExpenseRecord> expenses;
+  List<NoteRecord> accountingNotes;
 
   EventRecord({
     required this.id,
@@ -105,7 +106,8 @@ class EventRecord {
     required this.schedule,
     required this.gameModes,
     required this.expenses,
-  });
+    List<NoteRecord>? accountingNotes,
+  }) : accountingNotes = accountingNotes ?? [];
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -124,6 +126,7 @@ class EventRecord {
         'schedule': schedule.map((e) => e.toJson()).toList(),
         'gameModes': gameModes.map((e) => e.toJson()).toList(),
         'expenses': expenses.map((e) => e.toJson()).toList(),
+        'accountingNotes': accountingNotes.map((e) => e.toJson()).toList(),
       };
 
   factory EventRecord.fromJson(Map<String, dynamic> json) {
@@ -157,6 +160,9 @@ class EventRecord {
           .toList(),
       expenses: (json['expenses'] as List<dynamic>? ?? [])
           .map((e) => ExpenseRecord.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      accountingNotes: (json['accountingNotes'] as List<dynamic>? ?? [])
+          .map((e) => NoteRecord.fromJson(Map<String, dynamic>.from(e)))
           .toList(),
     );
   }
@@ -394,6 +400,7 @@ class ExpenseRecord {
   String note;
   String date;
   String category;
+  List<NoteRecord> notes;
 
   ExpenseRecord({
     required this.id,
@@ -402,7 +409,8 @@ class ExpenseRecord {
     required this.note,
     required this.date,
     required this.category,
-  });
+    List<NoteRecord>? notes,
+  }) : notes = notes ?? [];
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -411,6 +419,7 @@ class ExpenseRecord {
         'note': note,
         'date': date,
         'category': category,
+        'notes': notes.map((n) => n.toJson()).toList(),
       };
 
   factory ExpenseRecord.fromJson(Map<String, dynamic> json) {
@@ -421,6 +430,9 @@ class ExpenseRecord {
       note: json['note']?.toString() ?? '',
       date: json['date']?.toString() ?? '',
       category: json['category']?.toString() ?? '',
+      notes: (json['notes'] as List<dynamic>? ?? [])
+          .map((e) => NoteRecord.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
     );
   }
 }
@@ -645,4 +657,68 @@ int _parseInt(dynamic value, {int fallback = 0}) {
   if (value is int) return value;
   if (value is num) return value.toInt();
   return int.tryParse(value.toString()) ?? fallback;
+}
+
+// ── NoteRecord ────────────────────────────────────────────────────────────────
+/// A timestamped note authored by a named device user.
+class NoteRecord {
+  String id;
+  String author;
+  String body;
+  String createdAt;
+
+  NoteRecord({
+    required this.id,
+    required this.author,
+    required this.body,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'author': author,
+        'body': body,
+        'createdAt': createdAt,
+      };
+
+  factory NoteRecord.fromJson(Map<String, dynamic> json) => NoteRecord(
+        id: json['id']?.toString() ?? '',
+        author: json['author']?.toString() ?? '',
+        body: json['body']?.toString() ?? '',
+        createdAt: json['createdAt']?.toString() ?? '',
+      );
+}
+
+// ── MessageRecord ─────────────────────────────────────────────────────────────
+/// A cross-device message sent via the shared messages table.
+class MessageRecord {
+  String id;
+  String sender;
+  String body;
+  String createdAt;
+  String? eventId;
+
+  MessageRecord({
+    required this.id,
+    required this.sender,
+    required this.body,
+    required this.createdAt,
+    this.eventId,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'sender': sender,
+        'body': body,
+        'createdAt': createdAt,
+        if (eventId != null) 'eventId': eventId,
+      };
+
+  factory MessageRecord.fromJson(Map<String, dynamic> json) => MessageRecord(
+        id: json['id']?.toString() ?? '',
+        sender: json['sender']?.toString() ?? '',
+        body: json['body']?.toString() ?? '',
+        createdAt: json['createdAt']?.toString() ?? '',
+        eventId: json['eventId']?.toString(),
+      );
 }
