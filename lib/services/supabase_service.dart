@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/aoj_models.dart';
@@ -133,6 +135,23 @@ class SupabaseService {
   }
 
   static SupabaseClient get _db => Supabase.instance.client;
+  /// Safely convert a field that might be a JSON string or already a list.
+  /// If the value is a string, decode it as JSON. Otherwise, treat it as a list.
+  static List<dynamic> _safeJsonToList(dynamic value) {
+    if (value == null) return [];
+    if (value is List<dynamic>) return value;
+    if (value is String) {
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is List<dynamic>) return decoded;
+        return [];
+      } catch (_) {
+        return [];
+      }
+    }
+    return [];
+  }
+
 
   static bool _isHostLookupError(Object error) {
     final message = error.toString().toLowerCase();
@@ -402,21 +421,21 @@ class SupabaseService {
         await db.from('expenses').select().eq('event_id', eventId),
       );
 
-      final gameModes = (row['game_modes'] as List<dynamic>? ?? [])
+      final gameModes = _safeJsonToList(row['game_modes'])
           .map(
             (g) => GameModeRecord.fromJson(Map<String, dynamic>.from(g as Map)),
           )
           .toList();
 
       final accountingNotes =
-          (row['accounting_notes'] as List<dynamic>? ?? [])
+          _safeJsonToList(row['accounting_notes'])
               .map(
                 (n) =>
                     NoteRecord.fromJson(Map<String, dynamic>.from(n as Map)),
               )
               .toList();
 
-      final lunchOptions = (row['lunch_options'] as List<dynamic>? ?? [])
+      final lunchOptions = _safeJsonToList(row['lunch_options'])
           .map(
             (o) => LunchOptionRecord.fromJson(Map<String, dynamic>.from(o as Map)),
           )
@@ -443,20 +462,20 @@ class SupabaseService {
           needsTraining: b['needs_training'] as bool? ?? false,
           guestNames: b['guest_names'] as String? ?? '',
           languagePreference: b['language_preference'] as String? ?? '',
-            lunchOrderIds: (b['lunch_order_ids'] as List<dynamic>? ?? [])
+            lunchOrderIds: _safeJsonToList(b['lunch_order_ids'])
               .map((e) => e.toString())
               .toList(),
-          ticketIds: (b['ticket_ids'] as List<dynamic>? ?? [])
+          ticketIds: _safeJsonToList(b['ticket_ids'])
               .map((e) => e.toString())
               .toList(),
-          sales: (b['sales'] as List<dynamic>? ?? [])
+          sales: _safeJsonToList(b['sales'])
               .map(
                 (s) => SaleRecord.fromJson(
                   Map<String, dynamic>.from(s as Map),
                 ),
               )
               .toList(),
-          payments: (b['payments'] as List<dynamic>? ?? [])
+          payments: _safeJsonToList(b['payments'])
               .map(
                 (p) => PaymentRecord.fromJson(
                   Map<String, dynamic>.from(p as Map),
@@ -518,7 +537,7 @@ class SupabaseService {
               note: e['note'] as String? ?? '',
               date: e['date'] as String? ?? '',
               category: e['category'] as String? ?? '',
-              notes: (e['notes'] as List<dynamic>? ?? [])
+              notes: _safeJsonToList(e['notes'])
                   .map((n) => NoteRecord.fromJson(
                         Map<String, dynamic>.from(n as Map),
                       ))
@@ -871,25 +890,34 @@ class SupabaseService {
 
   /// Fetch all messages, optionally filtered to an event. Ordered oldest first.
   static Future<List<MessageRecord>> fetchMessages({String? eventId}) async {
-    return _withHostLookupRetry(() async {
-      final query = _db.from('messages').select().order('created_at');
-      final List<Map<String, dynamic>> rows =
-          List<Map<String, dynamic>>.from(await query);
-      return rows
-          .where(
-            (r) => eventId == null || (r['event_id'] as String?) == eventId,
-          )
-          .map(
-            (r) => MessageRecord(
-              id: r['id'] as String? ?? '',
-              sender: r['sender'] as String? ?? '',
-              body: r['body'] as String? ?? '',
-              createdAt: (r['created_at'] as String?) ?? '',
-              eventId: r['event_id'] as String?,
-            ),
-          )
-          .toList();
-    });
+    try {
+      return await _withHostLookupRetry(() async {
+        final query = _db.from('messages').select().order('created_at');
+        final List<Map<String, dynamic>> rows =
+            List<Map<String, dynamic>>.from(await query);
+        return rows
+            .where(
+              (r) => eventId == null || (r['event_id'] as String?) == eventId,
+            )
+            .map(
+              (r) => MessageRecord(
+                id: r['id'] as String? ?? '',
+                sender: r['sender'] as String? ?? '',
+                body: r['body'] as String? ?? '',
+                createdAt: (r['created_at'] as String?) ?? '',
+                eventId: r['event_id'] as String?,
+              ),
+            )
+            .toList();
+      });
+    } on PostgrestException catch (e) {
+      if (e.code == 'PGRST205') {
+        throw StateError(
+          'Supabase table public.messages is missing. Apply migrations (supabase db push) to create it.',
+        );
+      }
+      rethrow;
+    }
   }
 
   /// Send a new message to the shared messages table.
@@ -898,14 +926,23 @@ class SupabaseService {
     required String body,
     String? eventId,
   }) async {
-    await _withHostLookupRetry(() async {
-      await _db.from('messages').insert(<String, dynamic>{
-        'id': DateTime.now().microsecondsSinceEpoch.toString(),
-        'sender': sender,
-        'body': body,
-        'event_id': eventId,
-        'created_at': DateTime.now().toUtc().toIso8601String(),
+    try {
+      await _withHostLookupRetry(() async {
+        await _db.from('messages').insert(<String, dynamic>{
+          'id': DateTime.now().microsecondsSinceEpoch.toString(),
+          'sender': sender,
+          'body': body,
+          'event_id': eventId,
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        });
       });
-    });
+    } on PostgrestException catch (e) {
+      if (e.code == 'PGRST205') {
+        throw StateError(
+          'Supabase table public.messages is missing. Apply migrations (supabase db push) to create it.',
+        );
+      }
+      rethrow;
+    }
   }
 }

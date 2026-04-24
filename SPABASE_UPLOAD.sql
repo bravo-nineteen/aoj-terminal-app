@@ -287,3 +287,50 @@ execute function public.set_aoj_events_updated_at();
 alter table public.aoj_events enable row level security;
 
 -- Add read policies only if anon or authenticated clients should read aoj_events.
+
+create table if not exists public.messages (
+  id text primary key,
+  sender text not null default '',
+  body text not null default '',
+  event_id text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_messages_event_id on public.messages(event_id);
+create index if not exists idx_messages_created_at on public.messages(created_at);
+
+alter table if exists public.messages enable row level security;
+
+grant select, insert on table public.messages to anon, authenticated;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'messages'
+      and policyname = 'messages_select_all'
+  ) then
+    create policy "messages_select_all"
+    on public.messages
+    for select
+    to anon, authenticated
+    using (true);
+  end if;
+
+  if not exists (
+    select 1
+    from pg_policies
+    where schemaname = 'public'
+      and tablename = 'messages'
+      and policyname = 'messages_insert_all'
+  ) then
+    create policy "messages_insert_all"
+    on public.messages
+    for insert
+    to anon, authenticated
+    with check (true);
+  end if;
+end;
+$$;
