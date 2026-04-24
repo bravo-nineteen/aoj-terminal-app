@@ -76,7 +76,6 @@ class EventRecord {
   String venue;
   String date;
   String time;
-  String gameModeTitle;
   String notes;
   String ticketCostPerPerson;
   String trainingTrainer;
@@ -84,7 +83,6 @@ class EventRecord {
   String? fieldMapBase64;
   List<BookingRecord> bookings;
   List<TicketRecord> tickets;
-    this.gameModeTitle = '',
   List<MemberRecord> members;
   List<ScheduleRecord> schedule;
   List<GameModeRecord> gameModes;
@@ -93,7 +91,6 @@ class EventRecord {
 
   EventRecord({
     required this.id,
-        'gameModeTitle': gameModeTitle,
     required this.name,
     required this.venue,
     required this.date,
