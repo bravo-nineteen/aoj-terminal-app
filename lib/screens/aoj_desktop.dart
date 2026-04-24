@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
@@ -132,6 +133,10 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
   bool showPropControlPage = false;
   String propControlStatus = 'PROP CONSOLE OFFLINE';
+  int desktopMessagesUnreadCount = 0;
+  DateTime? _desktopMessagesLastReadAt;
+  Timer? _desktopMessagesPollTimer;
+  String _desktopUsername = '';
 
   void _refresh([VoidCallback? updates]) {
     if (!mounted) return;
@@ -192,12 +197,66 @@ class _AOJDesktopState extends State<AOJDesktop> {
     };
     _loadLocalState();
     _refreshSchemaHealth();
+    _initializeDesktopMessageBadge();
   }
 
   @override
   void dispose() {
+    _desktopMessagesPollTimer?.cancel();
     propIpController.dispose();
     super.dispose();
+  }
+
+  Future<void> _initializeDesktopMessageBadge() async {
+    _desktopMessagesLastReadAt ??= DateTime.now();
+    try {
+      _desktopUsername = await DeviceIdentityService.getUsername();
+    } catch (_) {
+      _desktopUsername = '';
+    }
+    await _refreshDesktopMessageUnreadCount();
+    _desktopMessagesPollTimer?.cancel();
+    _desktopMessagesPollTimer =
+        Timer.periodic(const Duration(seconds: 20), (_) async {
+      await _refreshDesktopMessageUnreadCount();
+    });
+  }
+
+  Future<void> _refreshDesktopMessageUnreadCount() async {
+    final lastRead = _desktopMessagesLastReadAt;
+    if (lastRead == null) return;
+    try {
+      final messages = await SupabaseService.fetchMessages();
+      var unread = 0;
+      for (final m in messages) {
+        if (_desktopUsername.isNotEmpty && m.sender == _desktopUsername) {
+          continue;
+        }
+        DateTime? created;
+        try {
+          created = DateTime.parse(m.createdAt).toLocal();
+        } catch (_) {
+          created = null;
+        }
+        if (created != null && created.isAfter(lastRead)) {
+          unread++;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        desktopMessagesUnreadCount = unread;
+      });
+    } catch (_) {
+      // Ignore transient badge polling failures.
+    }
+  }
+
+  Future<void> _markDesktopMessagesRead() async {
+    if (!mounted) return;
+    setState(() {
+      _desktopMessagesLastReadAt = DateTime.now();
+      desktopMessagesUnreadCount = 0;
+    });
   }
 
   EventRecord? get activeEvent {
@@ -445,6 +504,9 @@ class _AOJDesktopState extends State<AOJDesktop> {
       window.zIndex = nextZ++;
       selectedIconId = id;
     });
+    if (id == 'messages') {
+      _markDesktopMessagesRead();
+    }
   }
 
   void _toggleMinimize(String id) {
@@ -925,55 +987,127 @@ class _AOJDesktopState extends State<AOJDesktop> {
   }
 
   Future<void> _showAddTicketDialog(BookingGroup group) async {
+    final event = activeEvent;
+    if (event == null) return;
+
+    final uniqueTicketNames = _uniqueTicketNamesForEvent(event);
+    bool useExistingTicketName = uniqueTicketNames.isNotEmpty;
+    String? selectedTicketName =
+      uniqueTicketNames.isNotEmpty ? uniqueTicketNames.first : null;
+
     final nameController = TextEditingController();
-    final priceController = TextEditingController(text: '0');
+    final initialPrice = selectedTicketName == null
+      ? '0'
+      : _suggestedPriceForTicketName(event, selectedTicketName);
+    final priceController = TextEditingController(text: initialPrice);
 
     final result = await showDialog<bool>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Add Ticket'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Ticket Name'),
+        return StatefulBuilder(
+          builder: (context, setLocal) {
+            return AlertDialog(
+              title: const Text('Add Ticket'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (uniqueTicketNames.isNotEmpty)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Wrap(
+                        spacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('Select Existing'),
+                            selected: useExistingTicketName,
+                            onSelected: (_) {
+                              setLocal(() {
+                                useExistingTicketName = true;
+                                selectedTicketName ??= uniqueTicketNames.first;
+                                priceController.text =
+                                    _suggestedPriceForTicketName(
+                                  event,
+                                  selectedTicketName!,
+                                );
+                              });
+                            },
+                          ),
+                          ChoiceChip(
+                            label: const Text('Manual Entry'),
+                            selected: !useExistingTicketName,
+                            onSelected: (_) {
+                              setLocal(() {
+                                useExistingTicketName = false;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (uniqueTicketNames.isNotEmpty) const SizedBox(height: 10),
+                  if (useExistingTicketName && uniqueTicketNames.isNotEmpty)
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedTicketName,
+                      items: uniqueTicketNames
+                          .map(
+                            (name) => DropdownMenuItem<String>(
+                              value: name,
+                              child: Text(name),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setLocal(() {
+                          selectedTicketName = value;
+                          priceController.text =
+                              _suggestedPriceForTicketName(event, value);
+                        });
+                      },
+                      decoration:
+                          const InputDecoration(labelText: 'Ticket Type'),
+                    )
+                  else
+                    TextField(
+                      controller: nameController,
+                      decoration:
+                          const InputDecoration(labelText: 'Ticket Name'),
+                    ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: priceController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: 'Price'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: priceController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(labelText: 'Price'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Add'),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
 
     if (result == true) {
-      final event = activeEvent;
-      if (event == null) return;
+      final pickedName = useExistingTicketName
+          ? (selectedTicketName ?? '').trim()
+          : nameController.text.trim();
 
       final ticket = TicketRecord(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
         bookingId: group.primary.bookingId,
         bookingName: group.primary.fullName,
-        ticketName: nameController.text.trim().isEmpty
-            ? 'New Ticket'
-            : nameController.text.trim(),
+        ticketName: pickedName.isEmpty ? 'New Ticket' : pickedName,
         price: priceController.text.trim().isEmpty
             ? '0'
             : priceController.text.trim(),
@@ -990,6 +1124,134 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
       await _saveLocalState();
     }
+  }
+
+  List<String> _uniqueTicketNamesForEvent(EventRecord event) {
+    final namesByKey = <String, String>{};
+    for (final ticket in event.tickets) {
+      final name = ticket.ticketName.trim();
+      if (name.isEmpty) continue;
+      namesByKey.putIfAbsent(name.toLowerCase(), () => name);
+    }
+    final names = namesByKey.values.toList();
+    names.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return names;
+  }
+
+  String _suggestedPriceForTicketName(EventRecord event, String ticketName) {
+    for (final ticket in event.tickets) {
+      if (ticket.ticketName.trim().toLowerCase() ==
+          ticketName.trim().toLowerCase()) {
+        final value = ticket.price.trim();
+        if (value.isNotEmpty) return value;
+      }
+    }
+    return '0';
+  }
+
+  Future<void> _showAddManualBookingDialog() async {
+    final event = activeEvent;
+    if (event == null) return;
+
+    final firstNameController = TextEditingController();
+    final lastNameController = TextEditingController();
+    final emailController = TextEditingController();
+    final phoneController = TextEditingController();
+    final notesController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Add Manual Booking'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: firstNameController,
+                  decoration: const InputDecoration(labelText: 'First Name'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: lastNameController,
+                  decoration: const InputDecoration(labelText: 'Last Name'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: emailController,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: phoneController,
+                  decoration: const InputDecoration(labelText: 'Phone'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: notesController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(labelText: 'Notes'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Add Booking'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != true) return;
+
+    final now = DateTime.now();
+    final id = now.microsecondsSinceEpoch.toString();
+    final bookingId = 'MAN-${now.millisecondsSinceEpoch}';
+    final booking = BookingRecord(
+      id: id,
+      bookingId: bookingId,
+      bookingDate: now.toIso8601String().split('T').first,
+      firstName: firstNameController.text.trim(),
+      lastName: lastNameController.text.trim(),
+      email: emailController.text.trim(),
+      phone: phoneController.text.trim(),
+      event: event.name,
+      total: '0',
+      totalPaid: '0',
+      transactionId: '',
+      paymentMethod: '',
+      paymentStatus: 'Unpaid',
+      checkInStatus: 'Not Checked In',
+      notes: notesController.text.trim(),
+      needsPickup: false,
+      needsTraining: false,
+      guestNames: '',
+      languagePreference: '',
+      lunchOrderIds: <String>[],
+      ticketIds: <String>[],
+      sales: <SaleRecord>[],
+      payments: <PaymentRecord>[],
+    );
+
+    setState(() {
+      event.bookings.add(booking);
+      BookingUtils.linkTicketsToBookings(event);
+      BookingUtils.recalculateAllTotals(event);
+      selectedBookingIndex = 0;
+      bookingSearch = '';
+      systemStatus = 'MANUAL BOOKING ADDED';
+    });
+
+    await _saveLocalState();
   }
 
   Future<void> _showAddPaymentDialog(BookingGroup group) async {
@@ -1791,7 +2053,12 @@ class _AOJDesktopState extends State<AOJDesktop> {
                           child: Column(
                             children: [
                               AOJDesktopIcon(
-                                  icon: app.icon, accent: app.accent),
+                                icon: app.icon,
+                                accent: app.accent,
+                                unreadCount: app.id == 'messages'
+                                  ? desktopMessagesUnreadCount
+                                  : 0,
+                                ),
                               const SizedBox(height: 8),
                               Text(
                                 app.title,

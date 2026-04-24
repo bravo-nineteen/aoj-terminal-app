@@ -31,6 +31,7 @@ extension _AojDesktopBookingsSection on _AOJDesktopState {
       onQuickSetPaymentStatus: _quickSetPaymentStatus,
       onCheckInAll: _checkInAllBookings,
       onOpenBookingEditor: _openBookingEditorWindow,
+      onAddManualBooking: _showAddManualBookingDialog,
     );
   }
 }

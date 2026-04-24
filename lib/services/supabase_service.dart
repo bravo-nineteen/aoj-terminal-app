@@ -21,6 +21,7 @@ class SupabaseService {
   static const String _tableMembers = 'members';
   static const String _tableSchedule = 'schedule';
   static const String _tableExpenses = 'expenses';
+  static const String _tableGameModes = 'game_modes';
 
   static SyncDiagnosticsRecord _syncDiagnostics =
     SyncDiagnosticsRecord.empty();
@@ -270,6 +271,7 @@ class SupabaseService {
     await checkTable(_tableMembers);
     await checkTable(_tableSchedule);
     await checkTable(_tableExpenses);
+    await checkTable(_tableGameModes);
     await checkTable('messages');
 
     try {
@@ -348,7 +350,33 @@ class SupabaseService {
       await _pushMembers(db, event);
       await _pushSchedule(db, event);
       await _pushExpenses(db, event);
+      await _pushGameModes(db, event);
     }
+  }
+
+  static Future<void> _pushGameModes(
+    SupabaseClient db,
+    EventRecord event,
+  ) async {
+    final rows = event.gameModes
+        .map(
+          (g) => <String, dynamic>{
+            'id': _gameModeSignature(g.data),
+            'event_id': event.id,
+            'data': g.toJson()['data'],
+          },
+        )
+        .toList();
+
+    if (rows.isNotEmpty) {
+      await db.from(_tableGameModes).upsert(rows);
+    }
+  }
+
+  static String _gameModeSignature(Map<String, String> data) {
+    final keys = data.keys.toList()..sort();
+    final signature = keys.map((k) => '$k=${data[k] ?? ''}').join('|');
+    return signature.hashCode.toUnsigned(32).toString();
   }
 
   static Future<void> _pushBookings(
@@ -587,12 +615,25 @@ class SupabaseService {
           List<Map<String, dynamic>>.from(
         await db.from(_tableExpenses).select().eq('event_id', eventId),
       );
+      final List<Map<String, dynamic>> gameModeRows =
+          List<Map<String, dynamic>>.from(
+        await db.from(_tableGameModes).select().eq('event_id', eventId),
+      );
 
-      final gameModes = _safeJsonToList(row['game_modes'])
-          .map(
-            (g) => GameModeRecord.fromJson(Map<String, dynamic>.from(g as Map)),
-          )
-          .toList();
+      final gameModes = gameModeRows.isNotEmpty
+          ? gameModeRows
+              .map(
+                (g) => GameModeRecord.fromJson(
+                  <String, dynamic>{'data': Map<String, dynamic>.from(g['data'] as Map)},
+                ),
+              )
+              .toList()
+          : _safeJsonToList(row['game_modes'])
+              .map(
+                (g) =>
+                    GameModeRecord.fromJson(Map<String, dynamic>.from(g as Map)),
+              )
+              .toList();
 
       final accountingNotes =
           _safeJsonToList(row['accounting_notes'])

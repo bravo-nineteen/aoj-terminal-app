@@ -45,29 +45,68 @@ class AOJDesktopBackground extends StatelessWidget {
 class AOJDesktopIcon extends StatelessWidget {
   final IconData icon;
   final Color accent;
+  final int unreadCount;
 
   const AOJDesktopIcon({
     super.key,
     required this.icon,
     required this.accent,
+    this.unreadCount = 0,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: 54,
       height: 54,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [
-            accent.withValues(alpha: 0.35),
-            const Color(0xFF111713),
-          ],
-        ),
-        border: Border.all(color: accent.withValues(alpha: 0.75), width: 1.3),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  accent.withValues(alpha: 0.35),
+                  const Color(0xFF111713),
+                ],
+              ),
+              border:
+                  Border.all(color: accent.withValues(alpha: 0.75), width: 1.3),
+            ),
+            child: Icon(icon, size: 26, color: accent),
+          ),
+          if (unreadCount > 0)
+            Positioned(
+              right: -2,
+              top: -2,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD93025),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.80),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  unreadCount > 99 ? '99+' : unreadCount.toString(),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
-      child: Icon(icon, size: 26, color: accent),
     );
   }
 }

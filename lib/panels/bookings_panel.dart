@@ -19,6 +19,7 @@ class BookingsPanel extends StatefulWidget {
   final Future<void> Function(BookingGroup, String) onQuickSetPaymentStatus;
   final Future<void> Function() onCheckInAll;
   final Future<void> Function(BookingGroup) onOpenBookingEditor;
+  final Future<void> Function() onAddManualBooking;
 
   const BookingsPanel({
     super.key,
@@ -36,6 +37,7 @@ class BookingsPanel extends StatefulWidget {
     required this.onQuickSetPaymentStatus,
     required this.onCheckInAll,
     required this.onOpenBookingEditor,
+    required this.onAddManualBooking,
   });
 
   @override
@@ -175,6 +177,20 @@ class _BookingsPanelState extends State<BookingsPanel> {
                 ),
               ),
               const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: widget.event == null
+                    ? null
+                    : () async {
+                        await widget.onAddManualBooking();
+                      },
+                icon: const Icon(Icons.person_add_alt_1, size: 16),
+                label: const Text('ADD BOOKING'),
+                style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                ),
+              ),
+              const SizedBox(width: 6),
               OutlinedButton.icon(
                 onPressed: widget.event == null
                     ? null

@@ -76,6 +76,7 @@ class EventRecord {
   String venue;
   String date;
   String time;
+  String gameModeTitle;
   String notes;
   String ticketCostPerPerson;
   String trainingTrainer;
@@ -83,6 +84,7 @@ class EventRecord {
   String? fieldMapBase64;
   List<BookingRecord> bookings;
   List<TicketRecord> tickets;
+    this.gameModeTitle = '',
   List<MemberRecord> members;
   List<ScheduleRecord> schedule;
   List<GameModeRecord> gameModes;
@@ -91,6 +93,7 @@ class EventRecord {
 
   EventRecord({
     required this.id,
+        'gameModeTitle': gameModeTitle,
     required this.name,
     required this.venue,
     required this.date,
@@ -533,6 +536,7 @@ class ScheduleRecord {
         activity: data['Activity']?.toString() ?? '',
         location: data['Location']?.toString() ?? '',
         notes: data['Notes']?.toString() ?? '',
+        gameModeTitle: data['GameModeTitle']?.toString() ?? '',
       );
     }
 
@@ -542,6 +546,7 @@ class ScheduleRecord {
       activity: json['activity']?.toString() ?? '',
       location: json['location']?.toString() ?? '',
       notes: json['notes']?.toString() ?? '',
+      gameModeTitle: json['gameModeTitle']?.toString() ?? '',
     );
   }
 }
@@ -568,6 +573,49 @@ class GameModeRecord {
         data['Notes']?.trim() ??
         data['Objective']?.trim() ??
         '';
+  }
+
+  String get gameDuration =>
+      _firstNonEmpty(['Game duration', 'Duration', 'Game Duration']);
+
+  String get redTeamWinCondition => _firstNonEmpty(
+      ['Red Team Win Condition', 'Red Win Condition', 'Red Team Objective']);
+
+  String get blueTeamWinCondition => _firstNonEmpty(
+      ['Blue Team Win Condition', 'Blue Win Condition', 'Blue Team Objective']);
+
+  String get propList => _firstNonEmpty(['Prop list', 'Props', 'Prop List']);
+
+  String get coreGameRules =>
+      _firstNonEmpty(['Core game rules', 'Rules', 'Core Rules']);
+
+  String get gameFlowDescription => _firstNonEmpty(
+      ['Game flow description', 'Game Flow', 'Flow Description']);
+
+  String get spawnAreaFlow => _firstNonEmpty(
+      ['Spawn area flow', 'Spawn Flow', 'Checkpoint Flow']);
+
+  String get searchableText {
+    return [
+      title,
+      description,
+      gameDuration,
+      redTeamWinCondition,
+      blueTeamWinCondition,
+      propList,
+      coreGameRules,
+      gameFlowDescription,
+      spawnAreaFlow,
+      ...data.values,
+    ].join(' ').toLowerCase();
+  }
+
+  String _firstNonEmpty(List<String> keys) {
+    for (final key in keys) {
+      final value = data[key]?.trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return '';
   }
 
   Map<String, dynamic> toJson() => {'data': data};
