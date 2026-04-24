@@ -722,3 +722,84 @@ class MessageRecord {
         eventId: json['eventId']?.toString(),
       );
 }
+
+class MergeConflictRecord {
+  String entityType;
+  String entityId;
+  String field;
+  String localValue;
+  String cloudValue;
+  String resolvedValue;
+  String detectedAt;
+
+  MergeConflictRecord({
+    required this.entityType,
+    required this.entityId,
+    required this.field,
+    required this.localValue,
+    required this.cloudValue,
+    required this.resolvedValue,
+    required this.detectedAt,
+  });
+}
+
+class SyncDiagnosticsRecord {
+  String operation;
+  String startedAt;
+  String completedAt;
+  int localEvents;
+  int cloudEvents;
+  int mergedEvents;
+  int conflicts;
+  String lastError;
+  String lastErrorCode;
+
+  SyncDiagnosticsRecord({
+    required this.operation,
+    required this.startedAt,
+    required this.completedAt,
+    required this.localEvents,
+    required this.cloudEvents,
+    required this.mergedEvents,
+    required this.conflicts,
+    required this.lastError,
+    required this.lastErrorCode,
+  });
+
+  factory SyncDiagnosticsRecord.empty() => SyncDiagnosticsRecord(
+        operation: 'idle',
+        startedAt: '',
+        completedAt: '',
+        localEvents: 0,
+        cloudEvents: 0,
+        mergedEvents: 0,
+        conflicts: 0,
+        lastError: '',
+        lastErrorCode: '',
+      );
+}
+
+class SchemaHealthRecord {
+  bool healthy;
+  String expectedVersion;
+  String actualVersion;
+  String checkedAt;
+  List<String> issues;
+
+  SchemaHealthRecord({
+    required this.healthy,
+    required this.expectedVersion,
+    required this.actualVersion,
+    required this.checkedAt,
+    required this.issues,
+  });
+
+  factory SchemaHealthRecord.unchecked({required String expectedVersion}) =>
+      SchemaHealthRecord(
+        healthy: false,
+        expectedVersion: expectedVersion,
+        actualVersion: '',
+        checkedAt: '',
+        issues: <String>['Not checked yet'],
+      );
+}

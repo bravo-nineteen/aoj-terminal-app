@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/aoj_models.dart';
+import 'messages_service.dart';
 
 const String _kFallbackSupabaseUrl = 'https://uvixlrhcjojezhqmgnxk.supabase.co';
 const String _kFallbackSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'
@@ -11,6 +12,27 @@ const String _kFallbackSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'
 
 class SupabaseService {
   static String? _resolvedSupabaseUrl;
+  static const String _kExpectedSchemaVersion = '2026-04-24';
+
+  static const String _tableAppConfig = 'app_config';
+  static const String _tableEvents = 'events';
+  static const String _tableBookings = 'bookings';
+  static const String _tableTickets = 'tickets';
+  static const String _tableMembers = 'members';
+  static const String _tableSchedule = 'schedule';
+  static const String _tableExpenses = 'expenses';
+
+  static SyncDiagnosticsRecord _syncDiagnostics =
+    SyncDiagnosticsRecord.empty();
+  static SchemaHealthRecord _schemaHealth =
+    SchemaHealthRecord.unchecked(expectedVersion: _kExpectedSchemaVersion);
+  static final List<MergeConflictRecord> _recentMergeConflicts =
+    <MergeConflictRecord>[];
+
+  static SyncDiagnosticsRecord get syncDiagnostics => _syncDiagnostics;
+  static SchemaHealthRecord get schemaHealth => _schemaHealth;
+  static List<MergeConflictRecord> get recentMergeConflicts =>
+    List<MergeConflictRecord>.unmodifiable(_recentMergeConflicts);
 
   static String get resolvedSupabaseUrl => _resolvedSupabaseUrl ?? '';
 
@@ -178,6 +200,107 @@ class SupabaseService {
     throw lastError ?? StateError('Unknown host lookup failure');
   }
 
+  static String _extractErrorCode(Object error) {
+    if (error is PostgrestException) {
+      return error.code ?? '';
+    }
+    return '';
+  }
+
+  static String _normalizeSyncSchemaError(Object error) {
+    if (error is! PostgrestException) return error.toString();
+    final code = error.code ?? '';
+    final message = error.message.toLowerCase();
+    if (code == 'PGRST204' && message.contains('events')) {
+      return 'Supabase schema is missing expected fields on public.events. Apply latest migrations/sql (including accounting_notes).';
+    }
+    return error.toString();
+  }
+
+  static void _recordConflict({
+    required String entityType,
+    required String entityId,
+    required String field,
+    required String localValue,
+    required String cloudValue,
+    required String resolvedValue,
+  }) {
+    if (localValue.trim().isEmpty || cloudValue.trim().isEmpty) return;
+    if (localValue.trim() == cloudValue.trim()) return;
+    _recentMergeConflicts.add(
+      MergeConflictRecord(
+        entityType: entityType,
+        entityId: entityId,
+        field: field,
+        localValue: localValue,
+        cloudValue: cloudValue,
+        resolvedValue: resolvedValue,
+        detectedAt: DateTime.now().toUtc().toIso8601String(),
+      ),
+    );
+    if (_recentMergeConflicts.length > 200) {
+      _recentMergeConflicts.removeRange(0, _recentMergeConflicts.length - 200);
+    }
+  }
+
+  static Future<SchemaHealthRecord> checkSchemaHealth() async {
+    final issues = <String>[];
+    String actualVersion = '';
+
+    Future<void> checkTable(String table) async {
+      try {
+        await _db.from(table).select().limit(1);
+      } on PostgrestException catch (e) {
+        if (e.code == 'PGRST205') {
+          issues.add('Missing table: public.$table');
+          return;
+        }
+        if (e.code == '42501') {
+          issues.add('RLS/permission denied: public.$table');
+          return;
+        }
+        issues.add('Table check failed for $table: ${e.message}');
+      }
+    }
+
+    await checkTable(_tableAppConfig);
+    await checkTable(_tableEvents);
+    await checkTable(_tableBookings);
+    await checkTable(_tableTickets);
+    await checkTable(_tableMembers);
+    await checkTable(_tableSchedule);
+    await checkTable(_tableExpenses);
+    await checkTable('messages');
+
+    try {
+      final row = await _db
+          .from(_tableAppConfig)
+          .select('value')
+          .eq('key', 'schema_version')
+          .maybeSingle();
+      actualVersion = (row?['value'] as String?) ?? '';
+      if (actualVersion.isEmpty) {
+        issues.add('Missing app_config.schema_version');
+      } else if (actualVersion != _kExpectedSchemaVersion) {
+        issues.add(
+          'Schema version mismatch: expected $_kExpectedSchemaVersion, got $actualVersion',
+        );
+      }
+    } catch (e) {
+      issues.add('Schema version check failed: $e');
+    }
+
+    _schemaHealth = SchemaHealthRecord(
+      healthy: issues.isEmpty,
+      expectedVersion: _kExpectedSchemaVersion,
+      actualVersion: actualVersion,
+      checkedAt: DateTime.now().toUtc().toIso8601String(),
+      issues: issues,
+    );
+
+    return _schemaHealth;
+  }
+
   // ─── Push ─────────────────────────────────────────────────────────────────
 
   /// Pushes the full local app state to Supabase with merge-safe upserts.
@@ -209,11 +332,11 @@ class SupabaseService {
         .toList();
 
     if (eventRows.isNotEmpty) {
-      await db.from('events').upsert(eventRows);
+      await db.from(_tableEvents).upsert(eventRows);
     }
 
     // ── Save active event id ─────────────────────────────────────────────────
-    await db.from('app_config').upsert(<String, dynamic>{
+    await db.from(_tableAppConfig).upsert(<String, dynamic>{
       'key': 'active_event_id',
       'value': appState.activeEventId ?? '',
     });
@@ -264,7 +387,7 @@ class SupabaseService {
         .toList();
 
     if (rows.isNotEmpty) {
-      await db.from('bookings').upsert(rows);
+      await db.from(_tableBookings).upsert(rows);
     }
   }
 
@@ -288,7 +411,7 @@ class SupabaseService {
         .toList();
 
     if (rows.isNotEmpty) {
-      await db.from('tickets').upsert(rows);
+      await db.from(_tableTickets).upsert(rows);
     }
   }
 
@@ -315,7 +438,7 @@ class SupabaseService {
         .toList();
 
     if (rows.isNotEmpty) {
-      await db.from('members').upsert(rows);
+      await db.from(_tableMembers).upsert(rows);
     }
   }
 
@@ -337,7 +460,7 @@ class SupabaseService {
         .toList();
 
     if (rows.isNotEmpty) {
-      await db.from('schedule').upsert(rows);
+      await db.from(_tableSchedule).upsert(rows);
     }
   }
 
@@ -361,16 +484,60 @@ class SupabaseService {
         .toList();
 
     if (rows.isNotEmpty) {
-      await db.from('expenses').upsert(rows);
+      await db.from(_tableExpenses).upsert(rows);
     }
   }
 
   /// Pulls, merges, and pushes so each device converges to one merged state.
   static Future<AppStateData> syncMergeAppState(AppStateData localState) async {
-    final cloudState = await _withHostLookupRetry(() => pullAppState());
-    final merged = _mergeAppState(localState, cloudState);
-    await _withHostLookupRetry(() => pushAppState(merged));
-    return merged;
+    _syncDiagnostics = SyncDiagnosticsRecord(
+      operation: 'sync-merge',
+      startedAt: DateTime.now().toUtc().toIso8601String(),
+      completedAt: '',
+      localEvents: localState.events.length,
+      cloudEvents: 0,
+      mergedEvents: 0,
+      conflicts: _recentMergeConflicts.length,
+      lastError: '',
+      lastErrorCode: '',
+    );
+
+    try {
+      final health = await _withHostLookupRetry(checkSchemaHealth);
+      if (!health.healthy) {
+        throw StateError('Schema check failed: ${health.issues.join('; ')}');
+      }
+
+      final cloudState = await _withHostLookupRetry(() => pullAppState());
+      final merged = _mergeAppState(localState, cloudState);
+      await _withHostLookupRetry(() => pushAppState(merged));
+
+      _syncDiagnostics = SyncDiagnosticsRecord(
+        operation: 'sync-merge',
+        startedAt: _syncDiagnostics.startedAt,
+        completedAt: DateTime.now().toUtc().toIso8601String(),
+        localEvents: localState.events.length,
+        cloudEvents: cloudState.events.length,
+        mergedEvents: merged.events.length,
+        conflicts: _recentMergeConflicts.length,
+        lastError: '',
+        lastErrorCode: '',
+      );
+      return merged;
+    } catch (e) {
+      _syncDiagnostics = SyncDiagnosticsRecord(
+        operation: 'sync-merge',
+        startedAt: _syncDiagnostics.startedAt,
+        completedAt: DateTime.now().toUtc().toIso8601String(),
+        localEvents: localState.events.length,
+        cloudEvents: _syncDiagnostics.cloudEvents,
+        mergedEvents: _syncDiagnostics.mergedEvents,
+        conflicts: _recentMergeConflicts.length,
+        lastError: _normalizeSyncSchemaError(e),
+        lastErrorCode: _extractErrorCode(e),
+      );
+      rethrow;
+    }
   }
 
   // ─── Pull ─────────────────────────────────────────────────────────────────
@@ -381,7 +548,7 @@ class SupabaseService {
 
     // Active event id
     final configRow = await db
-        .from('app_config')
+        .from(_tableAppConfig)
         .select()
         .eq('key', 'active_event_id')
         .maybeSingle();
@@ -392,7 +559,7 @@ class SupabaseService {
     // Events
     final List<Map<String, dynamic>> eventRows =
         List<Map<String, dynamic>>.from(
-      await db.from('events').select(),
+      await db.from(_tableEvents).select(),
     );
 
     final events = <EventRecord>[];
@@ -402,23 +569,23 @@ class SupabaseService {
 
       final List<Map<String, dynamic>> bookingRows =
           List<Map<String, dynamic>>.from(
-        await db.from('bookings').select().eq('event_id', eventId),
+        await db.from(_tableBookings).select().eq('event_id', eventId),
       );
       final List<Map<String, dynamic>> ticketRows =
           List<Map<String, dynamic>>.from(
-        await db.from('tickets').select().eq('event_id', eventId),
+        await db.from(_tableTickets).select().eq('event_id', eventId),
       );
       final List<Map<String, dynamic>> memberRows =
           List<Map<String, dynamic>>.from(
-        await db.from('members').select().eq('event_id', eventId),
+        await db.from(_tableMembers).select().eq('event_id', eventId),
       );
       final List<Map<String, dynamic>> scheduleRows =
           List<Map<String, dynamic>>.from(
-        await db.from('schedule').select().eq('event_id', eventId),
+        await db.from(_tableSchedule).select().eq('event_id', eventId),
       );
       final List<Map<String, dynamic>> expenseRows =
           List<Map<String, dynamic>>.from(
-        await db.from('expenses').select().eq('event_id', eventId),
+        await db.from(_tableExpenses).select().eq('event_id', eventId),
       );
 
       final gameModes = _safeJsonToList(row['game_modes'])
@@ -622,19 +789,56 @@ class SupabaseService {
   }
 
   static EventRecord _mergeEvent(EventRecord local, EventRecord cloud) {
+    final name = _preferString(local.name, cloud.name);
+    final venue = _preferString(local.venue, cloud.venue);
+    final notes = _preferString(local.notes, cloud.notes);
+    final trainingTrainer =
+        _preferString(local.trainingTrainer, cloud.trainingTrainer);
+    _recordConflict(
+      entityType: 'event',
+      entityId: local.id,
+      field: 'name',
+      localValue: local.name,
+      cloudValue: cloud.name,
+      resolvedValue: name,
+    );
+    _recordConflict(
+      entityType: 'event',
+      entityId: local.id,
+      field: 'venue',
+      localValue: local.venue,
+      cloudValue: cloud.venue,
+      resolvedValue: venue,
+    );
+    _recordConflict(
+      entityType: 'event',
+      entityId: local.id,
+      field: 'notes',
+      localValue: local.notes,
+      cloudValue: cloud.notes,
+      resolvedValue: notes,
+    );
+    _recordConflict(
+      entityType: 'event',
+      entityId: local.id,
+      field: 'training_trainer',
+      localValue: local.trainingTrainer,
+      cloudValue: cloud.trainingTrainer,
+      resolvedValue: trainingTrainer,
+    );
+
     return EventRecord(
       id: local.id,
-      name: _preferString(local.name, cloud.name),
-      venue: _preferString(local.venue, cloud.venue),
+      name: name,
+      venue: venue,
       date: _preferString(local.date, cloud.date),
       time: _preferString(local.time, cloud.time),
-      notes: _preferString(local.notes, cloud.notes),
+      notes: notes,
       ticketCostPerPerson: _preferString(
         local.ticketCostPerPerson,
         cloud.ticketCostPerPerson,
       ),
-      trainingTrainer:
-          _preferString(local.trainingTrainer, cloud.trainingTrainer),
+      trainingTrainer: trainingTrainer,
       lunchOptions: _mergeById(
         local.lunchOptions,
         cloud.lunchOptions,
@@ -682,6 +886,34 @@ class SupabaseService {
   }
 
   static BookingRecord _mergeBooking(BookingRecord local, BookingRecord cloud) {
+    final paymentStatus = _preferString(local.paymentStatus, cloud.paymentStatus);
+    final checkInStatus = _preferString(local.checkInStatus, cloud.checkInStatus);
+    final notes = _preferString(local.notes, cloud.notes);
+    _recordConflict(
+      entityType: 'booking',
+      entityId: local.id,
+      field: 'payment_status',
+      localValue: local.paymentStatus,
+      cloudValue: cloud.paymentStatus,
+      resolvedValue: paymentStatus,
+    );
+    _recordConflict(
+      entityType: 'booking',
+      entityId: local.id,
+      field: 'check_in_status',
+      localValue: local.checkInStatus,
+      cloudValue: cloud.checkInStatus,
+      resolvedValue: checkInStatus,
+    );
+    _recordConflict(
+      entityType: 'booking',
+      entityId: local.id,
+      field: 'notes',
+      localValue: local.notes,
+      cloudValue: cloud.notes,
+      resolvedValue: notes,
+    );
+
     return BookingRecord(
       id: local.id,
       bookingId: _preferString(local.bookingId, cloud.bookingId),
@@ -695,9 +927,9 @@ class SupabaseService {
       totalPaid: _preferString(local.totalPaid, cloud.totalPaid),
       transactionId: _preferString(local.transactionId, cloud.transactionId),
       paymentMethod: _preferString(local.paymentMethod, cloud.paymentMethod),
-      paymentStatus: _preferString(local.paymentStatus, cloud.paymentStatus),
-      checkInStatus: _preferString(local.checkInStatus, cloud.checkInStatus),
-      notes: _preferString(local.notes, cloud.notes),
+      paymentStatus: paymentStatus,
+      checkInStatus: checkInStatus,
+      notes: notes,
       needsPickup: local.needsPickup || cloud.needsPickup,
       needsTraining: local.needsTraining || cloud.needsTraining,
       guestNames: _preferString(local.guestNames, cloud.guestNames),
@@ -739,6 +971,17 @@ class SupabaseService {
   }
 
   static MemberRecord _mergeMember(MemberRecord local, MemberRecord cloud) {
+    final membershipLevel =
+        _preferString(local.membershipLevel, cloud.membershipLevel);
+    _recordConflict(
+      entityType: 'member',
+      entityId: local.id,
+      field: 'membership_level',
+      localValue: local.membershipLevel,
+      cloudValue: cloud.membershipLevel,
+      resolvedValue: membershipLevel,
+    );
+
     return MemberRecord(
       id: local.id,
       firstName: _preferString(local.firstName, cloud.firstName),
@@ -748,8 +991,7 @@ class SupabaseService {
       gender: _preferString(local.gender, cloud.gender),
       telephone: _preferString(local.telephone, cloud.telephone),
       email: _preferString(local.email, cloud.email),
-      membershipLevel:
-          _preferString(local.membershipLevel, cloud.membershipLevel),
+      membershipLevel: membershipLevel,
       rating: local.rating >= cloud.rating ? local.rating : cloud.rating,
     );
   }
@@ -766,10 +1008,20 @@ class SupabaseService {
   }
 
   static ExpenseRecord _mergeExpense(ExpenseRecord local, ExpenseRecord cloud) {
+    final amount = _preferString(local.amount, cloud.amount);
+    _recordConflict(
+      entityType: 'expense',
+      entityId: local.id,
+      field: 'amount',
+      localValue: local.amount,
+      cloudValue: cloud.amount,
+      resolvedValue: amount,
+    );
+
     return ExpenseRecord(
       id: local.id,
       item: _preferString(local.item, cloud.item),
-      amount: _preferString(local.amount, cloud.amount),
+      amount: amount,
       note: _preferString(local.note, cloud.note),
       date: _preferString(local.date, cloud.date),
       category: _preferString(local.category, cloud.category),
@@ -890,34 +1142,7 @@ class SupabaseService {
 
   /// Fetch all messages, optionally filtered to an event. Ordered oldest first.
   static Future<List<MessageRecord>> fetchMessages({String? eventId}) async {
-    try {
-      return await _withHostLookupRetry(() async {
-        final query = _db.from('messages').select().order('created_at');
-        final List<Map<String, dynamic>> rows =
-            List<Map<String, dynamic>>.from(await query);
-        return rows
-            .where(
-              (r) => eventId == null || (r['event_id'] as String?) == eventId,
-            )
-            .map(
-              (r) => MessageRecord(
-                id: r['id'] as String? ?? '',
-                sender: r['sender'] as String? ?? '',
-                body: r['body'] as String? ?? '',
-                createdAt: (r['created_at'] as String?) ?? '',
-                eventId: r['event_id'] as String?,
-              ),
-            )
-            .toList();
-      });
-    } on PostgrestException catch (e) {
-      if (e.code == 'PGRST205') {
-        throw StateError(
-          'Supabase table public.messages is missing. Apply migrations (supabase db push) to create it.',
-        );
-      }
-      rethrow;
-    }
+    return MessagesService.fetchMessages(eventId: eventId);
   }
 
   /// Send a new message to the shared messages table.
@@ -926,23 +1151,10 @@ class SupabaseService {
     required String body,
     String? eventId,
   }) async {
-    try {
-      await _withHostLookupRetry(() async {
-        await _db.from('messages').insert(<String, dynamic>{
-          'id': DateTime.now().microsecondsSinceEpoch.toString(),
-          'sender': sender,
-          'body': body,
-          'event_id': eventId,
-          'created_at': DateTime.now().toUtc().toIso8601String(),
-        });
-      });
-    } on PostgrestException catch (e) {
-      if (e.code == 'PGRST205') {
-        throw StateError(
-          'Supabase table public.messages is missing. Apply migrations (supabase db push) to create it.',
-        );
-      }
-      rethrow;
-    }
+    return MessagesService.sendMessage(
+      sender: sender,
+      body: body,
+      eventId: eventId,
+    );
   }
 }

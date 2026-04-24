@@ -191,6 +191,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
         ),
     };
     _loadLocalState();
+    _refreshSchemaHealth();
   }
 
   @override
@@ -310,6 +311,23 @@ class _AOJDesktopState extends State<AOJDesktop> {
     } catch (_) {
       setState(() {
         systemStatus = 'LOAD FAILED';
+      });
+    }
+  }
+
+  Future<void> _refreshSchemaHealth() async {
+    try {
+      final health = await SupabaseService.checkSchemaHealth();
+      if (!mounted) return;
+      setState(() {
+        if (!health.healthy) {
+          systemStatus = 'SCHEMA NEEDS ATTENTION';
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        systemStatus = 'SCHEMA CHECK FAILED';
       });
     }
   }

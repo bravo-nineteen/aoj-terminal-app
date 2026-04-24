@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/aoj_models.dart';
 import '../services/device_identity_service.dart';
-import '../services/supabase_service.dart';
+import '../services/messages_service.dart';
 
 class MessagesPanel extends StatefulWidget {
   final Color accent;
@@ -19,33 +19,52 @@ class MessagesPanel extends StatefulWidget {
 }
 
 class _MessagesPanelState extends State<MessagesPanel> {
+  List<MessageRecord> _allMessages = [];
   List<MessageRecord> _messages = [];
   bool _loading = true;
   String _error = '';
   String _deviceUsername = '';
+  String _searchQuery = '';
+  DateTime? _lastReadAt;
+  int _unreadCount = 0;
 
   final TextEditingController _bodyController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  bool _globalOnly = false;
+  _MessageScope _scope = _MessageScope.all;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_handleScroll);
     _loadUsername();
     _load();
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_handleScroll);
     _bodyController.dispose();
+    _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
   Future<void> _loadUsername() async {
     final u = await DeviceIdentityService.getUsername();
-    if (mounted) setState(() => _deviceUsername = u);
+    if (mounted) {
+      setState(() {
+        _deviceUsername = u;
+        _unreadCount = _computeUnreadCount(_messages);
+      });
+    }
+  }
+
+  void _handleScroll() {
+    if (_isNearBottom() && _unreadCount > 0) {
+      _markAsRead();
+    }
   }
 
   Future<void> _load() async {
@@ -54,15 +73,19 @@ class _MessagesPanelState extends State<MessagesPanel> {
       _error = '';
     });
     try {
-      final all = await SupabaseService.fetchMessages();
+      final all = await MessagesService.fetchMessages();
       if (!mounted) return;
+      if (_lastReadAt == null) {
+        _lastReadAt = DateTime.now();
+      }
       setState(() {
-        _messages = _globalOnly
-            ? all.where((m) => m.eventId == null).toList()
-            : all;
+        _allMessages = all;
+        _messages = _applyFilters(all);
+        _unreadCount = _computeUnreadCount(_messages);
         _loading = false;
       });
       _scrollToBottom();
+      _markAsReadIfNearBottom();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -70,6 +93,68 @@ class _MessagesPanelState extends State<MessagesPanel> {
         _loading = false;
       });
     }
+  }
+
+  List<MessageRecord> _applyFilters(List<MessageRecord> source) {
+    Iterable<MessageRecord> filtered = source;
+    if (_scope == _MessageScope.globalOnly) {
+      filtered = filtered.where((m) => m.eventId == null);
+    } else if (_scope == _MessageScope.activeEventOnly) {
+      final activeId = widget.activeEventId;
+      filtered = filtered.where((m) => m.eventId == activeId);
+    }
+
+    final q = _searchQuery.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      filtered = filtered.where((m) {
+        final sender = m.sender.toLowerCase();
+        final body = m.body.toLowerCase();
+        return sender.contains(q) || body.contains(q);
+      });
+    }
+    return filtered.toList();
+  }
+
+  int _computeUnreadCount(List<MessageRecord> rows) {
+    final lastRead = _lastReadAt;
+    if (lastRead == null) return 0;
+    var count = 0;
+    for (final m in rows) {
+      final isMine = _deviceUsername.isNotEmpty && m.sender == _deviceUsername;
+      if (isMine) continue;
+      DateTime? created;
+      try {
+        created = DateTime.parse(m.createdAt).toLocal();
+      } catch (_) {
+        created = null;
+      }
+      if (created != null && created.isAfter(lastRead)) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  bool _isNearBottom() {
+    if (!_scrollController.hasClients) return true;
+    final position = _scrollController.position;
+    return (position.maxScrollExtent - position.pixels) < 80;
+  }
+
+  void _markAsRead() {
+    setState(() {
+      _lastReadAt = DateTime.now();
+      _unreadCount = 0;
+    });
+  }
+
+  void _markAsReadIfNearBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_isNearBottom()) {
+        _markAsRead();
+      }
+    });
   }
 
   void _scrollToBottom() {
@@ -89,12 +174,13 @@ class _MessagesPanelState extends State<MessagesPanel> {
     if (body.isEmpty) return;
 
     final sender = _deviceUsername.isEmpty ? 'Anonymous' : _deviceUsername;
-    final eventId = _globalOnly ? null : widget.activeEventId;
+    final eventId =
+      _scope == _MessageScope.globalOnly ? null : widget.activeEventId;
 
     _bodyController.clear();
 
     try {
-      await SupabaseService.sendMessage(
+      await MessagesService.sendMessage(
         sender: sender,
         body: body,
         eventId: eventId,
@@ -130,27 +216,91 @@ class _MessagesPanelState extends State<MessagesPanel> {
                   color: accent,
                 ),
               ),
-              const Spacer(),
-              if (widget.activeEventId != null)
-                Row(
-                  children: [
-                    const Text('Global only', style: TextStyle(fontSize: 12)),
-                    Switch(
-                      value: _globalOnly,
-                      activeThumbColor: accent,
-                      onChanged: (v) {
-                        setState(() => _globalOnly = v);
-                        _load();
-                      },
-                    ),
-                  ],
+              const SizedBox(width: 8),
+              if (_unreadCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$_unreadCount new',
+                    style: const TextStyle(color: Colors.white, fontSize: 11),
+                  ),
                 ),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: _markAsRead,
+                icon: const Icon(Icons.done_all, size: 16),
+                label: const Text('Mark read'),
+              ),
               IconButton(
                 icon: const Icon(Icons.refresh, size: 18),
                 tooltip: 'Refresh',
                 onPressed: _load,
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              ChoiceChip(
+                label: const Text('All'),
+                selected: _scope == _MessageScope.all,
+                onSelected: (_) {
+                  setState(() {
+                    _scope = _MessageScope.all;
+                    _messages = _applyFilters(_allMessages);
+                    _unreadCount = _computeUnreadCount(_messages);
+                  });
+                },
+              ),
+              ChoiceChip(
+                label: const Text('Global'),
+                selected: _scope == _MessageScope.globalOnly,
+                onSelected: (_) {
+                  setState(() {
+                    _scope = _MessageScope.globalOnly;
+                    _messages = _applyFilters(_allMessages);
+                    _unreadCount = _computeUnreadCount(_messages);
+                  });
+                },
+              ),
+              if (widget.activeEventId != null)
+                ChoiceChip(
+                  label: const Text('Active Event'),
+                  selected: _scope == _MessageScope.activeEventOnly,
+                  onSelected: (_) {
+                    setState(() {
+                      _scope = _MessageScope.activeEventOnly;
+                      _messages = _applyFilters(_allMessages);
+                      _unreadCount = _computeUnreadCount(_messages);
+                    });
+                  },
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search, size: 18),
+              hintText: 'Search sender or message',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              isDense: true,
+            ),
+            onChanged: (value) {
+              setState(() {
+                _searchQuery = value;
+                _messages = _applyFilters(_allMessages);
+                _unreadCount = _computeUnreadCount(_messages);
+              });
+            },
           ),
           const Divider(height: 8),
           // Sender identity hint
@@ -252,6 +402,7 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final time = _formatTime(message.createdAt);
+    final relative = _formatRelativeTime(message.createdAt);
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -292,7 +443,7 @@ class _MessageBubble extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              time,
+              relative.isEmpty ? time : '$time - $relative',
               style: TextStyle(
                 fontSize: 10,
                 color: isMine ? Colors.white54 : Colors.grey,
@@ -318,4 +469,25 @@ class _MessageBubble extends StatelessWidget {
       return iso;
     }
   }
+
+  String _formatRelativeTime(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final diff = DateTime.now().difference(dt);
+      if (diff.inSeconds < 60) return 'just now';
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      if (diff.inDays < 7) return '${diff.inDays}d ago';
+      final weeks = (diff.inDays / 7).floor();
+      return '${weeks}w ago';
+    } catch (_) {
+      return '';
+    }
+  }
+}
+
+enum _MessageScope {
+  all,
+  globalOnly,
+  activeEventOnly,
 }

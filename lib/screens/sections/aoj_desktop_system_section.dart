@@ -21,6 +21,10 @@ extension _AojDesktopSystemSection on _AOJDesktopState {
       onImportFieldMap: _importFieldMap,
       onSyncPush: _syncPush,
       onSyncPull: _syncPull,
+      syncDiagnostics: SupabaseService.syncDiagnostics,
+      schemaHealth: SupabaseService.schemaHealth,
+      recentConflicts: SupabaseService.recentMergeConflicts,
+      onRefreshSchemaHealth: _refreshSchemaHealth,
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/aoj_models.dart';
 import '../services/device_identity_service.dart';
@@ -23,6 +24,10 @@ class SystemPanel extends StatefulWidget {
   final Future<void> Function() onImportFieldMap;
   final Future<void> Function() onSyncPush;
   final Future<void> Function() onSyncPull;
+  final SyncDiagnosticsRecord syncDiagnostics;
+  final SchemaHealthRecord schemaHealth;
+  final List<MergeConflictRecord> recentConflicts;
+  final Future<void> Function() onRefreshSchemaHealth;
 
   const SystemPanel({
     super.key,
@@ -44,6 +49,10 @@ class SystemPanel extends StatefulWidget {
     required this.onImportFieldMap,
     required this.onSyncPush,
     required this.onSyncPull,
+    required this.syncDiagnostics,
+    required this.schemaHealth,
+    required this.recentConflicts,
+    required this.onRefreshSchemaHealth,
   });
 
   @override
@@ -110,6 +119,83 @@ class _SystemPanelState extends State<SystemPanel> {
   Future<void> _runIfActive(Future<void> Function() action) async {
     if (widget.activeEvent == null) return;
     await action();
+  }
+
+  String _compactTimestamp(String iso) {
+    if (iso.trim().isEmpty) return '-';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  String _compactError(String value) {
+    final normalized = value.replaceAll('\n', ' ').trim();
+    if (normalized.length <= 96) return normalized;
+    return '${normalized.substring(0, 96)}...';
+  }
+
+  Future<void> _copyLastSyncError() async {
+    final error = widget.syncDiagnostics.lastError.trim();
+    if (error.isEmpty) return;
+    final detail = [
+      'operation=${widget.syncDiagnostics.operation}',
+      'started=${widget.syncDiagnostics.startedAt}',
+      'completed=${widget.syncDiagnostics.completedAt}',
+      'error_code=${widget.syncDiagnostics.lastErrorCode}',
+      'error=${widget.syncDiagnostics.lastError}',
+    ].join('\n');
+    await Clipboard.setData(ClipboardData(text: detail));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Last sync error details copied.')),
+    );
+  }
+
+  Future<void> _showConflictDetailsDialog() async {
+    if (widget.recentConflicts.isEmpty) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Merge Conflict Details'),
+          content: SizedBox(
+            width: 720,
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: widget.recentConflicts.length,
+              separatorBuilder: (_, __) => const Divider(height: 16),
+              itemBuilder: (context, index) {
+                final c = widget.recentConflicts[index];
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${c.entityType}:${c.entityId} • ${c.field}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 6),
+                    Text('Local: ${c.localValue}'),
+                    const SizedBox(height: 4),
+                    Text('Cloud: ${c.cloudValue}'),
+                    const SizedBox(height: 4),
+                    Text('Resolved: ${c.resolvedValue}'),
+                  ],
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -207,6 +293,28 @@ class _SystemPanelState extends State<SystemPanel> {
                                 'Active', widget.activeEvent?.name ?? 'None'),
                             InfoLine('Export', widget.exportStatus),
                             InfoLine('Sync', widget.syncStatus),
+                            InfoLine(
+                              'Schema',
+                              widget.schemaHealth.healthy ? 'Healthy' : 'Needs Fix',
+                            ),
+                            InfoLine(
+                              'Last Sync Error',
+                              widget.syncDiagnostics.lastErrorCode.isEmpty
+                                  ? '-'
+                                  : widget.syncDiagnostics.lastErrorCode,
+                            ),
+                            InfoLine(
+                              'Conflicts',
+                              widget.syncDiagnostics.conflicts.toString(),
+                            ),
+                            if (!widget.schemaHealth.healthy)
+                              ...widget.schemaHealth.issues
+                                  .take(3)
+                                  .map((i) => InfoLine('Schema Issue', i)),
+                            ActionLine(
+                              label: 'Refresh Schema Health',
+                              onTap: widget.onRefreshSchemaHealth,
+                            ),
                           ],
                         ),
                         const SizedBox(height: 14),
@@ -262,8 +370,43 @@ class _SystemPanelState extends State<SystemPanel> {
                               label: 'Sync Merge from Supabase',
                               onTap: widget.onSyncPull,
                             ),
+                            InfoLine('Started', _compactTimestamp(widget.syncDiagnostics.startedAt)),
+                            InfoLine('Completed', _compactTimestamp(widget.syncDiagnostics.completedAt)),
+                            InfoLine('Local Events',
+                                widget.syncDiagnostics.localEvents.toString()),
+                            InfoLine('Cloud Events',
+                                widget.syncDiagnostics.cloudEvents.toString()),
+                            InfoLine('Merged Events',
+                                widget.syncDiagnostics.mergedEvents.toString()),
+                            if (widget.syncDiagnostics.lastError.isNotEmpty)
+                              InfoLine('Last Error', _compactError(widget.syncDiagnostics.lastError)),
+                            if (widget.syncDiagnostics.lastError.isNotEmpty)
+                              ActionLine(
+                                label: 'Copy Last Sync Error Details',
+                                onTap: _copyLastSyncError,
+                              ),
+                            if (widget.recentConflicts.isNotEmpty)
+                              ActionLine(
+                                label: 'View Conflict Details',
+                                onTap: _showConflictDetailsDialog,
+                              ),
                           ],
                         ),
+                        const SizedBox(height: 14),
+                        if (widget.recentConflicts.isNotEmpty)
+                          InfoCard(
+                            title: 'Recent Merge Conflicts',
+                            accent: widget.accent,
+                            children: widget.recentConflicts
+                                .take(6)
+                                .map(
+                                  (c) => InfoLine(
+                                    '${c.entityType}:${c.entityId} ${c.field}',
+                                    'resolved="${c.resolvedValue}"',
+                                  ),
+                                )
+                                .toList(),
+                          ),
                       ],
                     )
                   : Row(
@@ -281,6 +424,28 @@ class _SystemPanelState extends State<SystemPanel> {
                                   'Active', widget.activeEvent?.name ?? 'None'),
                               InfoLine('Export', widget.exportStatus),
                               InfoLine('Sync', widget.syncStatus),
+                              InfoLine(
+                                'Schema',
+                                widget.schemaHealth.healthy ? 'Healthy' : 'Needs Fix',
+                              ),
+                              InfoLine(
+                                'Last Sync Error',
+                                widget.syncDiagnostics.lastErrorCode.isEmpty
+                                    ? '-'
+                                    : widget.syncDiagnostics.lastErrorCode,
+                              ),
+                              InfoLine(
+                                'Conflicts',
+                                widget.syncDiagnostics.conflicts.toString(),
+                              ),
+                              if (!widget.schemaHealth.healthy)
+                                ...widget.schemaHealth.issues
+                                    .take(3)
+                                    .map((i) => InfoLine('Schema Issue', i)),
+                              ActionLine(
+                                label: 'Refresh Schema Health',
+                                onTap: widget.onRefreshSchemaHealth,
+                              ),
                             ],
                           ),
                         ),
@@ -342,9 +507,47 @@ class _SystemPanelState extends State<SystemPanel> {
                                 label: 'Sync Merge from Supabase',
                                 onTap: widget.onSyncPull,
                               ),
+                                InfoLine('Started', _compactTimestamp(widget.syncDiagnostics.startedAt)),
+                                InfoLine('Completed', _compactTimestamp(widget.syncDiagnostics.completedAt)),
+                              InfoLine('Local Events',
+                                  widget.syncDiagnostics.localEvents.toString()),
+                              InfoLine('Cloud Events',
+                                  widget.syncDiagnostics.cloudEvents.toString()),
+                              InfoLine('Merged Events',
+                                  widget.syncDiagnostics.mergedEvents.toString()),
+                              if (widget.syncDiagnostics.lastError.isNotEmpty)
+                                InfoLine('Last Error', _compactError(widget.syncDiagnostics.lastError)),
+                              if (widget.syncDiagnostics.lastError.isNotEmpty)
+                                ActionLine(
+                                  label: 'Copy Last Sync Error Details',
+                                  onTap: _copyLastSyncError,
+                                ),
+                              if (widget.recentConflicts.isNotEmpty)
+                                ActionLine(
+                                  label: 'View Conflict Details',
+                                  onTap: _showConflictDetailsDialog,
+                                ),
                             ],
                           ),
                         ),
+                        if (widget.recentConflicts.isNotEmpty) ...[
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: InfoCard(
+                              title: 'Recent Merge Conflicts',
+                              accent: widget.accent,
+                              children: widget.recentConflicts
+                                  .take(6)
+                                  .map(
+                                    (c) => InfoLine(
+                                      '${c.entityType}:${c.entityId} ${c.field}',
+                                      'resolved="${c.resolvedValue}"',
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
             ),
