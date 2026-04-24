@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -473,7 +474,7 @@ class CsvImportService {
 
     if (result == null || result.files.isEmpty) return false;
 
-    final bytes = await _readPlatformFileBytes(result.files.first);
+  final bytes = await _readPlatformFileBytes(result.files.first);
     if (bytes == null || bytes.isEmpty) return false;
 
     event.fieldMapBase64 = base64Encode(bytes);
@@ -1165,7 +1166,7 @@ class CsvImportService {
     final bytes = await _readPlatformFileBytes(file);
     if (bytes == null || bytes.isEmpty) return [];
 
-    final extension = (file.extension ?? '').toLowerCase();
+    final extension = _resolvePickedFileExtension(file);
     return tabularRowsFromBytes(
       bytes: bytes,
       extensionHint: extension,
@@ -1267,8 +1268,14 @@ class CsvImportService {
       if (bytes.isNotEmpty) return bytes;
     }
 
-    // Cloud-backed files (for example Google Drive mirrored files on Windows)
-    // may expose only a path and no in-memory bytes/read stream.
+    try {
+      final xFileBytes = await file.xFile.readAsBytes();
+      if (xFileBytes.isNotEmpty) return xFileBytes;
+    } catch (_) {
+      // Fall through to file path lookup.
+    }
+
+    // Cloud-backed files may expose a local path without eager bytes.
     final filePath = file.path;
     if (filePath != null && filePath.isNotEmpty) {
       final fsFile = File(filePath);
@@ -1279,6 +1286,18 @@ class CsvImportService {
     }
 
     return null;
+  }
+
+  static String _resolvePickedFileExtension(PlatformFile file) {
+    final extension = (file.extension ?? '').trim().toLowerCase();
+    if (extension.isNotEmpty) return extension;
+
+    final name = file.name.trim().toLowerCase();
+    final dotIndex = name.lastIndexOf('.');
+    if (dotIndex == -1 || dotIndex == name.length - 1) {
+      return '';
+    }
+    return name.substring(dotIndex + 1);
   }
 
   static Future<List<List<dynamic>>> _downloadTabularRowsFromUrl({
@@ -1423,7 +1442,6 @@ class CsvImportService {
         bodyLower.contains('sign in') ||
         bodyLower.contains('ログイン');
   }
-
   static List<List<dynamic>> _parseCsvRows(String csvText) {
     return const CsvToListConverter(
       shouldParseNumbers: false,

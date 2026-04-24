@@ -24,8 +24,8 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ -z "${SUPABASE_PROJECT_REF:-}" ]]; then
-  echo "SUPABASE_PROJECT_REF is missing. Add it to supabase_upload/.env"
+if [[ -z "${SUPABASE_DB_URL:-}" && -z "${SUPABASE_PROJECT_REF:-}" ]]; then
+  echo "Set either SUPABASE_DB_URL (direct DB connection) or SUPABASE_PROJECT_REF in supabase_upload/.env"
   exit 1
 fi
 
@@ -62,14 +62,23 @@ fi
 
 (
   cd "${REPO_ROOT}"
-  if [[ -n "${SUPABASE_DB_PASSWORD:-}" ]]; then
-    supabase_cmd link --project-ref "${SUPABASE_PROJECT_REF}" --password "${SUPABASE_DB_PASSWORD}"
+  if [[ -n "${SUPABASE_DB_URL:-}" ]]; then
+    echo "Using direct DB URL for supabase db push"
+    if [[ -n "${SUPABASE_DB_PASSWORD:-}" ]]; then
+      supabase_cmd db push --yes --db-url "${SUPABASE_DB_URL}" --password "${SUPABASE_DB_PASSWORD}"
+    else
+      supabase_cmd db push --yes --db-url "${SUPABASE_DB_URL}"
+    fi
   else
-    supabase_cmd link --project-ref "${SUPABASE_PROJECT_REF}"
-  fi
-  if [[ -n "${SUPABASE_DB_PASSWORD:-}" ]]; then
-    supabase_cmd db push --yes --password "${SUPABASE_DB_PASSWORD}"
-  else
-    supabase_cmd db push --yes
+    if [[ -n "${SUPABASE_DB_PASSWORD:-}" ]]; then
+      supabase_cmd link --project-ref "${SUPABASE_PROJECT_REF}" --password "${SUPABASE_DB_PASSWORD}"
+    else
+      supabase_cmd link --project-ref "${SUPABASE_PROJECT_REF}"
+    fi
+    if [[ -n "${SUPABASE_DB_PASSWORD:-}" ]]; then
+      supabase_cmd db push --yes --password "${SUPABASE_DB_PASSWORD}"
+    else
+      supabase_cmd db push --yes
+    fi
   fi
 )
