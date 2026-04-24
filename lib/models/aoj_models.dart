@@ -621,8 +621,9 @@ class GameModeRecord {
   Map<String, dynamic> toJson() => {'data': data};
 
   factory GameModeRecord.fromJson(Map<String, dynamic> json) {
+    final raw = Map<String, dynamic>.from(json['data'] as Map? ?? {});
     return GameModeRecord(
-      data: Map<String, String>.from(json['data'] as Map? ?? {}),
+      data: raw.map((k, v) => MapEntry(k.toString(), v?.toString() ?? '')),
     );
   }
 }

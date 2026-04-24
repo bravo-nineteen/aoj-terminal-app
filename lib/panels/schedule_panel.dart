@@ -8,6 +8,8 @@ import '../models/aoj_models.dart';
 class SchedulePanel extends StatefulWidget {
   final Color accent;
   final EventRecord? event;
+  final List<GameModeRecord> gameModes;
+  final Future<void> Function(String gameModeTitle) onOpenGameMode;
   final Future<void> Function() onSave;
   final VoidCallback onRefresh;
 
@@ -15,6 +17,8 @@ class SchedulePanel extends StatefulWidget {
     super.key,
     required this.accent,
     required this.event,
+    required this.gameModes,
+    required this.onOpenGameMode,
     required this.onSave,
     required this.onRefresh,
   });
@@ -84,6 +88,78 @@ class _SchedulePanelState extends State<SchedulePanel> {
 
   Future<void> _deleteRow(int index) async {
     widget.event!.schedule.removeAt(index);
+    await widget.onSave();
+    widget.onRefresh();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _pickGameModeForRow(ScheduleRecord row) async {
+    if (widget.gameModes.isEmpty) return;
+
+    String selected = row.gameModeTitle;
+    final options = widget.gameModes
+        .map((m) => m.title)
+        .toSet()
+        .toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    if (selected.isNotEmpty && !options.contains(selected)) {
+      selected = '';
+    }
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setLocal) {
+            return AlertDialog(
+              title: const Text('Link Game Mode'),
+              content: DropdownButtonFormField<String>(
+                initialValue: selected,
+                decoration: const InputDecoration(
+                  labelText: 'Game Mode',
+                  border: OutlineInputBorder(),
+                ),
+                items: [
+                  const DropdownMenuItem<String>(
+                    value: '',
+                    child: Text('None'),
+                  ),
+                  ...options.map(
+                    (title) => DropdownMenuItem<String>(
+                      value: title,
+                      child: Text(title),
+                    ),
+                  ),
+                ],
+                onChanged: (value) {
+                  setLocal(() {
+                    selected = value ?? '';
+                  });
+                },
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context, selected),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null) return;
+
+    row.gameModeTitle = result.trim();
+    if (row.gameModeTitle.isNotEmpty && row.activity.trim().isEmpty) {
+      row.activity = row.gameModeTitle;
+    }
     await widget.onSave();
     widget.onRefresh();
     if (mounted) setState(() {});
@@ -202,6 +278,7 @@ class _SchedulePanelState extends State<SchedulePanel> {
                                         return _ScheduleEditRow(
                                           key: ValueKey(row.id),
                                           row: row,
+                                          gameModes: widget.gameModes,
                                           accent: widget.accent,
                                           onDelete: () => _deleteRow(index),
                                           onSave: () async {
@@ -218,44 +295,103 @@ class _SchedulePanelState extends State<SchedulePanel> {
                                           row.activity.trim().isNotEmpty
                                               ? row.activity.trim()
                                               : 'Untitled Activity';
-                                      return Container(
-                                        margin:
-                                            const EdgeInsets.only(bottom: 8),
-                                        padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          color: Colors.white
-                                              .withValues(alpha: 0.03),
-                                          border: Border.all(
-                                            color: Colors.white
-                                                .withValues(alpha: 0.06),
-                                          ),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              '$headerTime - $headerTitle',
-                                              style: const TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                            if (row.notes.trim().isNotEmpty) ...[
-                                              const SizedBox(height: 6),
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                    left: 12),
-                                                child: Text(
-                                                  row.notes.trim(),
-                                                  style: const TextStyle(
-                                                      fontSize: 11),
+                                      return InkWell(
+                                        borderRadius: BorderRadius.circular(12),
+                                        onTap: row.gameModeTitle.trim().isEmpty
+                                            ? null
+                                            : () => widget.onOpenGameMode(
+                                                  row.gameModeTitle.trim(),
                                                 ),
+                                        child: Container(
+                                          margin:
+                                              const EdgeInsets.only(bottom: 8),
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            color: Colors.white
+                                                .withValues(alpha: 0.03),
+                                            border: Border.all(
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.06),
+                                            ),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      '$headerTime - $headerTitle',
+                                                      style: const TextStyle(
+                                                        fontSize: 13,
+                                                        fontWeight: FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  if (widget.gameModes.isNotEmpty)
+                                                    IconButton(
+                                                      tooltip: 'Link game mode',
+                                                      onPressed: () =>
+                                                          _pickGameModeForRow(row),
+                                                      icon: Icon(
+                                                        row.gameModeTitle
+                                                                .trim()
+                                                                .isEmpty
+                                                            ? Icons.link_outlined
+                                                            : Icons.link,
+                                                        size: 16,
+                                                        color: widget.accent,
+                                                      ),
+                                                      padding: EdgeInsets.zero,
+                                                      constraints:
+                                                          const BoxConstraints(),
+                                                    ),
+                                                ],
                                               ),
+                                              if (row.gameModeTitle
+                                                  .trim()
+                                                  .isNotEmpty) ...[
+                                                const SizedBox(height: 6),
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: widget.accent
+                                                        .withValues(alpha: 0.15),
+                                                    borderRadius:
+                                                        BorderRadius.circular(999),
+                                                  ),
+                                                  child: Text(
+                                                    'Game Mode: ${row.gameModeTitle.trim()}',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: widget.accent,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                              if (row.notes.trim().isNotEmpty) ...[
+                                                const SizedBox(height: 6),
+                                                Padding(
+                                                  padding: const EdgeInsets.only(
+                                                      left: 12),
+                                                  child: Text(
+                                                    row.notes.trim(),
+                                                    style: const TextStyle(
+                                                        fontSize: 11),
+                                                  ),
+                                                ),
+                                              ],
                                             ],
-                                          ],
+                                          ),
                                         ),
                                       );
                                     },
@@ -298,6 +434,7 @@ class _SchedulePanelState extends State<SchedulePanel> {
 /// Inline editing row for a single schedule entry.
 class _ScheduleEditRow extends StatefulWidget {
   final ScheduleRecord row;
+  final List<GameModeRecord> gameModes;
   final Color accent;
   final VoidCallback onDelete;
   final Future<void> Function() onSave;
@@ -305,6 +442,7 @@ class _ScheduleEditRow extends StatefulWidget {
   const _ScheduleEditRow({
     super.key,
     required this.row,
+    required this.gameModes,
     required this.accent,
     required this.onDelete,
     required this.onSave,
@@ -318,6 +456,7 @@ class _ScheduleEditRowState extends State<_ScheduleEditRow> {
   late final TextEditingController _timeCtrl;
   late final TextEditingController _activityCtrl;
   late final TextEditingController _notesCtrl;
+  String _gameModeTitle = '';
 
   @override
   void initState() {
@@ -325,6 +464,7 @@ class _ScheduleEditRowState extends State<_ScheduleEditRow> {
     _timeCtrl = TextEditingController(text: widget.row.time);
     _activityCtrl = TextEditingController(text: widget.row.activity);
     _notesCtrl = TextEditingController(text: widget.row.notes);
+    _gameModeTitle = widget.row.gameModeTitle;
   }
 
   @override
@@ -339,6 +479,7 @@ class _ScheduleEditRowState extends State<_ScheduleEditRow> {
     widget.row.time = _timeCtrl.text.trim();
     widget.row.activity = _activityCtrl.text.trim();
     widget.row.notes = _notesCtrl.text.trim();
+    widget.row.gameModeTitle = _gameModeTitle.trim();
     await widget.onSave();
   }
 
@@ -355,6 +496,46 @@ class _ScheduleEditRowState extends State<_ScheduleEditRow> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (widget.gameModes.isNotEmpty) ...[
+            DropdownButtonFormField<String>(
+              initialValue:
+                  _gameModeTitle.isEmpty ? '' : _gameModeTitle,
+              decoration: const InputDecoration(
+                labelText: 'Game Mode Link',
+                isDense: true,
+                border: OutlineInputBorder(),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              ),
+              items: [
+                const DropdownMenuItem<String>(
+                  value: '',
+                  child: Text('None'),
+                ),
+                ...widget.gameModes
+                    .map((m) => m.title)
+                    .toSet()
+                    .toList()
+                  ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()))
+                    .map(
+                      (title) => DropdownMenuItem<String>(
+                        value: title,
+                        child: Text(title),
+                      ),
+                    ),
+              ],
+              onChanged: (value) async {
+                setState(() {
+                  _gameModeTitle = value ?? '';
+                  if (_gameModeTitle.isNotEmpty) {
+                    _activityCtrl.text = _gameModeTitle;
+                  }
+                });
+                await _commit();
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
           Row(
             children: [
               Expanded(

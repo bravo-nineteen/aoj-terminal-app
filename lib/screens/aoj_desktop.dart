@@ -1743,8 +1743,16 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
     final q = gameModeSearch.trim().toLowerCase();
     return event.gameModes
-        .where((g) => g.data.values.join(' ').toLowerCase().contains(q))
+        .where((g) => g.searchableText.contains(q))
         .toList();
+  }
+
+  Future<void> _openGameModeFromSchedule(String gameModeTitle) async {
+    _refresh(() {
+      gameModeSearch = gameModeTitle;
+      selectedIconId = 'game_modes';
+    });
+    _openWindow('game_modes');
   }
 
   Future<void> _deleteBookingGroup(BookingGroup group) async {

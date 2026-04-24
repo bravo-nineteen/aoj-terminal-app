@@ -74,26 +74,96 @@ class GameModesPanel extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            mode.title,
-                            style: const TextStyle(
-                                fontSize: 14, fontWeight: FontWeight.w800),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  mode.title,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                              if (mode.gameDuration.trim().isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: accent.withValues(alpha: 0.16),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    mode.gameDuration.trim(),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: accent,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                           if (mode.description.isNotEmpty) ...[
                             const SizedBox(height: 6),
                             Text(
                               mode.description,
                               style: const TextStyle(
-                                  fontSize: 11, color: Color(0xFFAFB7AD)),
+                                fontSize: 11,
+                                color: Color(0xFFAFB7AD),
+                              ),
                             ),
                           ],
-                          const SizedBox(height: 8),
-                          ...mode.data.entries.map(
-                            (entry) => Padding(
-                              padding: const EdgeInsets.only(bottom: 3),
-                              child: Text('${entry.key}: ${entry.value}',
-                                  style: const TextStyle(fontSize: 11)),
-                            ),
+                          const SizedBox(height: 10),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _fieldBullets(
+                                      title: 'Red Team Win Condition',
+                                      value: mode.redTeamWinCondition,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    _fieldBullets(
+                                      title: 'Blue Team Win Condition',
+                                      value: mode.blueTeamWinCondition,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    _fieldBullets(
+                                      title: 'Prop List',
+                                      value: mode.propList,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _fieldBullets(
+                                      title: 'Core Game Rules',
+                                      value: mode.coreGameRules,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    _fieldBullets(
+                                      title: 'Game Flow Description',
+                                      value: mode.gameFlowDescription,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    _fieldBullets(
+                                      title: 'Spawn Area Flow',
+                                      value: mode.spawnAreaFlow,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -104,6 +174,45 @@ class GameModesPanel extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _fieldBullets({required String title, required String value}) {
+    final entries = value
+        .split(RegExp(r'[\n,;]+'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 4),
+        if (entries.isEmpty)
+          const Text(
+            '- Not set',
+            style: TextStyle(fontSize: 11, color: Color(0xFF8D968A)),
+          )
+        else
+          ...entries
+              .take(6)
+              .map(
+                (e) => Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(
+                    '- $e',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                ),
+              ),
+      ],
     );
   }
 }

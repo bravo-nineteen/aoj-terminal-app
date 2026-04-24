@@ -158,6 +158,24 @@ create table if not exists public.schedule (
   activity text not null default '',
   location text not null default '',
   notes text not null default '',
+  game_mode_title text not null default '',
+  updated_at timestamptz not null default now()
+);
+
+alter table if exists public.schedule
+  add column if not exists game_mode_title text;
+
+update public.schedule
+set game_mode_title = coalesce(game_mode_title::text, '');
+
+alter table if exists public.schedule
+  alter column game_mode_title set default '',
+  alter column game_mode_title set not null;
+
+create table if not exists public.game_modes (
+  id text primary key,
+  event_id text not null,
+  data jsonb not null default '{}',
   updated_at timestamptz not null default now()
 );
 
@@ -177,6 +195,7 @@ create index if not exists idx_tickets_event_id on public.tickets(event_id);
 create index if not exists idx_members_event_id on public.members(event_id);
 create index if not exists idx_schedule_event_id on public.schedule(event_id);
 create index if not exists idx_expenses_event_id on public.expenses(event_id);
+create index if not exists idx_game_modes_event_id on public.game_modes(event_id);
 
 do $$
 declare

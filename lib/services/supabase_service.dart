@@ -175,6 +175,21 @@ class SupabaseService {
     return [];
   }
 
+  static Map<String, dynamic> _safeJsonToMap(dynamic value) {
+    if (value == null) return <String, dynamic>{};
+    if (value is Map) return Map<String, dynamic>.from(value);
+    if (value is String) {
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+        return <String, dynamic>{};
+      } catch (_) {
+        return <String, dynamic>{};
+      }
+    }
+    return <String, dynamic>{};
+  }
+
 
   static bool _isHostLookupError(Object error) {
     final message = error.toString().toLowerCase();
@@ -361,7 +376,7 @@ class SupabaseService {
     final rows = event.gameModes
         .map(
           (g) => <String, dynamic>{
-            'id': _gameModeSignature(g.data),
+            'id': '${event.id}_${_gameModeSignature(g.data)}',
             'event_id': event.id,
             'data': g.toJson()['data'],
           },
@@ -483,6 +498,7 @@ class SupabaseService {
             'activity': s.activity,
             'location': s.location,
             'notes': s.notes,
+            'game_mode_title': s.gameModeTitle,
           },
         )
         .toList();
@@ -624,7 +640,7 @@ class SupabaseService {
           ? gameModeRows
               .map(
                 (g) => GameModeRecord.fromJson(
-                  <String, dynamic>{'data': Map<String, dynamic>.from(g['data'] as Map)},
+                  <String, dynamic>{'data': _safeJsonToMap(g['data'])},
                 ),
               )
               .toList()
@@ -732,6 +748,7 @@ class SupabaseService {
               activity: s['activity'] as String? ?? '',
               location: s['location'] as String? ?? '',
               notes: s['notes'] as String? ?? '',
+              gameModeTitle: s['game_mode_title'] as String? ?? '',
             ),
           )
           .toList();
