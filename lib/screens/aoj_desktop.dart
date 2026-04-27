@@ -34,9 +34,16 @@ part 'sections/aoj_desktop_schedule_section.dart';
 part 'sections/aoj_desktop_system_section.dart';
 
 class AOJDesktop extends StatefulWidget {
-  const AOJDesktop({super.key, this.startupError});
+  const AOJDesktop({
+    super.key,
+    this.startupError,
+    required this.isDarkTheme,
+    required this.onToggleTheme,
+  });
 
   final String? startupError;
+  final bool isDarkTheme;
+  final VoidCallback onToggleTheme;
 
   @override
   State<AOJDesktop> createState() => _AOJDesktopState();
@@ -1943,7 +1950,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
           return Stack(
             children: [
-              const AOJDesktopBackground(),
+              AOJDesktopBackground(isDarkTheme: widget.isDarkTheme),
               Positioned.fill(
                 child: SafeArea(
                   bottom: false,
@@ -2067,18 +2074,27 @@ class _AOJDesktopState extends State<AOJDesktop> {
                           ),
                           decoration: BoxDecoration(
                             color: selected
-                                ? const Color(0x66161F18)
-                                : const Color(0x33101812),
+                                ? (widget.isDarkTheme
+                                    ? const Color(0x66161F18)
+                                    : const Color(0xCCEDF3EA))
+                                : (widget.isDarkTheme
+                                    ? const Color(0x33101812)
+                                    : const Color(0xB8F6FAF4)),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
                               color: selected
                                   ? app.accent.withValues(alpha: 0.75)
-                                  : Colors.white.withValues(alpha: 0.08),
+                                  : (widget.isDarkTheme
+                                      ? Colors.white.withValues(alpha: 0.08)
+                                      : Colors.black.withValues(alpha: 0.08)),
                               width: 1.2,
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.30),
+                                color: (widget.isDarkTheme
+                                        ? Colors.black
+                                        : const Color(0xFF355E3B))
+                                    .withValues(alpha: 0.14),
                                 blurRadius: 14,
                                 offset: const Offset(0, 6),
                               ),
@@ -2160,17 +2176,25 @@ class _AOJDesktopState extends State<AOJDesktop> {
               color: window.accent.withValues(alpha: 0.65),
               width: 1.3,
             ),
-            gradient: const LinearGradient(
+            gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                Color(0xFF19211B),
-                Color(0xFF111612),
-              ],
+              colors: widget.isDarkTheme
+                  ? const [
+                      Color(0xFF19211B),
+                      Color(0xFF111612),
+                    ]
+                  : const [
+                      Color(0xFFF7FBF5),
+                      Color(0xFFECF2E9),
+                    ],
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.45),
+                color: (widget.isDarkTheme
+                        ? Colors.black
+                        : const Color(0xFF355E3B))
+                    .withValues(alpha: 0.18),
                 blurRadius: 30,
                 offset: const Offset(0, 18),
               ),
@@ -2245,13 +2269,22 @@ class _AOJDesktopState extends State<AOJDesktop> {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              window.accent.withValues(alpha: 0.35),
-              const Color(0xFF162019)
-            ],
+            colors: widget.isDarkTheme
+                ? [
+                    window.accent.withValues(alpha: 0.35),
+                    const Color(0xFF162019),
+                  ]
+                : [
+                    window.accent.withValues(alpha: 0.25),
+                    const Color(0xFFE8F0E5),
+                  ],
           ),
           border: Border(
-            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+            bottom: BorderSide(
+              color: widget.isDarkTheme
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.08),
+            ),
           ),
         ),
         child: Row(
@@ -2349,9 +2382,16 @@ class _AOJDesktopState extends State<AOJDesktop> {
       height: _tabBarHeight,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xCC0C120D),
+        color: widget.isDarkTheme
+            ? const Color(0xCC0C120D)
+            : const Color(0xDDEAF0E8),
         border: Border(
-            top: BorderSide(color: Colors.white.withValues(alpha: 0.06))),
+          top: BorderSide(
+            color: widget.isDarkTheme
+                ? Colors.white.withValues(alpha: 0.06)
+                : Colors.black.withValues(alpha: 0.08),
+          ),
+        ),
       ),
       child: Row(
         children: [
@@ -2359,22 +2399,33 @@ class _AOJDesktopState extends State<AOJDesktop> {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
-              color: const Color(0xFF121813),
-              border: Border.all(color: const Color(0x337E8B63)),
+              color: widget.isDarkTheme
+                  ? const Color(0xFF121813)
+                  : const Color(0xFFFFFFFF),
+              border: Border.all(
+                color: widget.isDarkTheme
+                    ? const Color(0x337E8B63)
+                    : const Color(0x3D355E3B),
+              ),
             ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   Icons.shield_outlined,
                   size: 16,
-                  color: Color(0xFF7E8B63),
+                  color: widget.isDarkTheme
+                      ? const Color(0xFF7E8B63)
+                      : const Color(0xFF355E3B),
                 ),
                 const SizedBox(width: 6),
                 Text(
                   activeEvent?.name ?? 'NO ACTIVE EVENT',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
+                    color: widget.isDarkTheme
+                        ? Colors.white
+                        : const Color(0xFF1E2E22),
                   ),
                 ),
               ],
@@ -2398,11 +2449,15 @@ class _AOJDesktopState extends State<AOJDesktop> {
                       borderRadius: BorderRadius.circular(10),
                       color: active
                           ? tab.accent.withValues(alpha: 0.20)
-                          : const Color(0xFF121813),
+                          : (widget.isDarkTheme
+                              ? const Color(0xFF121813)
+                              : const Color(0xFFFFFFFF)),
                       border: Border.all(
                         color: active
                             ? tab.accent.withValues(alpha: 0.85)
-                            : Colors.white.withValues(alpha: 0.06),
+                            : (widget.isDarkTheme
+                                ? Colors.white.withValues(alpha: 0.06)
+                                : Colors.black.withValues(alpha: 0.08)),
                       ),
                     ),
                     child: Row(
@@ -2424,6 +2479,19 @@ class _AOJDesktopState extends State<AOJDesktop> {
                   ),
                 );
               },
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: widget.isDarkTheme
+                ? 'Switch to light theme'
+                : 'Switch to dark theme',
+            onPressed: widget.onToggleTheme,
+            icon: Icon(
+              widget.isDarkTheme
+                  ? Icons.light_mode_outlined
+                  : Icons.dark_mode_outlined,
+              size: 18,
             ),
           ),
         ],

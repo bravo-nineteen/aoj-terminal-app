@@ -1,28 +1,43 @@
 import 'package:flutter/material.dart';
 
 class AOJDesktopBackground extends StatelessWidget {
-  const AOJDesktopBackground({super.key});
+  const AOJDesktopBackground({
+    super.key,
+    required this.isDarkTheme,
+  });
+
+  final bool isDarkTheme;
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
         Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: RadialGradient(
               center: Alignment(-0.4, -0.8),
               radius: 1.4,
-              colors: [
-                Color(0xFF2A372B),
-                Color(0xFF111712),
-                Color(0xFF090D0A),
-              ],
+              colors: isDarkTheme
+                  ? const [
+                      Color(0xFF2A372B),
+                      Color(0xFF111712),
+                      Color(0xFF090D0A),
+                    ]
+                  : const [
+                      Color(0xFFDCECDD),
+                      Color(0xFFF1F6EF),
+                      Color(0xFFE4EEE3),
+                    ],
             ),
           ),
         ),
         Positioned.fill(
           child: CustomPaint(
-            painter: GridPainter(),
+            painter: GridPainter(
+              color: isDarkTheme
+                  ? const Color(0xFF7E8B63).withValues(alpha: 0.06)
+                  : const Color(0xFF355E3B).withValues(alpha: 0.08),
+            ),
           ),
         ),
         Positioned(
@@ -56,6 +71,7 @@ class AOJDesktopIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkTheme = Theme.of(context).brightness == Brightness.dark;
     return SizedBox(
       width: 54,
       height: 54,
@@ -70,7 +86,9 @@ class AOJDesktopIcon extends StatelessWidget {
               gradient: LinearGradient(
                 colors: [
                   accent.withValues(alpha: 0.35),
-                  const Color(0xFF111713),
+                  isDarkTheme
+                      ? const Color(0xFF111713)
+                      : const Color(0xFFF2F8EF),
                 ],
               ),
               border:
@@ -157,10 +175,14 @@ class KeyboardSafeArea extends StatelessWidget {
 }
 
 class GridPainter extends CustomPainter {
+  final Color color;
+
+  GridPainter({required this.color});
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = const Color(0xFF7E8B63).withValues(alpha: 0.06)
+      ..color = color
       ..strokeWidth = 1;
 
     const gap = 28.0;
@@ -175,5 +197,7 @@ class GridPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant GridPainter oldDelegate) {
+    return oldDelegate.color != color;
+  }
 }
