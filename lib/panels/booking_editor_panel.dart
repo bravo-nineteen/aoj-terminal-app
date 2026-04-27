@@ -141,6 +141,70 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
     }
   }
 
+  String _paymentMethodLabel(BookingGroup group) {
+    final directMethod = group.primary.paymentMethod.trim();
+    if (directMethod.isNotEmpty) {
+      return directMethod;
+    }
+
+    for (final payment in group.primary.payments.reversed) {
+      final method = payment.method.trim();
+      if (method.isNotEmpty) return method;
+    }
+
+    return 'Not set';
+  }
+
+  Future<void> _showOutstandingPaidDialog({
+    required double balance,
+    required String paymentMethod,
+  }) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF121813),
+          title: const Text('Outstanding Balance'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'There is still an outstanding balance after marking this booking as Paid.',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.9),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Balance: ¥ ${MoneyUtils.formatMoney(balance)}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.redAccent,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Payment method: $paymentMethod',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final group = widget.group;
@@ -321,6 +385,13 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                                         if (v == null) return;
                                         group.primary.paymentStatus = v;
                                         await _markDirtyAndSaveGroup();
+                                        if (v == 'Paid' && balance > 0) {
+                                          await _showOutstandingPaidDialog(
+                                            balance: balance,
+                                            paymentMethod:
+                                                _paymentMethodLabel(group),
+                                          );
+                                        }
                                       },
                                     ),
                                   ),

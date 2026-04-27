@@ -234,6 +234,91 @@ class _EventPanelState extends State<EventPanel> {
     );
   }
 
+  Future<void> _renameRosterName(BookingGroup group) async {
+    final controller = TextEditingController(text: group.displayName);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Edit Name'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Full name',
+              border: OutlineInputBorder(),
+            ),
+            textInputAction: TextInputAction.done,
+            onSubmitted: (value) => Navigator.of(context).pop(value),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(controller.text),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+
+    final updatedName = (result ?? '').trim();
+    if (updatedName.isEmpty) return;
+
+    final parts = updatedName.split(RegExp(r'\s+'));
+    final firstName = parts.first;
+    final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+
+    for (final row in group.rows) {
+      row.firstName = firstName;
+      row.lastName = lastName;
+    }
+    await _saveAndRefresh();
+  }
+
+  Future<void> _removeFromRoster(
+    BookingGroup group, {
+    required bool pickup,
+  }) async {
+    final rosterLabel = pickup ? 'pickup' : 'training';
+    final shouldRemove = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Remove From List'),
+          content: Text(
+            'Remove ${group.displayName} from the $rosterLabel list?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Remove'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldRemove != true) return;
+
+    for (final row in group.rows) {
+      if (pickup) {
+        row.needsPickup = false;
+      } else {
+        row.needsTraining = false;
+      }
+    }
+    await _saveAndRefresh();
+  }
+
   Widget _buildReadOnlyRow({
     required String label,
     required String value,
@@ -279,9 +364,12 @@ class _EventPanelState extends State<EventPanel> {
 
   Widget _buildRosterCard({
     required String title,
-    required List<String> names,
+    required List<BookingGroup> groups,
     Widget? topExtra,
     String emptyText = 'NONE',
+    bool editable = false,
+    Future<void> Function(BookingGroup)? onRename,
+    Future<void> Function(BookingGroup)? onRemove,
   }) {
     return Container(
       padding: const EdgeInsets.all(10),
@@ -307,7 +395,7 @@ class _EventPanelState extends State<EventPanel> {
           ],
           const SizedBox(height: 8),
           Expanded(
-            child: names.isEmpty
+            child: groups.isEmpty
                 ? Center(
                     child: Text(
                       emptyText,
@@ -315,9 +403,13 @@ class _EventPanelState extends State<EventPanel> {
                     ),
                   )
                 : ListView.separated(
-                    itemCount: names.length,
+                    itemCount: groups.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 4),
                     itemBuilder: (context, index) {
+                      final group = groups[index];
+                      final name = group.displayName.trim().isEmpty
+                          ? 'Unnamed Booking'
+                          : group.displayName.trim();
                       return Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -330,12 +422,48 @@ class _EventPanelState extends State<EventPanel> {
                             color: Colors.white.withValues(alpha: 0.05),
                           ),
                         ),
-                        child: Text(
-                          names[index],
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                name,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (editable) ...[
+                              IconButton(
+                                tooltip: 'Edit name',
+                                visualDensity: VisualDensity.compact,
+                                icon: Icon(
+                                  Icons.edit_outlined,
+                                  size: 16,
+                                  color: widget.accent,
+                                ),
+                                onPressed: onRename == null
+                                    ? null
+                                    : () async {
+                                        await onRename(group);
+                                      },
+                              ),
+                              IconButton(
+                                tooltip: 'Remove from list',
+                                visualDensity: VisualDensity.compact,
+                                icon: const Icon(
+                                  Icons.remove_circle_outline,
+                                  size: 16,
+                                  color: Colors.redAccent,
+                                ),
+                                onPressed: onRemove == null
+                                    ? null
+                                    : () async {
+                                        await onRemove(group);
+                                      },
+                              ),
+                            ],
+                          ],
                         ),
                       );
                     },
@@ -350,19 +478,11 @@ class _EventPanelState extends State<EventPanel> {
   Widget build(BuildContext context) {
     final event = widget.event;
 
-    final pickupNames = event == null
-        ? <String>[]
-        : BookingUtils.pickupGroups(event)
-            .map((g) => g.displayName.trim())
-            .where((name) => name.isNotEmpty)
-            .toList();
+    final pickupGroups =
+      event == null ? <BookingGroup>[] : BookingUtils.pickupGroups(event);
 
-    final trainingNames = event == null
-        ? <String>[]
-        : BookingUtils.trainingGroups(event)
-            .map((g) => g.displayName.trim())
-            .where((name) => name.isNotEmpty)
-            .toList();
+    final trainingGroups =
+      event == null ? <BookingGroup>[] : BookingUtils.trainingGroups(event);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
@@ -663,8 +783,15 @@ class _EventPanelState extends State<EventPanel> {
                         Expanded(
                           child: _buildRosterCard(
                             title: 'Pickup Roster',
-                            names: pickupNames,
+                            groups: pickupGroups,
                             emptyText: 'NO PICKUPS',
+                            editable: _isEditing,
+                            onRename:
+                                _isEditing ? _renameRosterName : null,
+                            onRemove: _isEditing
+                                ? (group) =>
+                                    _removeFromRoster(group, pickup: true)
+                                : null,
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -674,8 +801,15 @@ class _EventPanelState extends State<EventPanel> {
                               Expanded(
                                 child: _buildRosterCard(
                                   title: 'Training Roster',
-                                  names: trainingNames,
+                                  groups: trainingGroups,
                                   emptyText: 'NO TRAINING REQUESTS',
+                                  editable: _isEditing,
+                                  onRename:
+                                    _isEditing ? _renameRosterName : null,
+                                  onRemove: _isEditing
+                                    ? (group) =>
+                                      _removeFromRoster(group, pickup: false)
+                                    : null,
                                   topExtra: _isEditing
                                       ? (event.members.isEmpty
                                           ? PersistentEditField(

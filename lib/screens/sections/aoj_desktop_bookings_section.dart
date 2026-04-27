@@ -10,15 +10,31 @@ extension _AojDesktopBookingsSection on _AOJDesktopState {
       selectedBookingIndex: selectedBookingIndex,
       checkInStatuses: checkInStatuses,
       paymentStatuses: paymentStatuses,
+      selectedPaymentFilter: bookingPaymentFilter,
+      selectedTicketTypeFilter: bookingTicketTypeFilter,
       onSetActiveEvent: (value) async {
         await _setActiveEvent(value);
         _refresh(() {
+          bookingPaymentFilter = 'All Payments';
+          bookingTicketTypeFilter = 'All Ticket Types';
           selectedBookingIndex = 0;
         });
       },
       onSearchChanged: (v) {
         _refresh(() {
           bookingSearch = v;
+          selectedBookingIndex = 0;
+        });
+      },
+      onPaymentFilterChanged: (value) {
+        _refresh(() {
+          bookingPaymentFilter = value;
+          selectedBookingIndex = 0;
+        });
+      },
+      onTicketTypeFilterChanged: (value) {
+        _refresh(() {
+          bookingTicketTypeFilter = value;
           selectedBookingIndex = 0;
         });
       },

@@ -45,7 +45,7 @@ class AOJDesktop extends StatefulWidget {
 class _AOJDesktopState extends State<AOJDesktop> {
   static const double _windowMinWidth = 520;
   static const double _windowMinHeight = 340;
-  static const double _tabBarHeight = 44;
+  static const double _tabBarHeight = 52;
   static const double _desktopPadding = 8;
 
   final List<DesktopAppItem> apps = const [
@@ -123,6 +123,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
   int? selectedBookingIndex;
   int? selectedMemberIndex;
   String bookingSearch = '';
+  String bookingPaymentFilter = 'All Payments';
+  String bookingTicketTypeFilter = 'All Ticket Types';
   String gameModeSearch = '';
   String systemStatus = 'READY';
   String exportStatus = 'NO EXPORT YET';
@@ -1434,15 +1436,39 @@ class _AOJDesktopState extends State<AOJDesktop> {
     if (event == null) return [];
     final groups = BookingUtils.groupedBookingsForEvent(event);
 
-    if (bookingSearch.trim().isEmpty) return groups;
-    final q = bookingSearch.trim().toLowerCase();
+    final query = bookingSearch.trim().toLowerCase();
+    final hasSearch = query.isNotEmpty;
+    final paymentFilter = bookingPaymentFilter.trim();
+    final hasPaymentFilter = paymentFilter != 'All Payments';
+    final ticketTypeFilter = bookingTicketTypeFilter.trim().toLowerCase();
+    final availableTicketTypes = event.tickets
+      .map((t) => t.ticketName.trim().toLowerCase())
+      .where((name) => name.isNotEmpty)
+      .toSet();
+    final hasTicketTypeFilter = ticketTypeFilter != 'all ticket types' &&
+      availableTicketTypes.contains(ticketTypeFilter);
 
     return groups.where((g) {
-      return g.displayName.toLowerCase().contains(q) ||
-          g.email.toLowerCase().contains(q) ||
-          g.phone.toLowerCase().contains(q) ||
-          g.bookingId.toLowerCase().contains(q) ||
-          g.guestNames.toLowerCase().contains(q);
+      final paymentStatus = g.primary.paymentStatus.trim().isEmpty
+          ? 'Unpaid'
+          : g.primary.paymentStatus.trim();
+      if (hasPaymentFilter && paymentStatus != paymentFilter) {
+        return false;
+      }
+
+      if (hasTicketTypeFilter) {
+        final hasTicketType = g.tickets.any(
+          (t) => t.ticketName.trim().toLowerCase() == ticketTypeFilter,
+        );
+        if (!hasTicketType) return false;
+      }
+
+      if (!hasSearch) return true;
+      return g.displayName.toLowerCase().contains(query) ||
+          g.email.toLowerCase().contains(query) ||
+          g.phone.toLowerCase().contains(query) ||
+          g.bookingId.toLowerCase().contains(query) ||
+          g.guestNames.toLowerCase().contains(query);
     }).toList();
   }
 
@@ -2215,7 +2241,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     return GestureDetector(
       onDoubleTap: () => _toggleMaximize(window.id, desktopRect),
       child: Container(
-        height: 48,
+        height: 54,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -2253,7 +2279,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
                 });
               },
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 5),
             WindowButton(
               icon: Icons.vertical_align_bottom,
               color: const Color(0xFF6D7F96),
@@ -2265,19 +2291,19 @@ class _AOJDesktopState extends State<AOJDesktop> {
                 });
               },
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 5),
             WindowButton(
               icon: window.isMaximized ? Icons.filter_none : Icons.crop_square,
               color: const Color(0xFF7E8B63),
               onPressed: () => _toggleMaximize(window.id, desktopRect),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 5),
             WindowButton(
               icon: Icons.remove,
               color: const Color(0xFFB7A36B),
               onPressed: () => _toggleMinimize(window.id),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 5),
             WindowButton(
               icon: Icons.close,
               color: const Color(0xFF9A5A52),
@@ -2321,7 +2347,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
   Widget _buildOpenTabsBar(List<DesktopWindowData> openTabs) {
     return Container(
       height: _tabBarHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: const Color(0xCC0C120D),
         border: Border(

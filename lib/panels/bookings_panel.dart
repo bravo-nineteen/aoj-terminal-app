@@ -12,8 +12,12 @@ class BookingsPanel extends StatefulWidget {
   final int? selectedBookingIndex;
   final List<String> checkInStatuses;
   final List<String> paymentStatuses;
+  final String selectedPaymentFilter;
+  final String selectedTicketTypeFilter;
   final Future<void> Function(String?) onSetActiveEvent;
   final ValueChanged<String> onSearchChanged;
+  final ValueChanged<String> onPaymentFilterChanged;
+  final ValueChanged<String> onTicketTypeFilterChanged;
   final ValueChanged<int> onSelectBooking;
   final Future<void> Function(BookingGroup, String) onQuickSetCheckInStatus;
   final Future<void> Function(BookingGroup, String) onQuickSetPaymentStatus;
@@ -30,8 +34,12 @@ class BookingsPanel extends StatefulWidget {
     required this.selectedBookingIndex,
     required this.checkInStatuses,
     required this.paymentStatuses,
+    required this.selectedPaymentFilter,
+    required this.selectedTicketTypeFilter,
     required this.onSetActiveEvent,
     required this.onSearchChanged,
+    required this.onPaymentFilterChanged,
+    required this.onTicketTypeFilterChanged,
     required this.onSelectBooking,
     required this.onQuickSetCheckInStatus,
     required this.onQuickSetPaymentStatus,
@@ -131,6 +139,25 @@ class _BookingsPanelState extends State<BookingsPanel> {
         .toList();
   }
 
+  List<String> _ticketTypeFilterOptions() {
+    final event = widget.event;
+    if (event == null) {
+      return const ['All Ticket Types'];
+    }
+
+    final seen = <String>{};
+    final options = <String>['All Ticket Types'];
+    for (final ticket in event.tickets) {
+      final name = ticket.ticketName.trim();
+      if (name.isEmpty) continue;
+      final key = name.toLowerCase();
+      if (seen.add(key)) {
+        options.add(name);
+      }
+    }
+    return options;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -177,35 +204,6 @@ class _BookingsPanelState extends State<BookingsPanel> {
                 ),
               ),
               const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: widget.event == null
-                    ? null
-                    : () async {
-                        await widget.onAddManualBooking();
-                      },
-                icon: const Icon(Icons.person_add_alt_1, size: 16),
-                label: const Text('ADD BOOKING'),
-                style: OutlinedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                ),
-              ),
-              const SizedBox(width: 6),
-              OutlinedButton.icon(
-                onPressed: widget.event == null
-                    ? null
-                    : () async {
-                        await widget.onCheckInAll();
-                        if (mounted) setState(() {});
-                      },
-                icon: const Icon(Icons.how_to_reg_outlined, size: 16),
-                label: const Text('ALL IN'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 10),
-                ),
-              ),
-              const SizedBox(width: 6),
               IconButton(
                 tooltip: _checkInMode
                     ? 'Standard view'
@@ -221,6 +219,110 @@ class _BookingsPanelState extends State<BookingsPanel> {
                   color: _checkInMode
                       ? widget.accent
                       : null,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: 150,
+                child: DropdownButtonFormField<String>(
+                  initialValue: widget.selectedPaymentFilter,
+                  decoration: const InputDecoration(
+                    labelText: 'Payment',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  ),
+                  items: <String>[
+                    'All Payments',
+                    ...widget.paymentStatuses,
+                  ]
+                      .map(
+                        (status) => DropdownMenuItem<String>(
+                          value: status,
+                          child: Text(
+                            status,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: widget.event == null
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          widget.onPaymentFilterChanged(value);
+                        },
+                ),
+              ),
+              SizedBox(
+                width: 180,
+                child: DropdownButtonFormField<String>(
+                  initialValue: _ticketTypeFilterOptions().contains(
+                    widget.selectedTicketTypeFilter,
+                  )
+                      ? widget.selectedTicketTypeFilter
+                      : 'All Ticket Types',
+                  decoration: const InputDecoration(
+                    labelText: 'Ticket Type',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  ),
+                  items: _ticketTypeFilterOptions()
+                      .map(
+                        (ticketType) => DropdownMenuItem<String>(
+                          value: ticketType,
+                          child: Text(
+                            ticketType,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: widget.event == null
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          widget.onTicketTypeFilterChanged(value);
+                        },
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: widget.event == null
+                    ? null
+                    : () async {
+                        await widget.onAddManualBooking();
+                      },
+                icon: const Icon(Icons.person_add_alt_1, size: 16),
+                label: const Text('ADD BOOKING'),
+                style: OutlinedButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: widget.event == null
+                    ? null
+                    : () async {
+                        await widget.onCheckInAll();
+                        if (mounted) setState(() {});
+                      },
+                icon: const Icon(Icons.how_to_reg_outlined, size: 16),
+                label: const Text('ALL IN'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 10,
+                  ),
                 ),
               ),
             ],
