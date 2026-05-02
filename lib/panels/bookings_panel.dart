@@ -23,6 +23,7 @@ class BookingsPanel extends StatefulWidget {
   final Future<void> Function() onCheckInAll;
   final Future<void> Function(BookingGroup) onOpenBookingEditor;
   final Future<void> Function() onAddManualBooking;
+  final Future<void> Function(BookingGroup)? onAddPayment;
 
   const BookingsPanel({
     super.key,
@@ -44,6 +45,7 @@ class BookingsPanel extends StatefulWidget {
     required this.onCheckInAll,
     required this.onOpenBookingEditor,
     required this.onAddManualBooking,
+    this.onAddPayment,
   });
 
   @override
@@ -158,6 +160,112 @@ class _BookingsPanelState extends State<BookingsPanel> {
     return options;
   }
 
+  Widget _buildStatsBar() {
+    final groups = widget.groups;
+    final total = groups.length;
+    final checkedIn = groups
+        .where((g) => g.primary.checkInStatus.trim() == 'Checked In')
+        .length;
+    final unpaid = groups
+        .where((g) {
+          final s = g.primary.paymentStatus.trim();
+          return s == 'Unpaid' || s.isEmpty;
+        })
+        .length;
+    final partPaid = groups
+        .where((g) => g.primary.paymentStatus.trim() == 'Part Paid')
+        .length;
+    double outstanding = 0;
+    for (final g in groups) {
+      final bal = BookingUtils.balance(g, widget.event);
+      if (bal > 0) outstanding += bal;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+      ),
+      child: Row(
+        children: [
+          _statChip('$total', 'BOOKINGS', Colors.white70),
+          const SizedBox(width: 10),
+          _statChip('$checkedIn', 'CHECKED IN', Colors.greenAccent),
+          const SizedBox(width: 10),
+          if (unpaid > 0) ...[
+            _statChip('$unpaid', 'UNPAID', Colors.redAccent),
+            const SizedBox(width: 10),
+          ],
+          if (partPaid > 0) ...[
+            _statChip('$partPaid', 'PART PAID', Colors.orangeAccent),
+            const SizedBox(width: 10),
+          ],
+          if (outstanding > 0)
+            _statChip(
+              '¥ ${MoneyUtils.formatMoney(outstanding)}',
+              'OUTSTANDING',
+              Colors.redAccent,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statChip(String value, String label, Color colour) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: colour,
+          ),
+        ),
+        const SizedBox(width: 3),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF98A197),
+            letterSpacing: 0.4,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _flagBadge(String label, IconData icon, Color colour) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: colour.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: colour.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 9, color: colour),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 9,
+              color: colour,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -193,13 +301,24 @@ class _BookingsPanelState extends State<BookingsPanel> {
                 child: TextField(
                   controller: _searchController,
                   onChanged: widget.onSearchChanged,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Search booking',
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
                     isDense: true,
-                    prefixIcon: Icon(Icons.search, size: 18),
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 10),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 16),
+                            tooltip: 'Clear search',
+                            onPressed: () {
+                              _searchController.clear();
+                              widget.onSearchChanged('');
+                              setState(() {});
+                            },
+                          )
+                        : null,
                   ),
                 ),
               ),
@@ -327,7 +446,9 @@ class _BookingsPanelState extends State<BookingsPanel> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
+          if (widget.event != null) _buildStatsBar(),
+          const SizedBox(height: 6),
           if (widget.event == null)
             const Expanded(
               child: Center(
@@ -675,6 +796,31 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                                     .toList(),
                                               ),
                                             ),
+                                          if (group.primary.needsPickup ||
+                                              group.primary.needsTraining)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                  top: 3),
+                                              child: Wrap(
+                                                spacing: 4,
+                                                children: [
+                                                  if (group.primary.needsPickup)
+                                                    _flagBadge(
+                                                      'PICKUP',
+                                                      Icons
+                                                          .directions_car_outlined,
+                                                      Colors.cyanAccent,
+                                                    ),
+                                                  if (group
+                                                      .primary.needsTraining)
+                                                    _flagBadge(
+                                                      'TRAINING',
+                                                      Icons.school_outlined,
+                                                      Colors.purpleAccent,
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
                                         ],
                                       ),
                                     ),
@@ -722,6 +868,45 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                       ),
                                     ),
                                     const SizedBox(width: 8),
+                                    if (widget.onAddPayment != null)
+                                      Padding(
+                                        padding:
+                                            const EdgeInsets.only(right: 4),
+                                        child: Tooltip(
+                                          message: 'Add payment',
+                                          child: Material(
+                                            color: Colors.green
+                                                .withValues(alpha: 0.14),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            child: InkWell(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              onTap: () => widget
+                                                  .onAddPayment!(group),
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 8),
+                                                decoration: BoxDecoration(
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                  border: Border.all(
+                                                      color: Colors.greenAccent
+                                                          .withValues(
+                                                              alpha: 0.35)),
+                                                ),
+                                                child: const Icon(
+                                                  Icons.payments_outlined,
+                                                  size: 16,
+                                                  color: Colors.greenAccent,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
                                     _IntegratedOpenButton(
                                       accent: widget.accent,
                                       onTap: () =>

@@ -47,6 +47,7 @@ extension _AojDesktopBookingsSection on _AOJDesktopState {
       onCheckInAll: _checkInAllBookings,
       onOpenBookingEditor: _openBookingEditorWindow,
       onAddManualBooking: _showAddManualBookingDialog,
+      onAddPayment: _showAddPaymentDialog,
     );
   }
 }

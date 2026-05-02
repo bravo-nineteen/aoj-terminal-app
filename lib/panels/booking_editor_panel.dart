@@ -60,6 +60,20 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
     });
   }
 
+  String _formatDate(String iso) {
+    if (iso.isEmpty) return '';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      final months = [
+        'Jan','Feb','Mar','Apr','May','Jun',
+        'Jul','Aug','Sep','Oct','Nov','Dec',
+      ];
+      return '${dt.day} ${months[dt.month - 1]} ${dt.year}  ${dt.hour.toString().padLeft(2,'0')}:${dt.minute.toString().padLeft(2,'0')}';
+    } catch (_) {
+      return iso;
+    }
+  }
+
   Future<void> _markDirtyAndSaveGroup() async {
     _dirty = true;
     await widget.onSaveGroup(widget.group);
@@ -479,12 +493,38 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                                               ],
                                             ),
                                           ),
-                                          Text(
-                                            '¥ ${ticket.price}',
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w800,
-                                            ),
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                '¥ ${ticket.price}',
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                              if (ticket.quantity > 1)
+                                                Builder(builder: (context) {
+                                                  final total =
+                                                      double.tryParse(
+                                                              ticket.price) ??
+                                                          0;
+                                                  final unit = ticket.quantity >
+                                                          0
+                                                      ? (total /
+                                                              ticket.quantity)
+                                                          .toStringAsFixed(0)
+                                                      : '0';
+                                                  return Text(
+                                                    '¥ $unit ea.',
+                                                    style: const TextStyle(
+                                                      fontSize: 10,
+                                                      color: Color(0xFF98A197),
+                                                    ),
+                                                  );
+                                                }),
+                                            ],
                                           ),
                                         ],
                                       ),
@@ -556,6 +596,15 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                                                       fontSize: 11,
                                                     ),
                                                   ),
+                                                  if (payment.date.isNotEmpty)
+                                                    Text(
+                                                      _formatDate(payment.date),
+                                                      style: const TextStyle(
+                                                        fontSize: 10,
+                                                        color:
+                                                            Color(0xFF98A197),
+                                                      ),
+                                                    ),
                                                   if (payment.note.isNotEmpty)
                                                     Text(
                                                       payment.note,

@@ -136,6 +136,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
   String systemStatus = 'READY';
   String exportStatus = 'NO EXPORT YET';
   String syncStatus = 'NOT SYNCED';
+  String _lastUsedPaymentMethod = '';
 
   final TextEditingController propIpController =
       TextEditingController(text: '192.168.4.1');
@@ -1267,7 +1268,10 @@ class _AOJDesktopState extends State<AOJDesktop> {
   Future<void> _showAddPaymentDialog(BookingGroup group) async {
     final amountController = TextEditingController();
     final noteController = TextEditingController();
-    String method = paymentMethods.first;
+    String method = _lastUsedPaymentMethod.isNotEmpty &&
+            paymentMethods.contains(_lastUsedPaymentMethod)
+        ? _lastUsedPaymentMethod
+        : paymentMethods.first;
 
     final result = await showDialog<bool>(
       context: context,
@@ -1281,6 +1285,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
                 children: [
                   TextField(
                     controller: amountController,
+                    autofocus: true,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
                     decoration: const InputDecoration(labelText: 'Amount'),
@@ -1324,6 +1329,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     );
 
     if (result == true) {
+      _lastUsedPaymentMethod = method;
       group.primary.payments.add(
         PaymentRecord(
           id: DateTime.now().microsecondsSinceEpoch.toString(),
