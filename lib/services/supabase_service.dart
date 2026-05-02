@@ -513,6 +513,10 @@ class SupabaseService {
       existingRowsById[id] = row;
     }
 
+    // Safety: if local has fewer events than cloud, we may have a partial load.
+    // Skip all deletions to avoid wiping events that simply haven't loaded locally yet.
+    if (localEvents.length < existingRowsById.length) return;
+
     final existingIds = existingRowsById.keys.toSet();
 
     final idsToDelete = <String>[];
@@ -738,6 +742,10 @@ class SupabaseService {
         .where((id) => !desiredIds.contains(id))
         .toList();
     if (idsToDelete.isEmpty) return;
+
+    // Safety: if local has fewer rows than cloud for this table/event, skip deletion.
+    // This prevents a partial local load from pruning cloud-only rows that belong here.
+    if (desiredIds.length < existingIds.length) return;
 
     await _writeDeletionTombstones(
       db: db,
