@@ -17,7 +17,6 @@ extension _AojDesktopBookingEditorSection on _AOJDesktopState {
       event: event,
       group: group,
       membershipLevel: _membershipLevelForGroup(event, group),
-      paymentStatuses: paymentStatuses,
       checkInStatuses: checkInStatuses,
       onToggleCheckIn: _toggleCheckInForGroup,
       onEditContact: _showEditContactDialog,

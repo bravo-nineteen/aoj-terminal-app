@@ -4,6 +4,7 @@ class PersistentEditField extends StatefulWidget {
   final String label;
   final String value;
   final Future<void> Function(String) onChanged;
+  final ValueChanged<bool>? onDirtyChanged;
   final int maxLines;
   final bool enabled;
   final TextInputType? keyboardType;
@@ -13,6 +14,7 @@ class PersistentEditField extends StatefulWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.onDirtyChanged,
     this.maxLines = 1,
     this.enabled = true,
     this.keyboardType,
@@ -48,6 +50,7 @@ class _PersistentEditFieldState extends State<PersistentEditField> {
         selection: TextSelection.collapsed(offset: widget.value.length),
       );
       _lastCommittedValue = widget.value;
+      widget.onDirtyChanged?.call(false);
     }
   }
 
@@ -67,6 +70,7 @@ class _PersistentEditFieldState extends State<PersistentEditField> {
     try {
       await widget.onChanged(currentValue);
       _lastCommittedValue = currentValue;
+      widget.onDirtyChanged?.call(false);
     } finally {
       _isSaving = false;
     }
@@ -108,6 +112,9 @@ class _PersistentEditFieldState extends State<PersistentEditField> {
           if (mounted) {
             _focusNode.unfocus();
           }
+        },
+        onChanged: (_) {
+          widget.onDirtyChanged?.call(_controller.text != _lastCommittedValue);
         },
       ),
     );

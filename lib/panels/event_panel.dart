@@ -98,6 +98,10 @@ class _EventPanelState extends State<EventPanel> {
     return BookingUtils.eventTicketValue(event);
   }
 
+  double _donationTicketRevenue(EventRecord event) {
+    return BookingUtils.eventDonationValue(event);
+  }
+
   double _salesRevenue(EventRecord event) {
     return BookingUtils.eventSalesValue(event);
   }
@@ -119,7 +123,9 @@ class _EventPanelState extends State<EventPanel> {
       0.0,
       (sum, e) => sum + _parseMoney(e.amount),
     );
-    return _ticketRevenue(event) -
+    final ticketAndDonations =
+        _ticketRevenue(event) + _donationTicketRevenue(event);
+    return ticketAndDonations -
         _ticketCostTotal(event) +
         _salesRevenue(event) -
         manualExpensesTotal;
@@ -128,6 +134,13 @@ class _EventPanelState extends State<EventPanel> {
   int _lunchOrderCount(EventRecord event) {
     return BookingUtils.lunchBreakdown(event)
         .fold<int>(0, (sum, item) => sum + item.count);
+  }
+
+  double _lunchPassThroughTotal(EventRecord event) {
+    return BookingUtils.groupedBookingsForEvent(event).fold<double>(
+      0,
+      (sum, group) => sum + BookingUtils.lunchTotal(group, event),
+    );
   }
 
   List<_LunchOrderPerson> _lunchOrdersByPerson(EventRecord event) {
@@ -736,11 +749,15 @@ class _EventPanelState extends State<EventPanel> {
                             ),
                             InfoLine(
                               'Ticket Value',
-                              '¥ ${MoneyUtils.formatMoney(_ticketRevenue(event))}',
+                              '¥ ${MoneyUtils.formatMoney(_ticketCostTotal(event))}',
                             ),
                             InfoLine(
                               'Ticket Cost Total',
-                              '¥ ${MoneyUtils.formatMoney(_ticketCostTotal(event))}',
+                              '¥ ${MoneyUtils.formatMoney(_ticketRevenue(event))}',
+                            ),
+                            InfoLine(
+                              'Donation Tickets',
+                              '¥ ${MoneyUtils.formatMoney(_donationTicketRevenue(event))}',
                             ),
                             InfoLine(
                               'Sales Value',
@@ -763,6 +780,10 @@ class _EventPanelState extends State<EventPanel> {
                             InfoLine(
                               'Lunch Orders',
                               _lunchOrderCount(event).toString(),
+                            ),
+                            InfoLine(
+                              'Lunch Fees (Pass-through)',
+                              '¥ ${MoneyUtils.formatMoney(_lunchPassThroughTotal(event))}',
                             ),
                             InfoLine(
                               'Training Requests',

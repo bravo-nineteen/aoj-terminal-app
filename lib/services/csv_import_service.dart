@@ -1642,6 +1642,7 @@ class CsvImportService {
     if (value.contains('paypal')) return 'PayPal';
 
     return trimmed;
+
   }
 
   static bool _looksPaid(String raw) {

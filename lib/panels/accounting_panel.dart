@@ -185,10 +185,16 @@ class _AccountingPanelState extends State<AccountingPanel> {
 
     int checkedInCount = 0;
     final int bookingCount = groups.length;
+    final int bookedPersons = BookingUtils.eventBookedPersons(widget.event!);
 
-    double ticketsTotal = 0;
+    final double ticketValueByPeople =
+      BookingUtils.eventTicketCostTotal(widget.event!);
+    double ticketCostTotal = 0;
+    double donationTicketsTotal = 0;
+    double lunchPassThroughTotal = 0;
     double salesTotal = 0;
     double grandTotal = 0;
+    double chargeableTotal = 0;
     double paymentsRecorded = 0;
     double cardFees = 0;
     double manualExpensesTotal = 0;
@@ -198,9 +204,19 @@ class _AccountingPanelState extends State<AccountingPanel> {
         checkedInCount++;
       }
 
-      ticketsTotal += BookingUtils.ticketsTotal(group);
-      salesTotal += BookingUtils.salesTotal(group);
-      grandTotal += BookingUtils.grandTotal(group, widget.event);
+      final groupTicketCost =
+          BookingUtils.groupTicketRevenueExcludingDonations(group);
+      final groupDonationTickets = BookingUtils.groupDonationTotal(group);
+      final groupLunchPassThrough =
+          BookingUtils.lunchTotal(group, widget.event!);
+      final groupSales = BookingUtils.salesTotal(group);
+
+      ticketCostTotal += groupTicketCost;
+      donationTicketsTotal += groupDonationTickets;
+      lunchPassThroughTotal += groupLunchPassThrough;
+      salesTotal += groupSales;
+      grandTotal += groupTicketCost + groupSales + groupDonationTickets;
+      chargeableTotal += BookingUtils.grandTotal(group, widget.event);
       paymentsRecorded += BookingUtils.paymentsTotal(group);
 
       for (final payment in group.primary.payments) {
@@ -269,27 +285,9 @@ class _AccountingPanelState extends State<AccountingPanel> {
       );
     }
 
-    // Lunch cost deduction — lunch fees collected inflate revenue but are pass-through costs
-    double lunchCostTotal = 0;
-    for (final group in groups) {
-      lunchCostTotal += BookingUtils.lunchTotal(group, widget.event!);
-    }
-    if (lunchCostTotal > 0) {
-      deductionLines.insert(
-        0,
-        _LedgerLine(
-          id: 'lunch_costs',
-          title: 'Lunch Costs',
-          subtitle: 'LUNCH DEDUCTION • pass-through collected from bookings',
-          amount: lunchCostTotal,
-          isDeletable: false,
-        ),
-      );
-    }
-
-    final totalDeductions = cardFees + manualExpensesTotal + lunchCostTotal;
+    final totalDeductions = cardFees + manualExpensesTotal;
     final netAfterAllDeductions = paymentsRecorded - totalDeductions;
-    final outstandingBalance = grandTotal - paymentsRecorded;
+    final outstandingBalance = chargeableTotal - paymentsRecorded;
     final accent = widget.accent;
     final accountingNotes = widget.event!.accountingNotes;
 
@@ -297,13 +295,6 @@ class _AccountingPanelState extends State<AccountingPanel> {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          HeroPanel(
-            title: 'ACCOUNT MANAGEMENT',
-            subtitle: 'Income, deductions and event totals',
-            accent: accent,
-            icon: Icons.account_balance_wallet_outlined,
-          ),
-          const SizedBox(height: 14),
           Expanded(
             child: Column(
               children: [
@@ -442,16 +433,36 @@ class _AccountingPanelState extends State<AccountingPanel> {
                             value: bookingCount.toString(),
                           ),
                           _SummaryStat(
+                            label: 'Booked Persons',
+                            value: bookedPersons.toString(),
+                          ),
+                          _SummaryStat(
                             label: 'Checked In',
                             value: checkedInCount.toString(),
                           ),
                           _SummaryStat(
                             label: 'Ticket Value',
-                            value: '¥ ${MoneyUtils.formatMoney(ticketsTotal)}',
+                            value:
+                                '¥ ${MoneyUtils.formatMoney(ticketValueByPeople)}',
+                          ),
+                          _SummaryStat(
+                            label: 'Ticket Cost Total',
+                            value:
+                                '¥ ${MoneyUtils.formatMoney(ticketCostTotal)}',
+                          ),
+                          _SummaryStat(
+                            label: 'Donation Tickets',
+                            value:
+                                '¥ ${MoneyUtils.formatMoney(donationTicketsTotal)}',
                           ),
                           _SummaryStat(
                             label: 'Sales Value',
                             value: '¥ ${MoneyUtils.formatMoney(salesTotal)}',
+                          ),
+                          _SummaryStat(
+                            label: 'Lunch Fees (Pass-through)',
+                            value:
+                                '¥ ${MoneyUtils.formatMoney(lunchPassThroughTotal)}',
                           ),
                           _SummaryStat(
                             label: 'Gross Event Value',

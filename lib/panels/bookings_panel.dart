@@ -20,7 +20,6 @@ class BookingsPanel extends StatefulWidget {
   final ValueChanged<String> onTicketTypeFilterChanged;
   final ValueChanged<int> onSelectBooking;
   final Future<void> Function(BookingGroup, String) onQuickSetCheckInStatus;
-  final Future<void> Function(BookingGroup, String) onQuickSetPaymentStatus;
   final Future<void> Function() onCheckInAll;
   final Future<void> Function(BookingGroup) onOpenBookingEditor;
   final Future<void> Function() onAddManualBooking;
@@ -42,7 +41,6 @@ class BookingsPanel extends StatefulWidget {
     required this.onTicketTypeFilterChanged,
     required this.onSelectBooking,
     required this.onQuickSetCheckInStatus,
-    required this.onQuickSetPaymentStatus,
     required this.onCheckInAll,
     required this.onOpenBookingEditor,
     required this.onAddManualBooking,
@@ -106,6 +104,8 @@ class _BookingsPanelState extends State<BookingsPanel> {
     switch (status.trim()) {
       case 'Paid':
         return Colors.greenAccent;
+      case 'Overpaid':
+        return Colors.lightBlueAccent;
       case 'Part Paid':
         return Colors.orangeAccent;
       case 'Refunded':
@@ -621,54 +621,14 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                                 ),
                                               ),
                                               const SizedBox(width: 4),
-                                              DropdownButtonHideUnderline(
-                                                child: DropdownButton<String>(
-                                                  value: widget.paymentStatuses
-                                                          .contains(
-                                                              paymentStatus)
-                                                      ? paymentStatus
-                                                      : widget.paymentStatuses
-                                                          .first,
-                                                  isDense: true,
-                                                  style: TextStyle(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w800,
-                                                    color: _paymentColor(
-                                                        paymentStatus),
+                                              Text(
+                                                paymentStatus,
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: _paymentColor(
+                                                    paymentStatus,
                                                   ),
-                                                  dropdownColor:
-                                                      const Color(0xFF1A211C),
-                                                  items: widget.paymentStatuses
-                                                      .map(
-                                                        (e) => DropdownMenuItem<
-                                                            String>(
-                                                          value: e,
-                                                          child: Text(
-                                                            e,
-                                                            style: TextStyle(
-                                                              color:
-                                                                  _paymentColor(
-                                                                      e),
-                                                              fontSize: 11,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w800,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      )
-                                                      .toList(),
-                                                  onChanged: (value) async {
-                                                    if (value == null) return;
-                                                    await widget
-                                                        .onQuickSetPaymentStatus(
-                                                      group,
-                                                      value,
-                                                    );
-                                                    if (mounted) {
-                                                      setState(() {});
-                                                    }
-                                                  },
                                                 ),
                                               ),
                                             ],

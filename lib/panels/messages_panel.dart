@@ -75,9 +75,7 @@ class _MessagesPanelState extends State<MessagesPanel> {
     try {
       final all = await MessagesService.fetchMessages();
       if (!mounted) return;
-      if (_lastReadAt == null) {
-        _lastReadAt = DateTime.now();
-      }
+      _lastReadAt ??= DateTime.now();
       setState(() {
         _allMessages = all;
         _messages = _applyFilters(all);

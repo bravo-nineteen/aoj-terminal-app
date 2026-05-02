@@ -167,6 +167,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     'Unpaid',
     'Part Paid',
     'Paid',
+    'Overpaid',
     'Refunded',
   ];
 
@@ -1530,17 +1531,6 @@ class _AOJDesktopState extends State<AOJDesktop> {
     await _saveGroupedBooking(group);
     setState(() {
       systemStatus = 'CHECK-IN STATUS UPDATED';
-    });
-  }
-
-  Future<void> _quickSetPaymentStatus(
-    BookingGroup group,
-    String status,
-  ) async {
-    group.primary.paymentStatus = status;
-    await _saveGroupedBooking(group);
-    setState(() {
-      systemStatus = 'PAYMENT STATUS UPDATED';
     });
   }
 

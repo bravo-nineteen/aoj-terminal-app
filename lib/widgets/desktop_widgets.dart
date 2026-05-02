@@ -15,7 +15,7 @@ class AOJDesktopBackground extends StatelessWidget {
         Container(
           decoration: BoxDecoration(
             gradient: RadialGradient(
-              center: Alignment(-0.4, -0.8),
+              center: const Alignment(-0.4, -0.8),
               radius: 1.4,
               colors: isDarkTheme
                   ? const [

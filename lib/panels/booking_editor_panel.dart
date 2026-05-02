@@ -11,7 +11,6 @@ class BookingEditorPanel extends StatefulWidget {
   final EventRecord event;
   final BookingGroup group;
   final String membershipLevel;
-  final List<String> paymentStatuses;
   final List<String> checkInStatuses;
   final Future<void> Function(BookingGroup) onToggleCheckIn;
   final Future<void> Function(BookingGroup) onEditContact;
@@ -32,7 +31,6 @@ class BookingEditorPanel extends StatefulWidget {
     required this.event,
     required this.group,
     required this.membershipLevel,
-    required this.paymentStatuses,
     required this.checkInStatuses,
     required this.onToggleCheckIn,
     required this.onEditContact,
@@ -54,6 +52,13 @@ class BookingEditorPanel extends StatefulWidget {
 
 class _BookingEditorPanelState extends State<BookingEditorPanel> {
   bool _dirty = false;
+
+  void _handleFieldDirtyChanged(bool isDirty) {
+    if (!isDirty || _dirty) return;
+    setState(() {
+      _dirty = true;
+    });
+  }
 
   Future<void> _markDirtyAndSaveGroup() async {
     _dirty = true;
@@ -139,70 +144,6 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
     if (result == true) {
       await widget.onDeleteGroup(widget.group);
     }
-  }
-
-  String _paymentMethodLabel(BookingGroup group) {
-    final directMethod = group.primary.paymentMethod.trim();
-    if (directMethod.isNotEmpty) {
-      return directMethod;
-    }
-
-    for (final payment in group.primary.payments.reversed) {
-      final method = payment.method.trim();
-      if (method.isNotEmpty) return method;
-    }
-
-    return 'Not set';
-  }
-
-  Future<void> _showOutstandingPaidDialog({
-    required double balance,
-    required String paymentMethod,
-  }) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF121813),
-          title: const Text('Outstanding Balance'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'There is still an outstanding balance after marking this booking as Paid.',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.9),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Balance: ¥ ${MoneyUtils.formatMoney(balance)}',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.redAccent,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Payment method: $paymentMethod',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   @override
@@ -350,85 +291,44 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                                 value: '¥ ${MoneyUtils.formatMoney(paid)}',
                               ),
                               SummaryLine(
+                                label: 'Payment Status',
+                                value: group.primary.paymentStatus.trim().isEmpty
+                                    ? 'Unpaid'
+                                    : group.primary.paymentStatus,
+                              ),
+                              SummaryLine(
                                 label: 'Balance',
                                 value: '¥ ${MoneyUtils.formatMoney(balance)}',
                               ),
                               const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: DropdownButtonFormField<String>(
-                                      initialValue:
-                                          widget.paymentStatuses.contains(
-                                        group.primary.paymentStatus,
-                                      )
-                                              ? group.primary.paymentStatus
-                                              : 'Unpaid',
-                                      decoration: const InputDecoration(
-                                        labelText: 'Payment',
-                                        border: OutlineInputBorder(),
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 10,
-                                        ),
-                                      ),
-                                      items: widget.paymentStatuses
-                                          .map(
-                                            (e) => DropdownMenuItem<String>(
-                                              value: e,
-                                              child: Text(e),
-                                            ),
-                                          )
-                                          .toList(),
-                                      onChanged: (v) async {
-                                        if (v == null) return;
-                                        group.primary.paymentStatus = v;
-                                        await _markDirtyAndSaveGroup();
-                                        if (v == 'Paid' && balance > 0) {
-                                          await _showOutstandingPaidDialog(
-                                            balance: balance,
-                                            paymentMethod:
-                                                _paymentMethodLabel(group),
-                                          );
-                                        }
-                                      },
-                                    ),
+                              DropdownButtonFormField<String>(
+                                initialValue: widget.checkInStatuses.contains(
+                                  group.primary.checkInStatus,
+                                )
+                                    ? group.primary.checkInStatus
+                                    : 'Not Checked In',
+                                decoration: const InputDecoration(
+                                  labelText: 'Check-in',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 10,
                                   ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: DropdownButtonFormField<String>(
-                                      initialValue:
-                                          widget.checkInStatuses.contains(
-                                        group.primary.checkInStatus,
-                                      )
-                                              ? group.primary.checkInStatus
-                                              : 'Not Checked In',
-                                      decoration: const InputDecoration(
-                                        labelText: 'Check-in',
-                                        border: OutlineInputBorder(),
-                                        isDense: true,
-                                        contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 10,
-                                        ),
+                                ),
+                                items: widget.checkInStatuses
+                                    .map(
+                                      (e) => DropdownMenuItem<String>(
+                                        value: e,
+                                        child: Text(e),
                                       ),
-                                      items: widget.checkInStatuses
-                                          .map(
-                                            (e) => DropdownMenuItem<String>(
-                                              value: e,
-                                              child: Text(e),
-                                            ),
-                                          )
-                                          .toList(),
-                                      onChanged: (v) async {
-                                        if (v == null) return;
-                                        group.primary.checkInStatus = v;
-                                        await _markDirtyAndSaveGroup();
-                                      },
-                                    ),
-                                  ),
-                                ],
+                                    )
+                                    .toList(),
+                                onChanged: (v) async {
+                                  if (v == null) return;
+                                  group.primary.checkInStatus = v;
+                                  await _markDirtyAndSaveGroup();
+                                },
                               ),
                               if (outstanding) ...[
                                 const SizedBox(height: 8),
@@ -465,6 +365,7 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                             label: 'Notes',
                             value: group.primary.notes,
                             maxLines: 4,
+                            onDirtyChanged: _handleFieldDirtyChanged,
                             onChanged: (v) async {
                               group.primary.notes = v;
                               await _markDirtyAndSaveGroup();

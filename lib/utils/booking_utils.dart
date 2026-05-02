@@ -167,6 +167,11 @@ class BookingUtils {
     return status != 'cancelled' && status != 'refunded' && status != 'void';
   }
 
+  static bool ticketIsDonation(TicketRecord ticket) {
+    final name = ticket.ticketName.trim().toLowerCase();
+    return name.contains('donation');
+  }
+
   static bool ticketIsRental(TicketRecord ticket) {
     final name = ticket.ticketName.toLowerCase();
     return name.contains('rental') ||
@@ -198,6 +203,26 @@ class BookingUtils {
         .fold<int>(0, (sum, ticket) => sum + ticketQuantity(ticket));
   }
 
+  static double groupDonationTotal(BookingGroup group) {
+    return group.tickets.where((ticket) {
+      return ticketIsActive(ticket) && ticketIsDonation(ticket);
+    }).fold<double>(
+      0.0,
+      (sum, ticket) =>
+          sum + (MoneyUtils.parseMoney(ticket.price) * ticketQuantity(ticket)),
+    );
+  }
+
+  static double groupTicketRevenueExcludingDonations(BookingGroup group) {
+    return group.tickets.where((ticket) {
+      return ticketIsActive(ticket) && !ticketIsDonation(ticket);
+    }).fold<double>(
+      0.0,
+      (sum, ticket) =>
+          sum + (MoneyUtils.parseMoney(ticket.price) * ticketQuantity(ticket)),
+    );
+  }
+
   static int eventBookedPersons(EventRecord event) {
     return groupedBookingsForEvent(event)
         .fold<int>(0, (sum, group) => sum + groupPersonCount(group));
@@ -205,7 +230,15 @@ class BookingUtils {
 
   static double eventTicketValue(EventRecord event) {
     return groupedBookingsForEvent(event)
-        .fold<double>(0, (sum, group) => sum + ticketsTotal(group));
+        .fold<double>(
+          0,
+          (sum, group) => sum + groupTicketRevenueExcludingDonations(group),
+        );
+  }
+
+  static double eventDonationValue(EventRecord event) {
+    return groupedBookingsForEvent(event)
+        .fold<double>(0, (sum, group) => sum + groupDonationTotal(group));
   }
 
   static double eventSalesValue(EventRecord event) {
@@ -300,7 +333,9 @@ class BookingUtils {
 
       final nextStatus = paid <= 0
           ? 'Unpaid'
-          : remaining <= 0
+          : remaining < 0
+            ? 'Overpaid'
+            : remaining <= 0
               ? 'Paid'
               : 'Part Paid';
 
