@@ -217,6 +217,15 @@ create table if not exists public.sync_log (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.deleted_records (
+  id text primary key,
+  table_name text not null,
+  event_id text not null,
+  record_id text not null,
+  deleted_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
 create index if not exists idx_bookings_event_id on public.bookings(event_id);
 create index if not exists idx_tickets_event_id on public.tickets(event_id);
 create index if not exists idx_members_event_id on public.members(event_id);
@@ -224,6 +233,16 @@ create index if not exists idx_schedule_event_id on public.schedule(event_id);
 create index if not exists idx_expenses_event_id on public.expenses(event_id);
 create index if not exists idx_game_modes_event_id on public.game_modes(event_id);
 create index if not exists idx_sync_log_created_at on public.sync_log(created_at desc);
+create index if not exists idx_deleted_records_table_event on public.deleted_records(table_name, event_id);
+create index if not exists idx_deleted_records_record on public.deleted_records(record_id);
+create unique index if not exists uq_deleted_records_table_event_record
+  on public.deleted_records(table_name, event_id, record_id);
+create unique index if not exists uq_payments_event_booking_payment
+  on public.payments(event_id, booking_row_id, payment_id)
+  where payment_id <> '';
+create unique index if not exists uq_payments_event_booking_signature
+  on public.payments(event_id, booking_row_id, method, amount, date)
+  where payment_id = '';
 
 do $$
 begin
@@ -413,6 +432,76 @@ begin
   return new;
 end;
 $$;
+
+create or replace function public.aoj_guard_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'INSERT' then
+    new.updated_at = coalesce(new.updated_at, now());
+    return new;
+  end if;
+
+  if new.updated_at is null then
+    new.updated_at = now();
+  end if;
+
+  if old.updated_at is not null and new.updated_at < old.updated_at then
+    return old;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_events_guard_updated_at on public.events;
+create trigger trg_events_guard_updated_at
+before insert or update on public.events
+for each row
+execute function public.aoj_guard_updated_at();
+
+drop trigger if exists trg_bookings_guard_updated_at on public.bookings;
+create trigger trg_bookings_guard_updated_at
+before insert or update on public.bookings
+for each row
+execute function public.aoj_guard_updated_at();
+
+drop trigger if exists trg_tickets_guard_updated_at on public.tickets;
+create trigger trg_tickets_guard_updated_at
+before insert or update on public.tickets
+for each row
+execute function public.aoj_guard_updated_at();
+
+drop trigger if exists trg_members_guard_updated_at on public.members;
+create trigger trg_members_guard_updated_at
+before insert or update on public.members
+for each row
+execute function public.aoj_guard_updated_at();
+
+drop trigger if exists trg_schedule_guard_updated_at on public.schedule;
+create trigger trg_schedule_guard_updated_at
+before insert or update on public.schedule
+for each row
+execute function public.aoj_guard_updated_at();
+
+drop trigger if exists trg_expenses_guard_updated_at on public.expenses;
+create trigger trg_expenses_guard_updated_at
+before insert or update on public.expenses
+for each row
+execute function public.aoj_guard_updated_at();
+
+drop trigger if exists trg_game_modes_guard_updated_at on public.game_modes;
+create trigger trg_game_modes_guard_updated_at
+before insert or update on public.game_modes
+for each row
+execute function public.aoj_guard_updated_at();
+
+drop trigger if exists trg_payments_guard_updated_at on public.payments;
+create trigger trg_payments_guard_updated_at
+before insert or update on public.payments
+for each row
+execute function public.aoj_guard_updated_at();
 
 insert into public.app_config (key, value)
 values ('schema_version', '2026-04-24')

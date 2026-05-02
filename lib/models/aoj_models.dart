@@ -72,6 +72,7 @@ class AppStateData {
 
 class EventRecord {
   String id;
+  String updatedAt;
   String name;
   String venue;
   String date;
@@ -91,6 +92,7 @@ class EventRecord {
 
   EventRecord({
     required this.id,
+    this.updatedAt = '',
     required this.name,
     required this.venue,
     required this.date,
@@ -111,6 +113,7 @@ class EventRecord {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+      'updatedAt': updatedAt,
         'name': name,
         'venue': venue,
         'date': date,
@@ -132,6 +135,7 @@ class EventRecord {
   factory EventRecord.fromJson(Map<String, dynamic> json) {
     return EventRecord(
       id: json['id']?.toString() ?? '',
+      updatedAt: json['updatedAt']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       venue: json['venue']?.toString() ?? '',
       date: json['date']?.toString() ?? '',
@@ -170,6 +174,7 @@ class EventRecord {
 
 class BookingRecord {
   String id;
+  String updatedAt;
   String bookingId;
   String bookingDate;
   String firstName;
@@ -195,6 +200,7 @@ class BookingRecord {
 
   BookingRecord({
     required this.id,
+    this.updatedAt = '',
     required this.bookingId,
     required this.bookingDate,
     required this.firstName,
@@ -223,6 +229,7 @@ class BookingRecord {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+      'updatedAt': updatedAt,
         'bookingId': bookingId,
         'bookingDate': bookingDate,
         'firstName': firstName,
@@ -250,6 +257,7 @@ class BookingRecord {
   factory BookingRecord.fromJson(Map<String, dynamic> json) {
     return BookingRecord(
       id: json['id']?.toString() ?? '',
+      updatedAt: json['updatedAt']?.toString() ?? '',
       bookingId: json['bookingId']?.toString() ?? '',
       bookingDate: json['bookingDate']?.toString() ?? '',
       firstName: json['firstName']?.toString() ?? '',
@@ -286,6 +294,7 @@ class BookingRecord {
 
 class TicketRecord {
   String id;
+  String updatedAt;
   String bookingId;
   String bookingName;
   String ticketName;
@@ -295,6 +304,7 @@ class TicketRecord {
 
   TicketRecord({
     required this.id,
+    this.updatedAt = '',
     required this.bookingId,
     required this.bookingName,
     required this.ticketName,
@@ -310,6 +320,7 @@ class TicketRecord {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+      'updatedAt': updatedAt,
         'bookingId': bookingId,
         'bookingName': bookingName,
         'ticketName': ticketName,
@@ -321,6 +332,7 @@ class TicketRecord {
   factory TicketRecord.fromJson(Map<String, dynamic> json) {
     return TicketRecord(
       id: json['id']?.toString() ?? '',
+      updatedAt: json['updatedAt']?.toString() ?? '',
       bookingId: json['bookingId']?.toString() ?? '',
       bookingName: json['bookingName']?.toString() ?? '',
       ticketName: json['ticketName']?.toString() ?? '',
@@ -395,6 +407,7 @@ class PaymentRecord {
 
 class ExpenseRecord {
   String id;
+  String updatedAt;
   String item;
   String amount;
   String note;
@@ -404,6 +417,7 @@ class ExpenseRecord {
 
   ExpenseRecord({
     required this.id,
+    this.updatedAt = '',
     required this.item,
     required this.amount,
     required this.note,
@@ -414,6 +428,7 @@ class ExpenseRecord {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+      'updatedAt': updatedAt,
         'item': item,
         'amount': amount,
         'note': note,
@@ -425,6 +440,7 @@ class ExpenseRecord {
   factory ExpenseRecord.fromJson(Map<String, dynamic> json) {
     return ExpenseRecord(
       id: json['id']?.toString() ?? '',
+      updatedAt: json['updatedAt']?.toString() ?? '',
       item: json['item']?.toString() ?? '',
       amount: json['amount']?.toString() ?? '0',
       note: json['note']?.toString() ?? '',
@@ -439,6 +455,7 @@ class ExpenseRecord {
 
 class MemberRecord {
   String id;
+  String updatedAt;
   String firstName;
   String lastName;
   String username;
@@ -451,6 +468,7 @@ class MemberRecord {
 
   MemberRecord({
     required this.id,
+    this.updatedAt = '',
     required this.firstName,
     required this.lastName,
     required this.username,
@@ -466,6 +484,7 @@ class MemberRecord {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+      'updatedAt': updatedAt,
         'firstName': firstName,
         'lastName': lastName,
         'username': username,
@@ -480,6 +499,7 @@ class MemberRecord {
   factory MemberRecord.fromJson(Map<String, dynamic> json) {
     return MemberRecord(
       id: json['id']?.toString() ?? '',
+      updatedAt: json['updatedAt']?.toString() ?? '',
       firstName: json['firstName']?.toString() ?? '',
       lastName: json['lastName']?.toString() ?? '',
       username: json['username']?.toString() ?? '',
@@ -495,6 +515,7 @@ class MemberRecord {
 
 class ScheduleRecord {
   String id;
+  String updatedAt;
   String time;
   String activity;
   String location;
@@ -503,6 +524,7 @@ class ScheduleRecord {
 
   ScheduleRecord({
     required this.id,
+    this.updatedAt = '',
     required this.time,
     required this.activity,
     required this.location,
@@ -521,6 +543,7 @@ class ScheduleRecord {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+      'updatedAt': updatedAt,
         'time': time,
         'activity': activity,
         'location': location,
@@ -533,6 +556,7 @@ class ScheduleRecord {
       final data = Map<String, String>.from(json['data'] as Map? ?? {});
       return ScheduleRecord(
         id: data['ID']?.toString() ?? '',
+        updatedAt: json['updatedAt']?.toString() ?? '',
         time: data['Time']?.toString() ?? '',
         activity: data['Activity']?.toString() ?? '',
         location: data['Location']?.toString() ?? '',
@@ -543,6 +567,7 @@ class ScheduleRecord {
 
     return ScheduleRecord(
       id: json['id']?.toString() ?? '',
+      updatedAt: json['updatedAt']?.toString() ?? '',
       time: json['time']?.toString() ?? '',
       activity: json['activity']?.toString() ?? '',
       location: json['location']?.toString() ?? '',
@@ -554,9 +579,11 @@ class ScheduleRecord {
 
 class GameModeRecord {
   Map<String, String> data;
+  String updatedAt;
 
   GameModeRecord({
     required this.data,
+    this.updatedAt = '',
   });
 
   String get title {
@@ -619,12 +646,16 @@ class GameModeRecord {
     return '';
   }
 
-  Map<String, dynamic> toJson() => {'data': data};
+  Map<String, dynamic> toJson() => {
+        'data': data,
+        'updatedAt': updatedAt,
+      };
 
   factory GameModeRecord.fromJson(Map<String, dynamic> json) {
     final raw = Map<String, dynamic>.from(json['data'] as Map? ?? {});
     return GameModeRecord(
       data: raw.map((k, v) => MapEntry(k.toString(), v?.toString() ?? '')),
+      updatedAt: json['updatedAt']?.toString() ?? '',
     );
   }
 }

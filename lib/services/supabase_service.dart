@@ -10,6 +10,11 @@ const String _kFallbackSupabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'
     '.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2aXhscmhjam9qZXpocW1nbnhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMzY5NzIsImV4cCI6MjA5MTkxMjk3Mn0'
     '.1ychTDnuRxtOFY9SquXtg8RkzX0UxvyXENU1ncAaFO4';
 
+class _TableSyncStats {
+  int uploaded = 0;
+  int deleted = 0;
+}
+
 class SupabaseService {
   static String? _resolvedSupabaseUrl;
   static const String _kExpectedSchemaVersion = '2026-04-24';
@@ -23,6 +28,7 @@ class SupabaseService {
   static const String _tableSchedule = 'schedule';
   static const String _tableExpenses = 'expenses';
   static const String _tableGameModes = 'game_modes';
+  static const String _tableDeletedRecords = 'deleted_records';
   static const String _tableSyncLog = 'sync_log';
 
   static SyncDiagnosticsRecord _syncDiagnostics =
@@ -31,6 +37,8 @@ class SupabaseService {
     SchemaHealthRecord.unchecked(expectedVersion: _kExpectedSchemaVersion);
   static final List<MergeConflictRecord> _recentMergeConflicts =
     <MergeConflictRecord>[];
+  static final Map<String, _TableSyncStats> _lastSyncTableStats =
+    <String, _TableSyncStats>{};
 
   static SyncDiagnosticsRecord get syncDiagnostics => _syncDiagnostics;
   static SchemaHealthRecord get schemaHealth => _schemaHealth;
@@ -38,6 +46,47 @@ class SupabaseService {
     List<MergeConflictRecord>.unmodifiable(_recentMergeConflicts);
 
   static String get resolvedSupabaseUrl => _resolvedSupabaseUrl ?? '';
+
+  static String get lastSyncSummary {
+    if (_lastSyncTableStats.isEmpty) return '';
+
+    const orderedTables = <String>[
+      _tableEvents,
+      _tableBookings,
+      _tablePayments,
+      _tableTickets,
+      _tableMembers,
+      _tableSchedule,
+      _tableExpenses,
+      _tableGameModes,
+    ];
+
+    final lines = <String>[];
+    for (final table in orderedTables) {
+      final stats = _lastSyncTableStats[table];
+      if (stats == null) continue;
+      if (stats.uploaded == 0 && stats.deleted == 0) continue;
+      lines.add('$table: +${stats.uploaded} / -${stats.deleted}');
+    }
+
+    if (lines.isEmpty) return '';
+    return 'Snapshot sync changes -> ${lines.join(', ')}';
+  }
+
+  static void _resetSyncSummaryCounters() {
+    _lastSyncTableStats.clear();
+  }
+
+  static void _recordSyncSummaryCount(
+    String table, {
+    int uploaded = 0,
+    int deleted = 0,
+  }) {
+    if (uploaded == 0 && deleted == 0) return;
+    final stats = _lastSyncTableStats.putIfAbsent(table, () => _TableSyncStats());
+    stats.uploaded += uploaded;
+    stats.deleted += deleted;
+  }
 
   static String get resolvedSupabaseHost {
     final uri = Uri.tryParse(resolvedSupabaseUrl);
@@ -225,6 +274,16 @@ class SupabaseService {
     return '';
   }
 
+  static String _nowIsoUtc() => DateTime.now().toUtc().toIso8601String();
+
+  static int _updatedAtMicros(String? value) {
+    final raw = (value ?? '').trim();
+    if (raw.isEmpty) return 0;
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return 0;
+    return parsed.toUtc().microsecondsSinceEpoch;
+  }
+
   static String _normalizeSyncSchemaError(Object error) {
     if (error is! PostgrestException) return error.toString();
     final code = error.code ?? '';
@@ -289,6 +348,7 @@ class SupabaseService {
     await checkTable(_tableSchedule);
     await checkTable(_tableExpenses);
     await checkTable(_tableGameModes);
+    await checkTable(_tableDeletedRecords);
     await checkTable('messages');
 
     try {
@@ -328,6 +388,7 @@ class SupabaseService {
   /// pruned to keep later syncs fully up to date.
   static Future<void> pushAppState(AppStateData appState) async {
     final db = _db;
+    _resetSyncSummaryCounters();
 
     // ── events ──────────────────────────────────────────────────────────────
     final eventRows = appState.events
@@ -346,14 +407,42 @@ class SupabaseService {
             'game_modes': e.gameModes.map((g) => g.toJson()).toList(),
             'accounting_notes':
                 e.accountingNotes.map((n) => n.toJson()).toList(),
+            'updated_at': e.updatedAt,
           },
         )
         .toList();
 
-    if (eventRows.isNotEmpty) {
-      await db.from(_tableEvents).upsert(eventRows);
+    final existingEventRows = List<Map<String, dynamic>>.from(
+      await db.from(_tableEvents).select('id, updated_at'),
+    );
+    final existingEventUpdatedAt = <String, String>{};
+    for (final row in existingEventRows) {
+      final id = row['id']?.toString() ?? '';
+      if (id.isEmpty) continue;
+      existingEventUpdatedAt[id] = row['updated_at']?.toString() ?? '';
     }
-    await _pruneDeletedEvents(db, appState.events.map((e) => e.id).toSet());
+
+    final eventRowsToUpsert = <Map<String, dynamic>>[];
+    for (final row in eventRows) {
+      final id = row['id']?.toString() ?? '';
+      if (id.isEmpty) continue;
+      final localUpdatedAt = row['updated_at']?.toString() ?? '';
+      final cloudUpdatedAt = existingEventUpdatedAt[id] ?? '';
+      if (_updatedAtMicros(cloudUpdatedAt) > _updatedAtMicros(localUpdatedAt)) {
+        continue;
+      }
+      final normalized = Map<String, dynamic>.from(row);
+      if (localUpdatedAt.trim().isEmpty) {
+        normalized['updated_at'] = _nowIsoUtc();
+      }
+      eventRowsToUpsert.add(normalized);
+    }
+
+    if (eventRowsToUpsert.isNotEmpty) {
+      await db.from(_tableEvents).upsert(eventRowsToUpsert);
+    }
+    _recordSyncSummaryCount(_tableEvents, uploaded: eventRowsToUpsert.length);
+    await _pruneDeletedEvents(db, appState.events);
 
     // ── Save active event id ─────────────────────────────────────────────────
     await db.from(_tableAppConfig).upsert(<String, dynamic>{
@@ -383,6 +472,7 @@ class SupabaseService {
             'id': '${event.id}_${_gameModeSignature(g.data)}',
             'event_id': event.id,
             'data': g.toJson()['data'],
+            'updated_at': g.updatedAt,
           },
         )
         .toList();
@@ -403,28 +493,73 @@ class SupabaseService {
 
   static Future<void> _pruneDeletedEvents(
     SupabaseClient db,
-    Set<String> desiredEventIds,
+    List<EventRecord> localEvents,
   ) async {
-    final existingRows = List<Map<String, dynamic>>.from(
-      await db.from(_tableEvents).select('id'),
-    );
-    final existingIds = existingRows
-        .map((row) => row['id']?.toString() ?? '')
-        .where((id) => id.isNotEmpty)
-        .toSet();
+    final desiredEventIds = localEvents.map((e) => e.id).toSet();
+    final localEventMaxTs = localEvents
+        .map((e) => _updatedAtMicros(e.updatedAt))
+        .fold<int>(0, (maxTs, ts) => ts > maxTs ? ts : maxTs);
 
-    final idsToDelete = existingIds
-        .where((id) => !desiredEventIds.contains(id))
-        .toList();
+    final existingRows = List<Map<String, dynamic>>.from(
+      await db.from(_tableEvents).select('id, updated_at'),
+    );
+    final existingRowsById = <String, Map<String, dynamic>>{};
+    for (final row in existingRows) {
+      final id = row['id']?.toString() ?? '';
+      if (id.isEmpty) continue;
+      existingRowsById[id] = row;
+    }
+
+    final existingIds = existingRowsById.keys.toSet();
+
+    final idsToDelete = <String>[];
+    for (final id in existingIds) {
+      if (desiredEventIds.contains(id)) continue;
+      final cloudTs = _updatedAtMicros(
+        existingRowsById[id]?['updated_at']?.toString() ?? '',
+      );
+      if (localEventMaxTs > 0 && cloudTs > localEventMaxTs) {
+        continue;
+      }
+      idsToDelete.add(id);
+    }
     if (idsToDelete.isEmpty) return;
 
-    await _deleteByEventIds(db, _tableBookings, idsToDelete);
-    await _deleteByEventIds(db, _tablePayments, idsToDelete);
-    await _deleteByEventIds(db, _tableTickets, idsToDelete);
-    await _deleteByEventIds(db, _tableMembers, idsToDelete);
-    await _deleteByEventIds(db, _tableSchedule, idsToDelete);
-    await _deleteByEventIds(db, _tableExpenses, idsToDelete);
-    await _deleteByEventIds(db, _tableGameModes, idsToDelete);
+    final deletedBookings = await _deleteByEventIds(
+      db,
+      _tableBookings,
+      idsToDelete,
+    );
+    final deletedPayments = await _deleteByEventIds(
+      db,
+      _tablePayments,
+      idsToDelete,
+    );
+    final deletedTickets = await _deleteByEventIds(
+      db,
+      _tableTickets,
+      idsToDelete,
+    );
+    final deletedMembers = await _deleteByEventIds(
+      db,
+      _tableMembers,
+      idsToDelete,
+    );
+    final deletedSchedule = await _deleteByEventIds(
+      db,
+      _tableSchedule,
+      idsToDelete,
+    );
+    final deletedExpenses = await _deleteByEventIds(
+      db,
+      _tableExpenses,
+      idsToDelete,
+    );
+    final deletedGameModes = await _deleteByEventIds(
+      db,
+      _tableGameModes,
+      idsToDelete,
+    );
 
     const chunkSize = 100;
     for (var i = 0; i < idsToDelete.length; i += chunkSize) {
@@ -434,22 +569,104 @@ class SupabaseService {
       final chunk = idsToDelete.sublist(i, end);
       await db.from(_tableEvents).delete().inFilter('id', chunk);
     }
+
+    _recordSyncSummaryCount(_tableBookings, deleted: deletedBookings);
+    _recordSyncSummaryCount(_tablePayments, deleted: deletedPayments);
+    _recordSyncSummaryCount(_tableTickets, deleted: deletedTickets);
+    _recordSyncSummaryCount(_tableMembers, deleted: deletedMembers);
+    _recordSyncSummaryCount(_tableSchedule, deleted: deletedSchedule);
+    _recordSyncSummaryCount(_tableExpenses, deleted: deletedExpenses);
+    _recordSyncSummaryCount(_tableGameModes, deleted: deletedGameModes);
+    _recordSyncSummaryCount(_tableEvents, deleted: idsToDelete.length);
   }
 
-  static Future<void> _deleteByEventIds(
+  static Future<int> _deleteByEventIds(
     SupabaseClient db,
     String table,
     List<String> eventIds,
   ) async {
-    if (eventIds.isEmpty) return;
-    const chunkSize = 100;
-    for (var i = 0; i < eventIds.length; i += chunkSize) {
-      final end = (i + chunkSize > eventIds.length)
-          ? eventIds.length
-          : i + chunkSize;
-      final chunk = eventIds.sublist(i, end);
-      await db.from(table).delete().inFilter('event_id', chunk);
+    if (eventIds.isEmpty) return 0;
+    final existingRows = List<Map<String, dynamic>>.from(
+      await db.from(table).select('id, event_id').inFilter('event_id', eventIds),
+    );
+    final existingIds = <String>[];
+    final idsByEvent = <String, List<String>>{};
+    for (final row in existingRows) {
+      final id = row['id']?.toString() ?? '';
+      final eventId = row['event_id']?.toString() ?? '';
+      if (id.isEmpty || eventId.isEmpty) continue;
+      existingIds.add(id);
+      idsByEvent.putIfAbsent(eventId, () => <String>[]).add(id);
     }
+    if (existingIds.isEmpty) return 0;
+
+    for (final entry in idsByEvent.entries) {
+      await _writeDeletionTombstones(
+        db: db,
+        table: table,
+        eventId: entry.key,
+        recordIds: entry.value,
+      );
+    }
+
+    const chunkSize = 100;
+    for (var i = 0; i < existingIds.length; i += chunkSize) {
+      final end = (i + chunkSize > existingIds.length)
+          ? existingIds.length
+          : i + chunkSize;
+      final chunk = existingIds.sublist(i, end);
+      await db.from(table).delete().inFilter('id', chunk);
+    }
+
+    return existingIds.length;
+  }
+
+  static Future<Map<String, String>> _fetchDeletionTombstones({
+    required SupabaseClient db,
+    required String table,
+    required String eventId,
+  }) async {
+    final rows = List<Map<String, dynamic>>.from(
+      await db
+          .from(_tableDeletedRecords)
+          .select('record_id, deleted_at')
+          .eq('table_name', table)
+          .eq('event_id', eventId),
+    );
+
+    final result = <String, String>{};
+    for (final row in rows) {
+      final recordId = row['record_id']?.toString() ?? '';
+      if (recordId.isEmpty) continue;
+      result[recordId] = row['deleted_at']?.toString() ?? '';
+    }
+    return result;
+  }
+
+  static Future<void> _writeDeletionTombstones({
+    required SupabaseClient db,
+    required String table,
+    required String eventId,
+    required List<String> recordIds,
+  }) async {
+    if (recordIds.isEmpty) return;
+
+    final deletedAt = _nowIsoUtc();
+    final rows = recordIds
+        .where((id) => id.trim().isNotEmpty)
+        .map(
+          (id) => <String, dynamic>{
+            'id': '$table|$eventId|$id',
+            'table_name': table,
+            'event_id': eventId,
+            'record_id': id,
+            'deleted_at': deletedAt,
+          },
+        )
+        .toList();
+    if (rows.isEmpty) return;
+
+    await db.from(_tableDeletedRecords).upsert(rows);
   }
 
   static Future<void> _syncEventScopedTable({
@@ -458,31 +675,69 @@ class SupabaseService {
     required String eventId,
     required List<Map<String, dynamic>> rows,
   }) async {
+    final existingRows = List<Map<String, dynamic>>.from(
+      await db.from(table).select('id, updated_at').eq('event_id', eventId),
+    );
+    final existingById = <String, String>{};
+    for (final row in existingRows) {
+      final id = row['id']?.toString() ?? '';
+      if (id.isEmpty) continue;
+      existingById[id] = row['updated_at']?.toString() ?? '';
+    }
+    final existingIds = existingById.keys.toSet();
+    final deletionTombstones = await _fetchDeletionTombstones(
+      db: db,
+      table: table,
+      eventId: eventId,
+    );
+
     final desiredIds = rows
         .map((row) => row['id']?.toString() ?? '')
         .where((id) => id.isNotEmpty)
         .toSet();
 
-    if (rows.isNotEmpty) {
-      await db.from(table).upsert(rows);
+    final rowsToUpsert = <Map<String, dynamic>>[];
+    for (final row in rows) {
+      final id = row['id']?.toString() ?? '';
+      if (id.isEmpty) continue;
+
+      final localUpdatedAtRaw = row['updated_at']?.toString() ?? '';
+      final cloudUpdatedAtRaw = existingById[id] ?? '';
+      final deletedAtRaw = deletionTombstones[id] ?? '';
+
+      final localTs = _updatedAtMicros(localUpdatedAtRaw);
+      final cloudTs = _updatedAtMicros(cloudUpdatedAtRaw);
+      final deletedTs = _updatedAtMicros(deletedAtRaw);
+      if (cloudTs > localTs) {
+        continue;
+      }
+      if (deletedTs > localTs) {
+        continue;
+      }
+
+      final normalized = Map<String, dynamic>.from(row);
+      if (localUpdatedAtRaw.trim().isEmpty) {
+        normalized['updated_at'] = _nowIsoUtc();
+      }
+      rowsToUpsert.add(normalized);
     }
 
-    if (desiredIds.isEmpty) {
-      await db.from(table).delete().eq('event_id', eventId);
-      return;
+    if (rowsToUpsert.isNotEmpty) {
+      await db.from(table).upsert(rowsToUpsert);
     }
+    _recordSyncSummaryCount(table, uploaded: rowsToUpsert.length);
 
-    final existingRows = List<Map<String, dynamic>>.from(
-      await db.from(table).select('id').eq('event_id', eventId),
-    );
-    final existingIds = existingRows
-        .map((row) => row['id']?.toString() ?? '')
-        .where((id) => id.isNotEmpty)
-        .toSet();
     final idsToDelete = existingIds
         .where((id) => !desiredIds.contains(id))
         .toList();
     if (idsToDelete.isEmpty) return;
+
+    await _writeDeletionTombstones(
+      db: db,
+      table: table,
+      eventId: eventId,
+      recordIds: idsToDelete,
+    );
 
     const chunkSize = 100;
     for (var i = 0; i < idsToDelete.length; i += chunkSize) {
@@ -492,6 +747,8 @@ class SupabaseService {
       final chunk = idsToDelete.sublist(i, end);
       await db.from(table).delete().inFilter('id', chunk);
     }
+
+    _recordSyncSummaryCount(table, deleted: idsToDelete.length);
   }
 
   static Future<void> _pushBookings(
@@ -527,6 +784,7 @@ class SupabaseService {
             'ticket_ids': b.ticketIds,
             'sales': b.sales.map((s) => s.toJson()).toList(),
             'payments': dedupedPayments.map((p) => p.toJson()).toList(),
+            'updated_at': b.updatedAt,
           };
           },
         )
@@ -555,6 +813,7 @@ class SupabaseService {
             'price': t.price,
             'spaces': t.spaces,
             'status': t.status,
+            'updated_at': t.updatedAt,
           },
         )
         .toList();
@@ -587,6 +846,7 @@ class SupabaseService {
             'method': payment.method,
             'note': payment.note,
             'date': payment.date,
+            'updated_at': payment.date,
           },
         );
       }
@@ -622,6 +882,7 @@ class SupabaseService {
             'email': m.email,
             'membership_level': m.membershipLevel,
             'rating': m.rating,
+            'updated_at': m.updatedAt,
           },
         )
         .toList();
@@ -648,6 +909,7 @@ class SupabaseService {
             'location': s.location,
             'notes': s.notes,
             'game_mode_title': s.gameModeTitle,
+            'updated_at': s.updatedAt,
           },
         )
         .toList();
@@ -675,6 +937,7 @@ class SupabaseService {
             'date': e.date,
             'category': e.category,
             'notes': e.notes.map((n) => n.toJson()).toList(),
+            'updated_at': e.updatedAt,
           },
         )
         .toList();
@@ -796,7 +1059,10 @@ class SupabaseService {
           ? gameModeRows
               .map(
                 (g) => GameModeRecord.fromJson(
-                  <String, dynamic>{'data': _safeJsonToMap(g['data'])},
+                  <String, dynamic>{
+                    'data': _safeJsonToMap(g['data']),
+                    'updatedAt': g['updated_at']?.toString() ?? '',
+                  },
                 ),
               )
               .toList()
@@ -824,6 +1090,7 @@ class SupabaseService {
       final bookings = bookingRows.map((b) {
         return BookingRecord(
           id: b['id'] as String? ?? '',
+          updatedAt: b['updated_at']?.toString() ?? '',
           bookingId: b['booking_id'] as String? ?? '',
           bookingDate: b['booking_date'] as String? ?? '',
           firstName: b['first_name'] as String? ?? '',
@@ -871,6 +1138,7 @@ class SupabaseService {
           .map(
             (t) => TicketRecord(
               id: t['id'] as String? ?? '',
+              updatedAt: t['updated_at']?.toString() ?? '',
               bookingId: t['booking_id'] as String? ?? '',
               bookingName: t['booking_name'] as String? ?? '',
               ticketName: t['ticket_name'] as String? ?? '',
@@ -885,6 +1153,7 @@ class SupabaseService {
           .map(
             (m) => MemberRecord(
               id: m['id'] as String? ?? '',
+              updatedAt: m['updated_at']?.toString() ?? '',
               firstName: m['first_name'] as String? ?? '',
               lastName: m['last_name'] as String? ?? '',
               username: m['username'] as String? ?? '',
@@ -902,6 +1171,7 @@ class SupabaseService {
           .map(
             (s) => ScheduleRecord(
               id: s['id'] as String? ?? '',
+              updatedAt: s['updated_at']?.toString() ?? '',
               time: s['time'] as String? ?? '',
               activity: s['activity'] as String? ?? '',
               location: s['location'] as String? ?? '',
@@ -915,6 +1185,7 @@ class SupabaseService {
           .map(
             (e) => ExpenseRecord(
               id: e['id'] as String? ?? '',
+              updatedAt: e['updated_at']?.toString() ?? '',
               item: e['item'] as String? ?? '',
               amount: e['amount'] as String? ?? '0',
               note: e['note'] as String? ?? '',
@@ -932,6 +1203,7 @@ class SupabaseService {
       events.add(
         EventRecord(
           id: eventId,
+          updatedAt: row['updated_at']?.toString() ?? '',
           name: row['name'] as String? ?? '',
           venue: row['venue'] as String? ?? '',
           date: row['date'] as String? ?? '',

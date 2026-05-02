@@ -452,7 +452,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
   Future<void> _syncPush() async {
     setState(() => syncStatus = 'SYNCING TO CLOUD...');
-    _showSyncMessage('Sync started: pushing merge to Supabase...');
+    _showSyncMessage('Sync started: pushing local snapshot to Supabase...');
     try {
       final merged = await SupabaseService.syncMergeAppState(appState)
           .timeout(const Duration(seconds: 30));
@@ -465,7 +465,12 @@ class _AOJDesktopState extends State<AOJDesktop> {
           systemStatus = 'SYNCED WITH CLOUD';
         });
       }
-      _showSyncMessage('Sync complete: push merge succeeded.');
+      final summary = SupabaseService.lastSyncSummary;
+      _showSyncMessage(
+        summary.isEmpty
+            ? 'Sync complete: snapshot push succeeded.'
+            : 'Sync complete: snapshot push succeeded. $summary',
+      );
     } catch (e) {
       final errorText = _formatSyncError(e);
       if (mounted) {
@@ -480,7 +485,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
   Future<void> _syncPull() async {
     setState(() => syncStatus = 'SYNCING FROM CLOUD...');
-    _showSyncMessage('Sync started: pulling and merging from Supabase...');
+    _showSyncMessage('Sync started: reconciling local snapshot with Supabase...');
     try {
       final merged = await SupabaseService.syncMergeAppState(appState)
           .timeout(const Duration(seconds: 30));
@@ -496,7 +501,12 @@ class _AOJDesktopState extends State<AOJDesktop> {
           systemStatus = 'SYNCED WITH CLOUD';
         });
       }
-      _showSyncMessage('Sync complete: pull merge succeeded.');
+      final summary = SupabaseService.lastSyncSummary;
+      _showSyncMessage(
+        summary.isEmpty
+            ? 'Sync complete: snapshot reconcile succeeded.'
+            : 'Sync complete: snapshot reconcile succeeded. $summary',
+      );
     } catch (e) {
       final errorText = _formatSyncError(e);
       if (mounted) {
@@ -1840,8 +1850,12 @@ class _AOJDesktopState extends State<AOJDesktop> {
   Future<void> _saveGroupedBooking(BookingGroup group) async {
     group.primary.payments =
         BookingUtils.dedupePayments(group.primary.payments);
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    group.primary.updatedAt = nowIso;
+    activeEvent?.updatedAt = nowIso;
 
     for (final row in group.rows) {
+      row.updatedAt = nowIso;
       row.bookingId = group.primary.bookingId;
       row.bookingDate = group.primary.bookingDate;
       row.firstName = group.primary.firstName;

@@ -43,7 +43,20 @@ create table if not exists public.sync_log (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.deleted_records (
+  id text primary key,
+  table_name text not null,
+  event_id text not null,
+  record_id text not null,
+  deleted_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
 create index if not exists idx_sync_log_created_at on public.sync_log(created_at desc);
+create index if not exists idx_deleted_records_table_event on public.deleted_records(table_name, event_id);
+create index if not exists idx_deleted_records_record on public.deleted_records(record_id);
+create unique index if not exists uq_deleted_records_table_event_record
+  on public.deleted_records(table_name, event_id, record_id);
 
 -- ── MIGRATION: Consolidate payments to single table source of truth ──
 -- This migration addresses duplicate payment storage:
@@ -145,9 +158,11 @@ $$;
 
 -- Step 3: Create a view to detect duplicates for monitoring
 -- This helps identify bookings with duplicate payments
+drop view if exists public.v_payment_duplicates;
+
 create or replace view v_payment_duplicates as
 select
-  b.id as booking_id,
+  b.id as booking_row_id,
   b.id as event_id,
   b.booking_id,
   count(distinct p.id) as payment_count_in_table,
