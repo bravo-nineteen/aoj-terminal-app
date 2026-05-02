@@ -322,10 +322,10 @@ class SupabaseService {
 
   // ─── Push ─────────────────────────────────────────────────────────────────
 
-  /// Pushes the full local app state to Supabase with merge-safe upserts.
+  /// Pushes the full local app state to Supabase as a snapshot.
   ///
-  /// This intentionally avoids table pruning to reduce accidental data loss
-  /// across multiple devices that sync at different times.
+  /// Local state is authoritative for sync and remote rows missing locally are
+  /// pruned to keep later syncs fully up to date.
   static Future<void> pushAppState(AppStateData appState) async {
     final db = _db;
 
@@ -353,6 +353,7 @@ class SupabaseService {
     if (eventRows.isNotEmpty) {
       await db.from(_tableEvents).upsert(eventRows);
     }
+    await _pruneDeletedEvents(db, appState.events.map((e) => e.id).toSet());
 
     // ── Save active event id ─────────────────────────────────────────────────
     await db.from(_tableAppConfig).upsert(<String, dynamic>{
@@ -386,15 +387,111 @@ class SupabaseService {
         )
         .toList();
 
-    if (rows.isNotEmpty) {
-      await db.from(_tableGameModes).upsert(rows);
-    }
+    await _syncEventScopedTable(
+      db: db,
+      table: _tableGameModes,
+      eventId: event.id,
+      rows: rows,
+    );
   }
 
   static String _gameModeSignature(Map<String, String> data) {
     final keys = data.keys.toList()..sort();
     final signature = keys.map((k) => '$k=${data[k] ?? ''}').join('|');
     return signature.hashCode.toUnsigned(32).toString();
+  }
+
+  static Future<void> _pruneDeletedEvents(
+    SupabaseClient db,
+    Set<String> desiredEventIds,
+  ) async {
+    final existingRows = List<Map<String, dynamic>>.from(
+      await db.from(_tableEvents).select('id'),
+    );
+    final existingIds = existingRows
+        .map((row) => row['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    final idsToDelete = existingIds
+        .where((id) => !desiredEventIds.contains(id))
+        .toList();
+    if (idsToDelete.isEmpty) return;
+
+    await _deleteByEventIds(db, _tableBookings, idsToDelete);
+    await _deleteByEventIds(db, _tablePayments, idsToDelete);
+    await _deleteByEventIds(db, _tableTickets, idsToDelete);
+    await _deleteByEventIds(db, _tableMembers, idsToDelete);
+    await _deleteByEventIds(db, _tableSchedule, idsToDelete);
+    await _deleteByEventIds(db, _tableExpenses, idsToDelete);
+    await _deleteByEventIds(db, _tableGameModes, idsToDelete);
+
+    const chunkSize = 100;
+    for (var i = 0; i < idsToDelete.length; i += chunkSize) {
+      final end = (i + chunkSize > idsToDelete.length)
+          ? idsToDelete.length
+          : i + chunkSize;
+      final chunk = idsToDelete.sublist(i, end);
+      await db.from(_tableEvents).delete().inFilter('id', chunk);
+    }
+  }
+
+  static Future<void> _deleteByEventIds(
+    SupabaseClient db,
+    String table,
+    List<String> eventIds,
+  ) async {
+    if (eventIds.isEmpty) return;
+    const chunkSize = 100;
+    for (var i = 0; i < eventIds.length; i += chunkSize) {
+      final end = (i + chunkSize > eventIds.length)
+          ? eventIds.length
+          : i + chunkSize;
+      final chunk = eventIds.sublist(i, end);
+      await db.from(table).delete().inFilter('event_id', chunk);
+    }
+  }
+
+  static Future<void> _syncEventScopedTable({
+    required SupabaseClient db,
+    required String table,
+    required String eventId,
+    required List<Map<String, dynamic>> rows,
+  }) async {
+    final desiredIds = rows
+        .map((row) => row['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    if (rows.isNotEmpty) {
+      await db.from(table).upsert(rows);
+    }
+
+    if (desiredIds.isEmpty) {
+      await db.from(table).delete().eq('event_id', eventId);
+      return;
+    }
+
+    final existingRows = List<Map<String, dynamic>>.from(
+      await db.from(table).select('id').eq('event_id', eventId),
+    );
+    final existingIds = existingRows
+        .map((row) => row['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final idsToDelete = existingIds
+        .where((id) => !desiredIds.contains(id))
+        .toList();
+    if (idsToDelete.isEmpty) return;
+
+    const chunkSize = 100;
+    for (var i = 0; i < idsToDelete.length; i += chunkSize) {
+      final end = (i + chunkSize > idsToDelete.length)
+          ? idsToDelete.length
+          : i + chunkSize;
+      final chunk = idsToDelete.sublist(i, end);
+      await db.from(table).delete().inFilter('id', chunk);
+    }
   }
 
   static Future<void> _pushBookings(
@@ -435,9 +532,12 @@ class SupabaseService {
         )
         .toList();
 
-    if (rows.isNotEmpty) {
-      await db.from(_tableBookings).upsert(rows);
-    }
+    await _syncEventScopedTable(
+      db: db,
+      table: _tableBookings,
+      eventId: event.id,
+      rows: rows,
+    );
   }
 
   static Future<void> _pushTickets(
@@ -459,9 +559,12 @@ class SupabaseService {
         )
         .toList();
 
-    if (rows.isNotEmpty) {
-      await db.from(_tableTickets).upsert(rows);
-    }
+    await _syncEventScopedTable(
+      db: db,
+      table: _tableTickets,
+      eventId: event.id,
+      rows: rows,
+    );
   }
 
   static Future<void> _pushPaymentsMirror(
@@ -471,10 +574,11 @@ class SupabaseService {
     final rows = <Map<String, dynamic>>[];
 
     for (final booking in event.bookings) {
-      for (final payment in booking.payments) {
+      for (final payment in _dedupePayments(booking.payments)) {
+        final rowId = '${booking.id}_${payment.id}';
         rows.add(
           <String, dynamic>{
-            'id': '${booking.id}_${payment.id}',
+            'id': rowId,
             'event_id': event.id,
             'booking_row_id': booking.id,
             'booking_id': booking.bookingId,
@@ -488,12 +592,15 @@ class SupabaseService {
       }
     }
 
-    if (rows.isEmpty) return;
-
     // Optional mirror table for external querying. Ignore if schema does not
     // include this table/shape yet.
     try {
-      await db.from(_tablePayments).upsert(rows);
+      await _syncEventScopedTable(
+        db: db,
+        table: _tablePayments,
+        eventId: event.id,
+        rows: rows,
+      );
     } catch (_) {}
   }
 
@@ -519,9 +626,12 @@ class SupabaseService {
         )
         .toList();
 
-    if (rows.isNotEmpty) {
-      await db.from(_tableMembers).upsert(rows);
-    }
+    await _syncEventScopedTable(
+      db: db,
+      table: _tableMembers,
+      eventId: event.id,
+      rows: rows,
+    );
   }
 
   static Future<void> _pushSchedule(
@@ -542,9 +652,12 @@ class SupabaseService {
         )
         .toList();
 
-    if (rows.isNotEmpty) {
-      await db.from(_tableSchedule).upsert(rows);
-    }
+    await _syncEventScopedTable(
+      db: db,
+      table: _tableSchedule,
+      eventId: event.id,
+      rows: rows,
+    );
   }
 
   static Future<void> _pushExpenses(
@@ -566,9 +679,12 @@ class SupabaseService {
         )
         .toList();
 
-    if (rows.isNotEmpty) {
-      await db.from(_tableExpenses).upsert(rows);
-    }
+    await _syncEventScopedTable(
+      db: db,
+      table: _tableExpenses,
+      eventId: event.id,
+      rows: rows,
+    );
   }
 
   /// Pulls, merges, and pushes so each device converges to one merged state.
@@ -591,9 +707,8 @@ class SupabaseService {
         throw StateError('Schema check failed: ${health.issues.join('; ')}');
       }
 
+      await _withHostLookupRetry(() => pushAppState(localState));
       final cloudState = await _withHostLookupRetry(() => pullAppState());
-      final merged = _mergeAppState(localState, cloudState);
-      await _withHostLookupRetry(() => pushAppState(merged));
 
       _syncDiagnostics = SyncDiagnosticsRecord(
         operation: 'sync-merge',
@@ -601,13 +716,13 @@ class SupabaseService {
         completedAt: DateTime.now().toUtc().toIso8601String(),
         localEvents: localState.events.length,
         cloudEvents: cloudState.events.length,
-        mergedEvents: merged.events.length,
+        mergedEvents: cloudState.events.length,
         conflicts: _recentMergeConflicts.length,
         lastError: '',
         lastErrorCode: '',
       );
       await _tryWriteSyncLog(_syncDiagnostics);
-      return merged;
+      return cloudState;
     } catch (e) {
       _syncDiagnostics = SyncDiagnosticsRecord(
         operation: 'sync-merge',
@@ -1042,12 +1157,17 @@ class SupabaseService {
       ticketIds: _mergeUniqueStrings(local.ticketIds, cloud.ticketIds),
       sales: _mergeById(local.sales, cloud.sales, (x) => x.id, _mergeSale),
       payments: _dedupePayments(
-        _mergeById(
-          local.payments,
-          cloud.payments,
-          (x) => x.id,
-          _mergePayment,
-        ),
+        local.payments
+            .map(
+              (p) => PaymentRecord(
+                id: p.id,
+                amount: p.amount,
+                method: p.method,
+                note: p.note,
+                date: p.date,
+              ),
+            )
+            .toList(),
       ),
     );
   }
