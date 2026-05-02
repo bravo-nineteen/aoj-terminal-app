@@ -871,7 +871,7 @@ class SupabaseService {
             'method': payment.method,
             'note': payment.note,
             'date': payment.date,
-            'updated_at': payment.date,
+            'updated_at': payment.updatedAt.isNotEmpty ? payment.updatedAt : _nowIsoUtc(),
           },
         );
       }
@@ -998,6 +998,25 @@ class SupabaseService {
       // If local state is empty, skip push to avoid wiping cloud data.
       // This handles fresh installs / cleared local storage (bootstrap from cloud).
       if (localState.events.isNotEmpty) {
+        // Pre-flight safety check: count total local bookings vs cloud bookings.
+        // If local has far fewer bookings than cloud, local is likely partially loaded.
+        // Abort the push to prevent data loss.
+        final cloudBookingCountRows = List<Map<String, dynamic>>.from(
+          await _db.from(_tableBookings).select('id'),
+        );
+        final cloudBookingCount = cloudBookingCountRows.length;
+        final localBookingCount = localState.events
+            .fold<int>(0, (sum, e) => sum + e.bookings.length);
+        // Allow push only if local has at least 50% of cloud bookings, or cloud is empty.
+        final tooFewLocal = cloudBookingCount > 0 &&
+            localBookingCount < (cloudBookingCount * 0.5).ceil();
+        if (tooFewLocal) {
+          throw StateError(
+            'Push aborted: local has $localBookingCount bookings but cloud has '
+            '$cloudBookingCount. Local state appears incomplete. Pull first to '
+            'load all data before pushing.',
+          );
+        }
         await _withHostLookupRetry(() => pushAppState(localState));
       }
       final cloudState = await _withHostLookupRetry(() => pullAppState());
