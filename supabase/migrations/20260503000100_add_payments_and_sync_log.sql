@@ -1,3 +1,6 @@
+-- Ensure migration runs with superuser privileges (bypasses RLS on bookings/payments)
+set local role postgres;
+
 create table if not exists public.payments (
   id text primary key,
   event_id text not null,
@@ -188,4 +191,42 @@ having count(distinct p.id) != jsonb_array_length(b.payments)
 -- Step 6: Add index for payment deduplication checks
 create index if not exists idx_payments_booking_row_id on public.payments(booking_row_id);
 create index if not exists idx_payments_dedup_key on public.payments(booking_row_id, method, amount, date);
+
+-- Step 7: Enable RLS and add permissive policies for new/updated tables
+-- payments
+alter table public.payments enable row level security;
+drop policy if exists "payments_allow_all" on public.payments;
+create policy "payments_allow_all" on public.payments
+  for all using (true) with check (true);
+
+-- sync_log
+alter table public.sync_log enable row level security;
+drop policy if exists "sync_log_allow_all" on public.sync_log;
+create policy "sync_log_allow_all" on public.sync_log
+  for all using (true) with check (true);
+
+-- deleted_records
+alter table public.deleted_records enable row level security;
+drop policy if exists "deleted_records_allow_all" on public.deleted_records;
+create policy "deleted_records_allow_all" on public.deleted_records
+  for all using (true) with check (true);
+
+-- Grant table access to authenticated and service roles
+grant all on public.payments to authenticated, service_role;
+grant all on public.sync_log to authenticated, service_role;
+grant all on public.deleted_records to authenticated, service_role;
+-- Grant sequence access dynamically (handles varying sequence names across Supabase versions)
+do $$
+declare
+  seq_name text;
+begin
+  select sequence_name into seq_name
+  from information_schema.sequences
+  where sequence_schema = 'public'
+    and sequence_name like 'sync_log%';
+  if seq_name is not null then
+    execute format('grant usage, select on sequence public.%I to authenticated, service_role', seq_name);
+  end if;
+end
+$$;
 

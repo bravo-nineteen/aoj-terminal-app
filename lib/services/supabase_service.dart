@@ -495,6 +495,9 @@ class SupabaseService {
     SupabaseClient db,
     List<EventRecord> localEvents,
   ) async {
+    // Never prune when local has no events — treat as "nothing to delete" not "delete all".
+    if (localEvents.isEmpty) return;
+
     final desiredEventIds = localEvents.map((e) => e.id).toSet();
     final localEventMaxTs = localEvents
         .map((e) => _updatedAtMicros(e.updatedAt))
@@ -675,6 +678,10 @@ class SupabaseService {
     required String eventId,
     required List<Map<String, dynamic>> rows,
   }) async {
+    // If local has no rows for this table/event, skip entirely.
+    // Treat as "nothing to contribute" rather than "delete all cloud records".
+    if (rows.isEmpty) return;
+
     final existingRows = List<Map<String, dynamic>>.from(
       await db.from(table).select('id, updated_at').eq('event_id', eventId),
     );
@@ -970,7 +977,11 @@ class SupabaseService {
         throw StateError('Schema check failed: ${health.issues.join('; ')}');
       }
 
-      await _withHostLookupRetry(() => pushAppState(localState));
+      // If local state is empty, skip push to avoid wiping cloud data.
+      // This handles fresh installs / cleared local storage (bootstrap from cloud).
+      if (localState.events.isNotEmpty) {
+        await _withHostLookupRetry(() => pushAppState(localState));
+      }
       final cloudState = await _withHostLookupRetry(() => pullAppState());
 
       _syncDiagnostics = SyncDiagnosticsRecord(
