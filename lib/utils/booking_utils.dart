@@ -14,6 +14,46 @@ class LunchBreakdownItem {
 class BookingUtils {
   static String _norm(String value) => value.trim().toLowerCase();
 
+  static bool _isImportedSeedPayment(PaymentRecord payment) {
+    return payment.note.trim().toLowerCase() == 'imported from booking file';
+  }
+
+  static String _paymentExactSignature(PaymentRecord payment) {
+    final method = payment.method.trim().toLowerCase();
+    final note = payment.note.trim().toLowerCase();
+    final amount = MoneyUtils.parseMoney(payment.amount).toStringAsFixed(2);
+    final date = payment.date.trim();
+    return '$method|$note|$amount|$date';
+  }
+
+  static String _paymentImportedSeedSignature(PaymentRecord payment) {
+    final method = payment.method.trim().toLowerCase();
+    final amount = MoneyUtils.parseMoney(payment.amount).toStringAsFixed(2);
+    return 'imported|$method|$amount';
+  }
+
+  static List<PaymentRecord> dedupePayments(List<PaymentRecord> payments) {
+    final deduped = <PaymentRecord>[];
+    final seenExact = <String>{};
+    final seenImportedSeed = <String>{};
+
+    for (final payment in payments) {
+      final exact = _paymentExactSignature(payment);
+      if (seenExact.contains(exact)) continue;
+
+      if (_isImportedSeedPayment(payment)) {
+        final importedKey = _paymentImportedSeedSignature(payment);
+        if (seenImportedSeed.contains(importedKey)) continue;
+        seenImportedSeed.add(importedKey);
+      }
+
+      seenExact.add(exact);
+      deduped.add(payment);
+    }
+
+    return deduped;
+  }
+
   static double ticketsTotal(BookingGroup group) {
     return group.tickets
         .where(ticketIsActive)
@@ -32,7 +72,8 @@ class BookingUtils {
   }
 
   static double paymentsTotal(BookingGroup group) {
-    return group.primary.payments.fold<double>(0.0, (sum, payment) {
+    final payments = dedupePayments(group.primary.payments);
+    return payments.fold<double>(0.0, (sum, payment) {
       final amount = MoneyUtils.parseMoney(payment.amount);
       if (payment.method.trim().toLowerCase() == 'refund') return sum - amount;
       return sum + amount;

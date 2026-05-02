@@ -17,11 +17,13 @@ class SupabaseService {
   static const String _tableAppConfig = 'app_config';
   static const String _tableEvents = 'events';
   static const String _tableBookings = 'bookings';
+  static const String _tablePayments = 'payments';
   static const String _tableTickets = 'tickets';
   static const String _tableMembers = 'members';
   static const String _tableSchedule = 'schedule';
   static const String _tableExpenses = 'expenses';
   static const String _tableGameModes = 'game_modes';
+  static const String _tableSyncLog = 'sync_log';
 
   static SyncDiagnosticsRecord _syncDiagnostics =
     SyncDiagnosticsRecord.empty();
@@ -361,6 +363,7 @@ class SupabaseService {
     // ── Per-event sub-tables ─────────────────────────────────────────────────
     for (final event in appState.events) {
       await _pushBookings(db, event);
+      await _pushPaymentsMirror(db, event);
       await _pushTickets(db, event);
       await _pushMembers(db, event);
       await _pushSchedule(db, event);
@@ -456,6 +459,39 @@ class SupabaseService {
     if (rows.isNotEmpty) {
       await db.from(_tableTickets).upsert(rows);
     }
+  }
+
+  static Future<void> _pushPaymentsMirror(
+    SupabaseClient db,
+    EventRecord event,
+  ) async {
+    final rows = <Map<String, dynamic>>[];
+
+    for (final booking in event.bookings) {
+      for (final payment in booking.payments) {
+        rows.add(
+          <String, dynamic>{
+            'id': '${booking.id}_${payment.id}',
+            'event_id': event.id,
+            'booking_row_id': booking.id,
+            'booking_id': booking.bookingId,
+            'payment_id': payment.id,
+            'amount': payment.amount,
+            'method': payment.method,
+            'note': payment.note,
+            'date': payment.date,
+          },
+        );
+      }
+    }
+
+    if (rows.isEmpty) return;
+
+    // Optional mirror table for external querying. Ignore if schema does not
+    // include this table/shape yet.
+    try {
+      await db.from(_tablePayments).upsert(rows);
+    } catch (_) {}
   }
 
   static Future<void> _pushMembers(
@@ -567,6 +603,7 @@ class SupabaseService {
         lastError: '',
         lastErrorCode: '',
       );
+      await _tryWriteSyncLog(_syncDiagnostics);
       return merged;
     } catch (e) {
       _syncDiagnostics = SyncDiagnosticsRecord(
@@ -580,6 +617,7 @@ class SupabaseService {
         lastError: _normalizeSyncSchemaError(e),
         lastErrorCode: _extractErrorCode(e),
       );
+      await _tryWriteSyncLog(_syncDiagnostics);
       rethrow;
     }
   }
@@ -998,11 +1036,13 @@ class SupabaseService {
       lunchOrderIds: _mergeUniqueStrings(local.lunchOrderIds, cloud.lunchOrderIds),
       ticketIds: _mergeUniqueStrings(local.ticketIds, cloud.ticketIds),
       sales: _mergeById(local.sales, cloud.sales, (x) => x.id, _mergeSale),
-      payments: _mergeById(
-        local.payments,
-        cloud.payments,
-        (x) => x.id,
-        _mergePayment,
+      payments: _dedupePayments(
+        _mergeById(
+          local.payments,
+          cloud.payments,
+          (x) => x.id,
+          _mergePayment,
+        ),
       ),
     );
   }
@@ -1148,6 +1188,35 @@ class SupabaseService {
     return mergedById.values.toList();
   }
 
+  static List<PaymentRecord> _dedupePayments(List<PaymentRecord> payments) {
+    final deduped = <PaymentRecord>[];
+    final seenExact = <String>{};
+    final seenImportedSeed = <String>{};
+
+    for (final payment in payments) {
+      final method = payment.method.trim().toLowerCase();
+      final note = payment.note.trim().toLowerCase();
+      final amount =
+          (double.tryParse(payment.amount.replaceAll(RegExp(r'[^\\d.\\-]'), '')) ??
+                  0)
+              .toStringAsFixed(2);
+      final date = payment.date.trim();
+      final exact = '$method|$note|$amount|$date';
+      if (seenExact.contains(exact)) continue;
+
+      if (note == 'imported from booking file') {
+        final importedKey = 'imported|$method|$amount';
+        if (seenImportedSeed.contains(importedKey)) continue;
+        seenImportedSeed.add(importedKey);
+      }
+
+      seenExact.add(exact);
+      deduped.add(payment);
+    }
+
+    return deduped;
+  }
+
   static List<String> _mergeUniqueStrings(
       List<String> local, List<String> cloud) {
     final seen = <String>{};
@@ -1169,6 +1238,24 @@ class SupabaseService {
     if (c.isEmpty) return local;
 
     return l.length >= c.length ? local : cloud;
+  }
+
+  static Future<void> _tryWriteSyncLog(SyncDiagnosticsRecord diagnostics) async {
+    try {
+      await _db.from(_tableSyncLog).insert(<String, dynamic>{
+        'operation': diagnostics.operation,
+        'started_at': diagnostics.startedAt,
+        'completed_at': diagnostics.completedAt,
+        'local_events': diagnostics.localEvents,
+        'cloud_events': diagnostics.cloudEvents,
+        'merged_events': diagnostics.mergedEvents,
+        'conflicts': diagnostics.conflicts,
+        'last_error': diagnostics.lastError,
+        'last_error_code': diagnostics.lastErrorCode,
+      });
+    } catch (_) {
+      // Keep sync resilient on schemas that do not have sync_log yet.
+    }
   }
 
   static String? _preferStringNullable(String? local, String? cloud) {

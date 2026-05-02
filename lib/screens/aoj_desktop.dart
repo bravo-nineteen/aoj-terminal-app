@@ -1329,6 +1329,24 @@ class _AOJDesktopState extends State<AOJDesktop> {
     );
 
     if (result == true) {
+      final enteredAmount = double.tryParse(
+            amountController.text.trim().replaceAll(RegExp(r'[^\d.\-]'), ''),
+          ) ??
+          0;
+      final methodLower = method.trim().toLowerCase();
+
+      group.primary.payments.removeWhere((p) {
+        final isImportedSeed =
+            p.note.trim().toLowerCase() == 'imported from booking file';
+        if (!isImportedSeed) return false;
+        if (methodLower == 'imported') return false;
+        if (enteredAmount <= 0) return false;
+        final existingAmount =
+            double.tryParse(p.amount.trim().replaceAll(RegExp(r'[^\d.\-]'), '')) ??
+                0;
+        return (existingAmount - enteredAmount).abs() < 0.01;
+      });
+
       _lastUsedPaymentMethod = method;
       group.primary.payments.add(
         PaymentRecord(
@@ -1802,6 +1820,9 @@ class _AOJDesktopState extends State<AOJDesktop> {
   }
 
   Future<void> _saveGroupedBooking(BookingGroup group) async {
+    group.primary.payments =
+        BookingUtils.dedupePayments(group.primary.payments);
+
     for (final row in group.rows) {
       row.bookingId = group.primary.bookingId;
       row.bookingDate = group.primary.bookingDate;

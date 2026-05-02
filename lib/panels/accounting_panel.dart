@@ -219,7 +219,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
       chargeableTotal += BookingUtils.grandTotal(group, widget.event);
       paymentsRecorded += BookingUtils.paymentsTotal(group);
 
-      for (final payment in group.primary.payments) {
+      for (final payment in BookingUtils.dedupePayments(group.primary.payments)) {
         final amount = _toDouble(payment.amount);
         if (amount <= 0) continue;
 
