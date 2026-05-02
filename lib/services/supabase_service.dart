@@ -348,8 +348,9 @@ class SupabaseService {
     await checkTable(_tableSchedule);
     await checkTable(_tableExpenses);
     await checkTable(_tableGameModes);
-    await checkTable(_tableDeletedRecords);
-    await checkTable('messages');
+    // deleted_records and messages are optional — missing tables are noted but do not block sync
+    try { await _db.from(_tableDeletedRecords).select().limit(1); } catch (_) {}
+    try { await _db.from('messages').select().limit(1); } catch (_) {}
 
     try {
       final row = await _db
@@ -633,21 +634,26 @@ class SupabaseService {
     required String table,
     required String eventId,
   }) async {
-    final rows = List<Map<String, dynamic>>.from(
-      await db
-          .from(_tableDeletedRecords)
-          .select('record_id, deleted_at')
-          .eq('table_name', table)
-          .eq('event_id', eventId),
-    );
+    try {
+      final rows = List<Map<String, dynamic>>.from(
+        await db
+            .from(_tableDeletedRecords)
+            .select('record_id, deleted_at')
+            .eq('table_name', table)
+            .eq('event_id', eventId),
+      );
 
-    final result = <String, String>{};
-    for (final row in rows) {
-      final recordId = row['record_id']?.toString() ?? '';
-      if (recordId.isEmpty) continue;
-      result[recordId] = row['deleted_at']?.toString() ?? '';
+      final result = <String, String>{};
+      for (final row in rows) {
+        final recordId = row['record_id']?.toString() ?? '';
+        if (recordId.isEmpty) continue;
+        result[recordId] = row['deleted_at']?.toString() ?? '';
+      }
+      return result;
+    } catch (_) {
+      // deleted_records table missing — tombstones unavailable, degrade gracefully
+      return {};
     }
-    return result;
   }
 
   static Future<void> _writeDeletionTombstones({
@@ -673,7 +679,11 @@ class SupabaseService {
         .toList();
     if (rows.isEmpty) return;
 
-    await db.from(_tableDeletedRecords).upsert(rows);
+    try {
+      await db.from(_tableDeletedRecords).upsert(rows);
+    } catch (_) {
+      // deleted_records table missing — skip tombstone write, degrade gracefully
+    }
   }
 
   static Future<void> _syncEventScopedTable({
