@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../models/aoj_models.dart';
 import '../utils/booking_utils.dart';
 import '../utils/money_utils.dart';
-import '../widgets/ui_components.dart';
 
 class AccountingPanel extends StatefulWidget {
   final Color accent;

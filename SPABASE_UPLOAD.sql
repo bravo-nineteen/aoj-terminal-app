@@ -190,12 +190,54 @@ create table if not exists public.expenses (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.payments (
+  id text primary key,
+  event_id text not null,
+  booking_row_id text not null default '',
+  booking_id text not null default '',
+  payment_id text not null default '',
+  amount text not null default '0',
+  method text not null default '',
+  note text not null default '',
+  date text not null default '',
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.sync_log (
+  id bigserial primary key,
+  operation text not null default '',
+  started_at text not null default '',
+  completed_at text not null default '',
+  local_events integer not null default 0,
+  cloud_events integer not null default 0,
+  merged_events integer not null default 0,
+  conflicts integer not null default 0,
+  last_error text not null default '',
+  last_error_code text not null default '',
+  created_at timestamptz not null default now()
+);
+
 create index if not exists idx_bookings_event_id on public.bookings(event_id);
 create index if not exists idx_tickets_event_id on public.tickets(event_id);
 create index if not exists idx_members_event_id on public.members(event_id);
 create index if not exists idx_schedule_event_id on public.schedule(event_id);
 create index if not exists idx_expenses_event_id on public.expenses(event_id);
 create index if not exists idx_game_modes_event_id on public.game_modes(event_id);
+create index if not exists idx_sync_log_created_at on public.sync_log(created_at desc);
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'payments'
+      and column_name = 'event_id'
+  ) then
+    create index if not exists idx_payments_event_id on public.payments(event_id);
+  end if;
+end
+$$;
 
 do $$
 declare

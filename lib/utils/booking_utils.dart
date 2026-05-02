@@ -54,6 +54,33 @@ class BookingUtils {
     return deduped;
   }
 
+  static bool cleanupDuplicatePaymentsInEvent(EventRecord event) {
+    var changed = false;
+
+    for (final booking in event.bookings) {
+      final deduped = dedupePayments(booking.payments);
+      if (_samePaymentList(booking.payments, deduped)) continue;
+      booking.payments = deduped;
+      changed = true;
+    }
+
+    if (changed) {
+      recalculateAllTotals(event);
+    }
+
+    return changed;
+  }
+
+  static bool _samePaymentList(List<PaymentRecord> a, List<PaymentRecord> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (_paymentExactSignature(a[i]) != _paymentExactSignature(b[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   static double ticketsTotal(BookingGroup group) {
     return group.tickets
         .where(ticketIsActive)

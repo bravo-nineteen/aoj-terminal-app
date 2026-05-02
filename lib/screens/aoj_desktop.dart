@@ -371,12 +371,18 @@ class _AOJDesktopState extends State<AOJDesktop> {
     try {
       final loaded = await AppStateService.load();
       if (loaded == null) return;
+      final cleaned = _cleanupDuplicatePaymentsInState(loaded);
+      if (cleaned) {
+        await AppStateService.save(loaded);
+      }
       setState(() {
         appState = loaded;
         selectedBookingIndex = 0;
         selectedMemberIndex =
             activeEvent?.members.isNotEmpty == true ? 0 : null;
-        systemStatus = 'LOCAL DATA LOADED';
+        systemStatus = cleaned
+            ? 'LOCAL DATA LOADED (PAYMENTS CLEANED)'
+            : 'LOCAL DATA LOADED';
       });
     } catch (_) {
       setState(() {
@@ -450,6 +456,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     try {
       final merged = await SupabaseService.syncMergeAppState(appState)
           .timeout(const Duration(seconds: 30));
+      _cleanupDuplicatePaymentsInState(merged);
       await AppStateService.save(merged);
       if (mounted) {
         setState(() {
@@ -477,6 +484,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     try {
       final merged = await SupabaseService.syncMergeAppState(appState)
           .timeout(const Duration(seconds: 30));
+      _cleanupDuplicatePaymentsInState(merged);
       await AppStateService.save(merged);
       if (mounted) {
         setState(() {
@@ -505,6 +513,16 @@ class _AOJDesktopState extends State<AOJDesktop> {
     setState(() {
       windows[id]!.zIndex = nextZ++;
     });
+  }
+
+  bool _cleanupDuplicatePaymentsInState(AppStateData state) {
+    var changed = false;
+    for (final event in state.events) {
+      if (BookingUtils.cleanupDuplicatePaymentsInEvent(event)) {
+        changed = true;
+      }
+    }
+    return changed;
   }
 
   void _openWindow(String id) {

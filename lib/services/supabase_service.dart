@@ -403,7 +403,9 @@ class SupabaseService {
   ) async {
     final rows = event.bookings
         .map(
-          (b) => <String, dynamic>{
+          (b) {
+            final dedupedPayments = _dedupePayments(b.payments);
+            return <String, dynamic>{
             'id': b.id,
             'event_id': event.id,
             'booking_id': b.bookingId,
@@ -427,7 +429,8 @@ class SupabaseService {
             'lunch_order_ids': b.lunchOrderIds,
             'ticket_ids': b.ticketIds,
             'sales': b.sales.map((s) => s.toJson()).toList(),
-            'payments': b.payments.map((p) => p.toJson()).toList(),
+            'payments': dedupedPayments.map((p) => p.toJson()).toList(),
+          };
           },
         )
         .toList();
@@ -737,13 +740,15 @@ class SupabaseService {
                 ),
               )
               .toList(),
-          payments: _safeJsonToList(b['payments'])
-              .map(
-                (p) => PaymentRecord.fromJson(
-                  Map<String, dynamic>.from(p as Map),
-                ),
-              )
-              .toList(),
+          payments: _dedupePayments(
+            _safeJsonToList(b['payments'])
+                .map(
+                  (p) => PaymentRecord.fromJson(
+                    Map<String, dynamic>.from(p as Map),
+                  ),
+                )
+                .toList(),
+          ),
         );
       }).toList();
 
