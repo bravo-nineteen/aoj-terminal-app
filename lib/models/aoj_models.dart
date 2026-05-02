@@ -373,6 +373,7 @@ class SaleRecord {
 
 class PaymentRecord {
   String id;
+  String updatedAt;
   String amount;
   String method;
   String note;
@@ -380,6 +381,7 @@ class PaymentRecord {
 
   PaymentRecord({
     required this.id,
+    this.updatedAt = '',
     required this.amount,
     required this.method,
     required this.note,
@@ -388,6 +390,7 @@ class PaymentRecord {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+        'updatedAt': updatedAt,
         'amount': amount,
         'method': method,
         'note': note,
@@ -397,6 +400,7 @@ class PaymentRecord {
   factory PaymentRecord.fromJson(Map<String, dynamic> json) {
     return PaymentRecord(
       id: json['id']?.toString() ?? '',
+      updatedAt: json['updatedAt']?.toString() ?? '',
       amount: json['amount']?.toString() ?? '0',
       method: json['method']?.toString() ?? '',
       note: json['note']?.toString() ?? '',
