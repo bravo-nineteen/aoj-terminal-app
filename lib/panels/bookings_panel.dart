@@ -895,14 +895,14 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                                   borderRadius:
                                                       BorderRadius.circular(10),
                                                   border: Border.all(
-                                                      color: Colors.greenAccent
+                                                      color: (isDark ? Colors.greenAccent : Colors.green.shade600)
                                                           .withValues(
                                                               alpha: 0.35)),
                                                 ),
-                                                child: const Icon(
+                                                child: Icon(
                                                   Icons.payments_outlined,
                                                   size: 16,
-                                                  color: Colors.greenAccent,
+                                                  color: isDark ? Colors.greenAccent : Colors.green.shade600,
                                                 ),
                                               ),
                                             ),
