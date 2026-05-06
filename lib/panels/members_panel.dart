@@ -530,7 +530,7 @@ class _MembersPanelState extends State<MembersPanel> {
                                   ],
                                 ),
                                 const SizedBox(height: 8),
-                                _buildCompactRatingRow(member),
+                                _buildCompactRatingRow(member, context),
                                 if (_isEditing) ...[
                                   Row(
                                     children: [
@@ -658,18 +658,22 @@ class _MembersPanelState extends State<MembersPanel> {
                                     value:
                                         '${member.dateOfBirth.trim().isEmpty ? '—' : member.dateOfBirth}   ${member.gender.trim().isEmpty ? '' : '• ${member.gender}'}'
                                             .trim(),
+                                    context: context,
                                   ),
                                   _buildCompactReadOnlyRow(
                                     label: 'Telephone',
                                     value: member.telephone,
+                                    context: context,
                                   ),
                                   _buildCompactReadOnlyRow(
                                     label: 'Email',
                                     value: member.email,
+                                    context: context,
                                   ),
                                   _buildCompactReadOnlyRow(
                                     label: 'Username',
                                     value: _getUsername(member),
+                                    context: context,
                                   ),
                                 ],
                               ],

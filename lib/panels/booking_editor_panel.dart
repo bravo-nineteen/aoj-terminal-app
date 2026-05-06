@@ -96,15 +96,17 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
   Widget _sectionCard({
     required String title,
     required Widget child,
+    required BuildContext context,
     Widget? trailing,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        color: Colors.white.withValues(alpha: 0.03),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.04),
+        border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.10)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -136,7 +138,7 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
       barrierDismissible: false,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF121813),
+          backgroundColor: isDark ? const Color(0xFF121813) : const Color(0xFFF1F4EE),
           title: const Text('Delete Booking'),
           content: const Text(
             'Are you sure you want to delete this booking?\nThis cannot be undone.',
@@ -162,6 +164,7 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final group = widget.group;
     final grandTotal = BookingUtils.grandTotal(group, widget.event);
     final paid = BookingUtils.paymentsTotal(group);
@@ -228,6 +231,7 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                       children: [
                         _sectionCard(
                           title: 'Member / Booking',
+                          context: context,
                           trailing: Wrap(
                             spacing: 6,
                             children: [
@@ -283,6 +287,7 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                         ),
                         _sectionCard(
                           title: 'Financial / Status',
+                          context: context,
                           child: Column(
                             children: [
                               SummaryLine(
@@ -375,6 +380,7 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                         ),
                         _sectionCard(
                           title: 'Notes',
+                          context: context,
                           child: PersistentEditField(
                             label: 'Notes',
                             value: group.primary.notes,
@@ -395,6 +401,7 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                       children: [
                         _sectionCard(
                           title: 'Lunch Orders',
+                          context: context,
                           child: widget.event.lunchOptions.isEmpty
                               ? const Text('NO LUNCH OPTIONS CONFIGURED')
                               : Column(
@@ -447,6 +454,7 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                         ),
                         _sectionCard(
                           title: 'Tickets',
+                          context: context,
                           trailing: ElevatedButton.icon(
                             onPressed: () => widget.onOpenTicketEditor(group),
                             icon: const Icon(Icons.edit_note, size: 16),
@@ -461,11 +469,13 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                                       padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(10),
-                                        color: Colors.white
-                                            .withValues(alpha: 0.03),
+                                        color: isDark
+                                            ? Colors.white.withValues(alpha: 0.03)
+                                            : Colors.black.withValues(alpha: 0.04),
                                         border: Border.all(
-                                          color: Colors.white
-                                              .withValues(alpha: 0.05),
+                                          color: isDark
+                                              ? Colors.white.withValues(alpha: 0.05)
+                                              : Colors.black.withValues(alpha: 0.08),
                                         ),
                                       ),
                                       child: Row(
@@ -534,6 +544,7 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                         ),
                         _sectionCard(
                           title: 'Payments / Sales',
+                          context: context,
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -568,11 +579,13 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
                                         decoration: BoxDecoration(
                                           borderRadius:
                                               BorderRadius.circular(10),
-                                          color: Colors.white
-                                              .withValues(alpha: 0.03),
+                                          color: isDark
+                                              ? Colors.white.withValues(alpha: 0.03)
+                                              : Colors.black.withValues(alpha: 0.04),
                                           border: Border.all(
-                                            color: Colors.white
-                                                .withValues(alpha: 0.05),
+                                            color: isDark
+                                                ? Colors.white.withValues(alpha: 0.05)
+                                                : Colors.black.withValues(alpha: 0.08),
                                           ),
                                         ),
                                         child: Row(

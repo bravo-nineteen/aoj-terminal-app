@@ -315,6 +315,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (widget.event == null) {
       return const Padding(
         padding: EdgeInsets.all(16),
@@ -499,7 +500,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
                 Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    color: const Color(0xCC101511),
+                    color: isDark ? const Color(0xCC101511) : const Color(0xFFE8EFE5),
                     border:
                         Border.all(color: accent.withValues(alpha: 0.30)),
                   ),
@@ -567,7 +568,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(18),
-                    color: const Color(0xCC101511),
+                    color: isDark ? const Color(0xCC101511) : const Color(0xFFE8EFE5),
                     border: Border.all(color: accent.withValues(alpha: 0.35)),
                   ),
                   child: Column(

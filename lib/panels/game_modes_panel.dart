@@ -20,6 +20,7 @@ class GameModesPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -55,7 +56,7 @@ class GameModesPanel extends StatelessWidget {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
-                  color: const Color(0xCC101511),
+                  color: isDark ? const Color(0xCC101511) : const Color(0xFFE8EFE5),
                   border: Border.all(color: accent.withValues(alpha: 0.35)),
                 ),
                 child: ListView.builder(
@@ -67,9 +68,9 @@ class GameModesPanel extends StatelessWidget {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        color: Colors.white.withValues(alpha: 0.03),
+                        color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.04),
                         border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.06)),
+                            color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.10))),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,

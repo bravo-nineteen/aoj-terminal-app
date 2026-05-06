@@ -1717,7 +1717,9 @@ class _AOJDesktopState extends State<AOJDesktop> {
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.08),
+                                  color: widget.isDarkTheme
+                                      ? Colors.white.withValues(alpha: 0.08)
+                                      : Colors.black.withValues(alpha: 0.12),
                                 ),
                               ),
                               child: Column(

@@ -34,6 +34,7 @@ class PropsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (event == null) {
       return const Center(child: Text('NO ACTIVE EVENT'));
     }
@@ -102,9 +103,9 @@ class PropsPanel extends StatelessWidget {
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        color: Colors.white.withValues(alpha: 0.03),
+                        color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.04),
                         border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.08)),
+                            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.12)),
                       ),
                       child: const Text(
                         'This does not switch Wi-Fi automatically. Connect the tablet to the prop Wi-Fi first, then open the prop page here.',
@@ -123,7 +124,7 @@ class PropsPanel extends StatelessWidget {
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(18),
-                    color: const Color(0xCC101511),
+                    color: isDark ? const Color(0xCC101511) : const Color(0xFFE8EFE5),
                     border: Border.all(color: accent.withValues(alpha: 0.35)),
                   ),
                   child: ClipRRect(
