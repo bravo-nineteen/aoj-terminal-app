@@ -138,7 +138,7 @@ class _BookingEditorPanelState extends State<BookingEditorPanel> {
       barrierDismissible: false,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF121813) : const Color(0xFFF1F4EE),
+          backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF121813) : const Color(0xFFF1F4EE),
           title: const Text('Delete Booking'),
           content: const Text(
             'Are you sure you want to delete this booking?\nThis cannot be undone.',

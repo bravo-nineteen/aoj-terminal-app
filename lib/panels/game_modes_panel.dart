@@ -70,7 +70,7 @@ class GameModesPanel extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                         color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.04),
                         border: Border.all(
-                            color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.10))),
+                            color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.10)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
