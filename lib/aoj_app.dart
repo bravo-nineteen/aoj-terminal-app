@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'screens/aoj_desktop.dart';
+import 'services/device_identity_service.dart';
 
 class AOJApp extends StatefulWidget {
   const AOJApp({super.key, this.startupError});
@@ -14,12 +15,27 @@ class AOJApp extends StatefulWidget {
 class _AOJAppState extends State<AOJApp> {
   ThemeMode _themeMode = ThemeMode.dark;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadThemePreference();
+  }
+
+  Future<void> _loadThemePreference() async {
+    final isDark = await DeviceIdentityService.getIsDarkTheme();
+    if (mounted) {
+      setState(() {
+        _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+      });
+    }
+  }
+
   void _toggleThemeMode() {
+    final newMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     setState(() {
-      _themeMode = _themeMode == ThemeMode.dark
-          ? ThemeMode.light
-          : ThemeMode.dark;
+      _themeMode = newMode;
     });
+    DeviceIdentityService.setIsDarkTheme(newMode == ThemeMode.dark);
   }
 
   ThemeData _buildLightTheme() {

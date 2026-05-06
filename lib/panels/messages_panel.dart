@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../models/aoj_models.dart';
@@ -31,6 +34,10 @@ class _MessagesPanelState extends State<MessagesPanel> {
   final TextEditingController _bodyController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+
+  // Pending attachment (picked but not yet sent)
+  PlatformFile? _pendingFile;
+  bool _uploadingAttachment = false;
 
   _MessageScope _scope = _MessageScope.all;
 
@@ -167,21 +174,65 @@ class _MessagesPanelState extends State<MessagesPanel> {
     });
   }
 
+  Future<void> _pickFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(withData: false);
+      if (result != null && result.files.isNotEmpty) {
+        setState(() {
+          _pendingFile = result.files.first;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not pick file: $e')),
+      );
+    }
+  }
+
+  void _clearPendingFile() => setState(() => _pendingFile = null);
+
   Future<void> _send() async {
     final body = _bodyController.text.trim();
-    if (body.isEmpty) return;
+    final pending = _pendingFile;
+    if (body.isEmpty && pending == null) return;
 
     final sender = _deviceUsername.isEmpty ? 'Anonymous' : _deviceUsername;
     final eventId =
       _scope == _MessageScope.globalOnly ? null : widget.activeEventId;
 
     _bodyController.clear();
+    setState(() {
+      _pendingFile = null;
+      _uploadingAttachment = pending != null;
+    });
+
+    String? attachmentUrl;
+    String? attachmentType;
+    String? attachmentName;
 
     try {
+      if (pending != null && pending.path != null) {
+        final file = File(pending.path!);
+        attachmentUrl = await MessagesService.uploadAttachment(
+          file: file,
+          fileName: pending.name,
+        );
+        attachmentName = pending.name;
+        final ext = pending.name.contains('.')
+            ? pending.name.split('.').last.toLowerCase()
+            : '';
+        const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+        attachmentType = imageExts.contains(ext) ? 'image' : 'file';
+      }
+
       await MessagesService.sendMessage(
         sender: sender,
         body: body,
         eventId: eventId,
+        attachmentUrl: attachmentUrl,
+        attachmentType: attachmentType,
+        attachmentName: attachmentName,
       );
       await _load();
     } catch (e) {
@@ -189,6 +240,8 @@ class _MessagesPanelState extends State<MessagesPanel> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Send failed: $e')),
       );
+    } finally {
+      if (mounted) setState(() => _uploadingAttachment = false);
     }
   }
 
@@ -343,9 +396,30 @@ class _MessagesPanelState extends State<MessagesPanel> {
                           ),
           ),
           const SizedBox(height: 8),
+          // Pending attachment chip
+          if (_pendingFile != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: InputChip(
+                avatar: const Icon(Icons.attach_file, size: 14),
+                label: Text(
+                  _pendingFile!.name,
+                  style: const TextStyle(fontSize: 12),
+                ),
+                onDeleted: _clearPendingFile,
+                deleteIcon: const Icon(Icons.close, size: 14),
+              ),
+            ),
           // Compose row
           Row(
             children: [
+              // Attach button
+              IconButton(
+                tooltip: 'Attach file or image',
+                icon: const Icon(Icons.attach_file),
+                onPressed: _uploadingAttachment ? null : _pickFile,
+              ),
+              const SizedBox(width: 4),
               Expanded(
                 child: TextField(
                   controller: _bodyController,
@@ -365,19 +439,25 @@ class _MessagesPanelState extends State<MessagesPanel> {
                 ),
               ),
               const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: _send,
-                icon: const Icon(Icons.send, size: 16),
-                label: const Text('Send'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accent,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                ),
-              ),
+              _uploadingAttachment
+                  ? const SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : ElevatedButton.icon(
+                      onPressed: _send,
+                      icon: const Icon(Icons.send, size: 16),
+                      label: const Text('Send'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
             ],
           ),
         ],
@@ -433,12 +513,16 @@ class _MessageBubble extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 2),
-            Text(
-              message.body,
-              style: TextStyle(
-                color: isMine ? Colors.white : null,
+            if (message.body.isNotEmpty)
+              Text(
+                message.body,
+                style: TextStyle(
+                  color: isMine ? Colors.white : null,
+                ),
               ),
-            ),
+            // Attachment display
+            if (message.attachmentUrl != null) ...
+              _buildAttachment(context, message, isMine),
             const SizedBox(height: 2),
             Text(
               relative.isEmpty ? time : '$time - $relative',
@@ -451,6 +535,56 @@ class _MessageBubble extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  List<Widget> _buildAttachment(
+      BuildContext context, MessageRecord message, bool isMine) {
+    final url = message.attachmentUrl!;
+    final type = message.attachmentType ?? 'file';
+    final name = message.attachmentName ?? url.split('/').last;
+
+    if (type == 'image') {
+      return [
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(
+            url,
+            width: 200,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const Text('(Image failed to load)'),
+          ),
+        ),
+      ];
+    }
+
+    // File link
+    return [
+      const SizedBox(height: 6),
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.insert_drive_file_outlined,
+            size: 16,
+            color: isMine ? Colors.white70 : Colors.grey,
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              name,
+              style: TextStyle(
+                fontSize: 12,
+                decoration: TextDecoration.underline,
+                color: isMine ? Colors.white70 : Colors.blueAccent,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    ];
   }
 
   String _formatTime(String iso) {

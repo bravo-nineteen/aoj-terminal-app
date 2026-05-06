@@ -786,6 +786,9 @@ class MessageRecord {
   String body;
   String createdAt;
   String? eventId;
+  String? attachmentUrl;
+  String? attachmentType; // 'image' | 'file'
+  String? attachmentName;
 
   MessageRecord({
     required this.id,
@@ -793,6 +796,9 @@ class MessageRecord {
     required this.body,
     required this.createdAt,
     this.eventId,
+    this.attachmentUrl,
+    this.attachmentType,
+    this.attachmentName,
   });
 
   Map<String, dynamic> toJson() => {
@@ -801,6 +807,9 @@ class MessageRecord {
         'body': body,
         'createdAt': createdAt,
         if (eventId != null) 'eventId': eventId,
+        if (attachmentUrl != null) 'attachmentUrl': attachmentUrl,
+        if (attachmentType != null) 'attachmentType': attachmentType,
+        if (attachmentName != null) 'attachmentName': attachmentName,
       };
 
   factory MessageRecord.fromJson(Map<String, dynamic> json) => MessageRecord(
@@ -809,6 +818,9 @@ class MessageRecord {
         body: json['body']?.toString() ?? '',
         createdAt: json['createdAt']?.toString() ?? '',
         eventId: json['eventId']?.toString(),
+        attachmentUrl: json['attachmentUrl']?.toString(),
+        attachmentType: json['attachmentType']?.toString(),
+        attachmentName: json['attachmentName']?.toString(),
       );
 }
 

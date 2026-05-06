@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/aoj_models.dart';
 
 class MessagesService {
   static SupabaseClient get _db => Supabase.instance.client;
+
+  static const String _attachmentsBucket = 'message-attachments';
 
   static bool _isHostLookupError(Object error) {
     final message = error.toString().toLowerCase();
@@ -45,6 +49,9 @@ class MessagesService {
                 body: r['body'] as String? ?? '',
                 createdAt: (r['created_at'] as String?) ?? '',
                 eventId: r['event_id'] as String?,
+                attachmentUrl: r['attachment_url'] as String?,
+                attachmentType: r['attachment_type'] as String?,
+                attachmentName: r['attachment_name'] as String?,
               ),
             )
             .toList();
@@ -64,10 +71,30 @@ class MessagesService {
     }
   }
 
+  /// Uploads a file to Supabase Storage and returns the public URL.
+  static Future<String> uploadAttachment({
+    required File file,
+    required String fileName,
+  }) async {
+    final ext = fileName.contains('.') ? fileName.split('.').last : '';
+    final path = '${DateTime.now().microsecondsSinceEpoch}${ext.isNotEmpty ? '.$ext' : ''}';
+    await _withHostLookupRetry(() async {
+      await _db.storage.from(_attachmentsBucket).upload(
+            path,
+            file,
+            fileOptions: FileOptions(upsert: false),
+          );
+    });
+    return _db.storage.from(_attachmentsBucket).getPublicUrl(path);
+  }
+
   static Future<void> sendMessage({
     required String sender,
     required String body,
     String? eventId,
+    String? attachmentUrl,
+    String? attachmentType,
+    String? attachmentName,
   }) async {
     try {
       await _withHostLookupRetry(() async {
@@ -77,6 +104,9 @@ class MessagesService {
           'body': body,
           'event_id': eventId,
           'created_at': DateTime.now().toUtc().toIso8601String(),
+          if (attachmentUrl != null) 'attachment_url': attachmentUrl,
+          if (attachmentType != null) 'attachment_type': attachmentType,
+          if (attachmentName != null) 'attachment_name': attachmentName,
         });
       });
     } on PostgrestException catch (e) {
