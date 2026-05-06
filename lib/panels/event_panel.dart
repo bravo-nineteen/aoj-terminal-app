@@ -68,6 +68,17 @@ class _EventPanelState extends State<EventPanel> {
     await _saveAndRefresh();
   }
 
+  Future<void> _toggleTicketCostType(EventRecord event) async {
+    event.ticketCostType = event.ticketCostType == 'perPerson' ? 'grandTotal' : 'perPerson';
+    await _saveAndRefresh();
+  }
+
+  String _getTicketCostLabel(EventRecord event) {
+    return event.ticketCostType == 'grandTotal'
+        ? 'Ticket Cost (Grand Total)'
+        : 'Ticket Cost Per Person';
+  }
+
   Future<void> _addLunchOption(EventRecord event) async {
     event.lunchOptions.add(
       LunchOptionRecord(
@@ -585,7 +596,7 @@ class _EventPanelState extends State<EventPanel> {
                             },
                           ),
                           PersistentEditField(
-                            label: 'Ticket Cost Per Person',
+                            label: _getTicketCostLabel(event),
                             value: _eventTicketCostPerPerson(event),
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
@@ -593,6 +604,15 @@ class _EventPanelState extends State<EventPanel> {
                             onChanged: (v) async {
                               await _setEventTicketCostPerPerson(event, v);
                             },
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: ElevatedButton(
+                              onPressed: () => _toggleTicketCostType(event),
+                              child: Text(
+                                'Switch to ${event.ticketCostType == 'perPerson' ? 'Grand Total' : 'Per Person'}',
+                              ),
+                            ),
                           ),
                           PersistentEditField(
                             label: 'Date',

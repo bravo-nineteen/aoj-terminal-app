@@ -907,6 +907,60 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                           ),
                                         ),
                                       ),
+                                    Padding(
+                                      padding:
+                                          const EdgeInsets.only(right: 4),
+                                      child: Tooltip(
+                                        message: isCheckedIn ? 'Undo check-in' : 'Quick check-in',
+                                        child: Material(
+                                          color: isCheckedIn
+                                              ? Colors.green.withValues(alpha: 0.18)
+                                              : widget.accent.withValues(alpha: 0.14),
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          child: InkWell(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                            onTap: () async {
+                                              final next = isCheckedIn
+                                                  ? 'Not Checked In'
+                                                  : 'Checked In';
+                                              await widget
+                                                  .onQuickSetCheckInStatus(
+                                                      group, next);
+                                              if (mounted) setState(() {});
+                                            },
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 8),
+                                              decoration: BoxDecoration(
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                                border: Border.all(
+                                                    color: isCheckedIn
+                                                        ? Colors.greenAccent
+                                                            .withValues(
+                                                                alpha: 0.35)
+                                                        : widget.accent
+                                                            .withValues(
+                                                                alpha: 0.35)),
+                                              ),
+                                              child: Icon(
+                                                isCheckedIn
+                                                    ? Icons.check_circle
+                                                    : Icons.radio_button_unchecked,
+                                                size: 16,
+                                                color: isCheckedIn
+                                                    ? Colors.greenAccent
+                                                    : widget.accent,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                     _IntegratedOpenButton(
                                       accent: widget.accent,
                                       onTap: () =>

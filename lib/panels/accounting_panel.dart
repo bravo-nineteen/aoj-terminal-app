@@ -160,6 +160,159 @@ class _AccountingPanelState extends State<AccountingPanel> {
     }
   }
 
+  double _getTicketCostValue(EventRecord event) {
+    if (event.ticketCostType == 'grandTotal') {
+      // For grand total mode, just return the value as-is (don't multiply by person count)
+      return _toDouble(event.ticketCostPerPerson);
+    } else {
+      // For per-person mode, use the standard calculation
+      return BookingUtils.eventTicketCostTotal(event);
+    }
+  }
+
+  Future<void> _showExpandedLedger(
+    String title,
+    List<_LedgerLine> lines,
+    Color accent,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        child: Container(
+          width: 900,
+          height: 600,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xCC101511)
+                : const Color(0xFFF0F5ED),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(18),
+                  ),
+                  color: accent.withValues(alpha: 0.12),
+                  border: Border(
+                    bottom: BorderSide(color: accent.withValues(alpha: 0.25)),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: accent,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: lines.isEmpty
+                    ? Center(
+                        child: Text(
+                          'NO ENTRIES',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: lines.length,
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : Colors.black.withValues(alpha: 0.08),
+                        ),
+                        itemBuilder: (context, index) {
+                          final line = lines[index];
+                          final isLightTheme =
+                              Theme.of(context).brightness == Brightness.light;
+                          final defaultTextColor =
+                              isLightTheme ? Colors.black87 : Colors.white;
+                          final defaultSubtitleColor =
+                              isLightTheme ? Colors.black54 : Colors.white70;
+
+                          final titleStyle = TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: line.isRefund
+                                ? Colors.blueAccent
+                                : defaultTextColor,
+                          );
+                          final subtitleStyle = TextStyle(
+                            fontSize: 12,
+                            color: line.isRefund
+                                ? Colors.blueAccent.withValues(alpha: 0.7)
+                                : defaultSubtitleColor,
+                          );
+                          final amountText = line.isRefund
+                              ? '(REFUND) ¥ ${MoneyUtils.formatMoney(line.amount)}'
+                              : '¥ ${MoneyUtils.formatMoney(line.amount)}';
+
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        line.title,
+                                        style: titleStyle,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        line.subtitle,
+                                        style: subtitleStyle,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Text(
+                                  amountText,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: line.isRefund
+                                        ? Colors.blueAccent
+                                        : defaultTextColor,
+                                  ),
+                                  textAlign: TextAlign.right,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.event == null) {
@@ -186,8 +339,8 @@ class _AccountingPanelState extends State<AccountingPanel> {
     final int bookingCount = groups.length;
     final int bookedPersons = BookingUtils.eventBookedPersons(widget.event!);
 
-    final double ticketValueByPeople =
-      BookingUtils.eventTicketCostTotal(widget.event!);
+    // Calculate ticket cost based on the type (per person or grand total)
+    final double ticketValueByPeople = _getTicketCostValue(widget.event!);
     double ticketCostTotal = 0;
     double donationTicketsTotal = 0;
     double lunchPassThroughTotal = 0;
@@ -285,7 +438,8 @@ class _AccountingPanelState extends State<AccountingPanel> {
     }
 
     final totalDeductions = cardFees + manualExpensesTotal;
-    final netAfterAllDeductions = paymentsRecorded - totalDeductions;
+    final incomeValue = grandTotal;  // Total gross income from all sources
+    final netAfterAllDeductions = incomeValue - totalDeductions;  // Income minus deductions
     final outstandingBalance = chargeableTotal - paymentsRecorded;
     final accent = widget.accent;
     final accountingNotes = widget.event!.accountingNotes;
@@ -308,6 +462,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
                           lines: incomeLines,
                           onDeleteLine: null,
                           onViewExpenseNotes: null,
+                          onExpand: () => _showExpandedLedger('Income Ledger', incomeLines, accent),
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -330,6 +485,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
                             icon: const Icon(Icons.add, size: 16),
                             label: const Text('ADD EXPENSE'),
                           ),
+                          onExpand: () => _showExpandedLedger('Deductions Ledger', deductionLines, accent),
                         ),
                       ),
                     ],
@@ -555,6 +711,7 @@ class _LedgerCard extends StatelessWidget {
   final Widget? headerAction;
   final Future<void> Function(_LedgerLine line)? onDeleteLine;
   final Future<void> Function(_LedgerLine line)? onViewExpenseNotes;
+  final VoidCallback? onExpand;
 
   const _LedgerCard({
     required this.title,
@@ -564,43 +721,61 @@ class _LedgerCard extends StatelessWidget {
     required this.onDeleteLine,
     required this.onViewExpenseNotes,
     this.headerAction,
+    this.onExpand,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xCC101511) : const Color(0xFFF0F5ED);
+    final headerBgColor = accent.withValues(alpha: isDark ? 0.12 : 0.08);
+    final dividerColor = isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.08);
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: const Color(0xCC101511),
+        color: bgColor,
         border: Border.all(color: accent.withValues(alpha: 0.35)),
       ),
       child: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-            decoration: BoxDecoration(
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(18)),
-              color: accent.withValues(alpha: 0.12),
-              border: Border(
-                bottom: BorderSide(color: accent.withValues(alpha: 0.25)),
+          InkWell(
+            onTap: onExpand,
+            cursor: onExpand != null ? SystemMouseCursors.click : MouseCursor.defer,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              decoration: BoxDecoration(
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(18)),
+                color: headerBgColor,
+                border: Border(
+                  bottom: BorderSide(color: accent.withValues(alpha: 0.25)),
+                ),
               ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: accent,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: accent,
+                      ),
                     ),
                   ),
-                ),
-                if (headerAction != null) headerAction!,
-              ],
+                  if (headerAction != null) headerAction!,
+                  if (onExpand != null) ...[
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.open_in_new,
+                      size: 16,
+                      color: accent.withValues(alpha: 0.7),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
           Expanded(
@@ -611,20 +786,24 @@ class _LedgerCard extends StatelessWidget {
                     itemCount: lines.length,
                     separatorBuilder: (_, __) => Divider(
                       height: 1,
-                      color: Colors.white.withValues(alpha: 0.06),
+                      color: dividerColor,
                     ),
                     itemBuilder: (context, index) {
                       final line = lines[index];
+                      final isLightTheme = Theme.of(context).brightness == Brightness.light;
+                      final defaultTextColor = isLightTheme ? Colors.black87 : Colors.white;
+                      final defaultSubtitleColor = isLightTheme ? Colors.black54 : Colors.white70;
+                      
                       final titleStyle = TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: line.isRefund ? Colors.blueAccent : null,
+                        color: line.isRefund ? Colors.blueAccent : defaultTextColor,
                       );
                       final subtitleStyle = TextStyle(
                         fontSize: 11,
                         color: line.isRefund
                             ? Colors.blueAccent.withValues(alpha: 0.7)
-                            : null,
+                            : defaultSubtitleColor,
                       );
                       final amountText = line.isRefund
                           ? '(REFUND) ¥ ${MoneyUtils.formatMoney(line.amount)}'

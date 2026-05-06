@@ -278,6 +278,22 @@ class _SystemPanelState extends State<SystemPanel> {
             ],
           ),
           const SizedBox(height: 14),
+          // ── Sync Controls ────────────────────────────────────────────────
+          Row(
+            spacing: 10,
+            children: [
+              ElevatedButton(
+                onPressed: widget.onSyncPush,
+                child: const Text('SYNC TO SERVER'),
+              ),
+              ElevatedButton(
+                onPressed: widget.onSyncPull,
+                child: const Text('DOWNLOAD FROM SERVER'),
+              ),
+              const Spacer(),
+            ],
+          ),
+          const SizedBox(height: 14),
           Expanded(child: SingleChildScrollView(
               child: isNarrow
                   ? Column(
@@ -363,11 +379,11 @@ class _SystemPanelState extends State<SystemPanel> {
                           accent: widget.accent,
                           children: [
                             ActionLine(
-                              label: 'Sync Merge to Supabase',
+                              label: 'Sync to Server',
                               onTap: widget.onSyncPush,
                             ),
                             ActionLine(
-                              label: 'Sync Merge from Supabase',
+                              label: 'Download from Server',
                               onTap: widget.onSyncPull,
                             ),
                             InfoLine('Started', _compactTimestamp(widget.syncDiagnostics.startedAt)),
@@ -500,11 +516,11 @@ class _SystemPanelState extends State<SystemPanel> {
                             accent: widget.accent,
                             children: [
                               ActionLine(
-                                label: 'Sync Merge to Supabase',
+                                label: 'Sync to Server',
                                 onTap: widget.onSyncPush,
                               ),
                               ActionLine(
-                                label: 'Sync Merge from Supabase',
+                                label: 'Download from Server',
                                 onTap: widget.onSyncPull,
                               ),
                                 InfoLine('Started', _compactTimestamp(widget.syncDiagnostics.startedAt)),

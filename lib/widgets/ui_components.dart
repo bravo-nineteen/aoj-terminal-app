@@ -16,6 +16,10 @@ class HeroPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xCC101511) : const Color(0xFFE8F0E5);
+    final textColor = isDark ? Colors.white.withValues(alpha: 0.72) : Colors.black.withValues(alpha: 0.65);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -24,7 +28,7 @@ class HeroPanel extends StatelessWidget {
         gradient: LinearGradient(
           colors: [
             accent.withValues(alpha: 0.20),
-            const Color(0xCC101511),
+            bgColor,
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -32,7 +36,7 @@ class HeroPanel extends StatelessWidget {
         border: Border.all(color: accent.withValues(alpha: 0.35)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
+            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.08),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -57,10 +61,11 @@ class HeroPanel extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.8,
+                    color: isDark ? Colors.white : Colors.black87,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -69,7 +74,7 @@ class HeroPanel extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.35,
-                    color: Colors.white.withValues(alpha: 0.72),
+                    color: textColor,
                   ),
                 ),
               ],
@@ -95,12 +100,15 @@ class InfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xCC101511) : const Color(0xFFF0F5ED);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        color: const Color(0xCC101511),
+        color: bgColor,
         border: Border.all(color: accent.withValues(alpha: 0.35)),
       ),
       child: Column(
@@ -135,6 +143,10 @@ class InfoLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final labelColor = isDark ? Colors.white.withValues(alpha: 0.72) : Colors.black.withValues(alpha: 0.70);
+    final valueColor = isDark ? Colors.white : Colors.black87;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -147,7 +159,7 @@ class InfoLine extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: Colors.white.withValues(alpha: 0.72),
+                color: labelColor,
               ),
             ),
           ),
@@ -156,9 +168,10 @@ class InfoLine extends StatelessWidget {
             child: Text(
               value,
               textAlign: TextAlign.right,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
+                color: valueColor,
               ),
             ),
           ),
@@ -180,6 +193,12 @@ class ActionLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.05);
+    final borderColor = isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.10);
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final iconColor = isDark ? Colors.white : Colors.black87;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
@@ -189,21 +208,22 @@ class ActionLine extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            color: Colors.white.withValues(alpha: 0.03),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            color: bgColor,
+            border: Border.all(color: borderColor),
           ),
           child: Row(
             children: [
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
+                    color: textColor,
                   ),
                 ),
               ),
-              const Icon(Icons.upload_file, size: 18),
+              Icon(Icons.upload_file, size: 18, color: iconColor),
             ],
           ),
         ),

@@ -79,6 +79,7 @@ class EventRecord {
   String time;
   String notes;
   String ticketCostPerPerson;
+  String ticketCostType;  // 'perPerson' or 'grandTotal'
   String trainingTrainer;
   List<LunchOptionRecord> lunchOptions;
   String? fieldMapBase64;
@@ -99,6 +100,7 @@ class EventRecord {
     required this.time,
     required this.notes,
     required this.ticketCostPerPerson,
+    this.ticketCostType = 'perPerson',
     required this.trainingTrainer,
     required this.lunchOptions,
     required this.fieldMapBase64,
@@ -120,6 +122,7 @@ class EventRecord {
         'time': time,
         'notes': notes,
         'ticketCostPerPerson': ticketCostPerPerson,
+        'ticketCostType': ticketCostType,
         'trainingTrainer': trainingTrainer,
         'lunchOptions': lunchOptions.map((e) => e.toJson()).toList(),
         'fieldMapBase64': fieldMapBase64,
@@ -142,6 +145,7 @@ class EventRecord {
       time: json['time']?.toString() ?? '',
       notes: json['notes']?.toString() ?? '',
       ticketCostPerPerson: json['ticketCostPerPerson']?.toString() ?? '0',
+      ticketCostType: json['ticketCostType']?.toString() ?? 'perPerson',
       trainingTrainer: json['trainingTrainer']?.toString() ?? '',
         lunchOptions: (json['lunchOptions'] as List<dynamic>? ?? [])
           .map((e) => LunchOptionRecord.fromJson(Map<String, dynamic>.from(e)))
