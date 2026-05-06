@@ -102,31 +102,31 @@ class _BookingsPanelState extends State<BookingsPanel> {
     return '';
   }
 
-  Color _paymentColor(String status) {
+  Color _paymentColor(String status, {bool isDark = true}) {
     switch (status.trim()) {
       case 'Paid':
-        return Colors.greenAccent;
+        return isDark ? Colors.greenAccent : Colors.green.shade700;
       case 'Overpaid':
-        return Colors.lightBlueAccent;
+        return isDark ? Colors.lightBlueAccent : Colors.blue.shade700;
       case 'Part Paid':
-        return Colors.orangeAccent;
+        return isDark ? Colors.orangeAccent : Colors.orange.shade700;
       case 'Refunded':
-        return Colors.blueAccent;
+        return isDark ? Colors.blueAccent : Colors.blue.shade600;
       default:
         return Colors.redAccent;
     }
   }
 
-  Color _checkInColor(String status) {
+  Color _checkInColor(String status, {bool isDark = true}) {
     switch (status.trim()) {
       case 'Checked In':
-        return Colors.greenAccent;
+        return isDark ? Colors.greenAccent : Colors.green.shade700;
       case 'Cancelled':
         return Colors.redAccent;
       case 'No Show':
-        return Colors.orangeAccent;
+        return isDark ? Colors.orangeAccent : Colors.orange.shade700;
       default:
-        return Colors.white70;
+        return isDark ? Colors.white70 : Colors.black54;
     }
   }
 
@@ -190,16 +190,16 @@ class _BookingsPanelState extends State<BookingsPanel> {
       ),
       child: Row(
         children: [
-          _statChip('$total', 'BOOKINGS', Colors.white70),
+          _statChip('$total', 'BOOKINGS', isDark ? Colors.white70 : Colors.black54),
           const SizedBox(width: 10),
-          _statChip('$checkedIn', 'CHECKED IN', Colors.greenAccent),
+          _statChip('$checkedIn', 'CHECKED IN', isDark ? Colors.greenAccent : Colors.green.shade700),
           const SizedBox(width: 10),
           if (unpaid > 0) ...[
             _statChip('$unpaid', 'UNPAID', Colors.redAccent),
             const SizedBox(width: 10),
           ],
           if (partPaid > 0) ...[
-            _statChip('$partPaid', 'PART PAID', Colors.orangeAccent),
+            _statChip('$partPaid', 'PART PAID', isDark ? Colors.orangeAccent : Colors.orange.shade700),
             const SizedBox(width: 10),
           ],
           if (outstanding > 0)
@@ -506,7 +506,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                     : Colors.transparent,
                                 border: Border.all(
                                   color: isCheckedIn
-                                      ? Colors.greenAccent
+                                      ? (isDark ? Colors.greenAccent : Colors.green.shade600)
                                           .withValues(alpha: 0.40)
                                       : (isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.10)),
                                 ),
@@ -551,7 +551,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                                     fontSize: 12,
                                                     fontWeight: FontWeight.w700,
                                                     color: _paymentColor(
-                                                        paymentStatus),
+                                                        paymentStatus, isDark: isDark),
                                                   ),
                                                 ),
                                               if (lunchNames.isNotEmpty) ...
@@ -695,7 +695,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                                     fontSize: 11,
                                                     fontWeight: FontWeight.w800,
                                                     color: _checkInColor(
-                                                        checkInStatus),
+                                                        checkInStatus, isDark: isDark),
                                                   ),
                                                   dropdownColor:
                                                       isDark ? const Color(0xFF1A211C) : const Color(0xFFF0F5ED),
@@ -709,7 +709,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                                             style: TextStyle(
                                                               color:
                                                                   _checkInColor(
-                                                                      e),
+                                                                      e, isDark: isDark),
                                                               fontSize: 11,
                                                               fontWeight:
                                                                   FontWeight
@@ -736,11 +736,11 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                           ),
                                           Row(
                                             children: [
-                                              const Text(
+                                              Text(
                                                 'Payment:',
                                                 style: TextStyle(
                                                   fontSize: 11,
-                                                  color: Color(0xFFAFB7AD),
+                                                  color: isDark ? const Color(0xFFAFB7AD) : Colors.black54,
                                                 ),
                                               ),
                                               const SizedBox(width: 4),
@@ -750,7 +750,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.w800,
                                                   color: _paymentColor(
-                                                    paymentStatus,
+                                                    paymentStatus, isDark: isDark,
                                                   ),
                                                 ),
                                               ),
@@ -811,14 +811,14 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                                       'PICKUP',
                                                       Icons
                                                           .directions_car_outlined,
-                                                      Colors.cyanAccent,
+                                                      isDark ? Colors.cyanAccent : Colors.cyan.shade700,
                                                     ),
                                                   if (group
                                                       .primary.needsTraining)
                                                     _flagBadge(
                                                       'TRAINING',
                                                       Icons.school_outlined,
-                                                      Colors.purpleAccent,
+                                                      isDark ? Colors.purpleAccent : Colors.purple.shade600,
                                                     ),
                                                 ],
                                               ),
@@ -942,7 +942,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                                     BorderRadius.circular(10),
                                                 border: Border.all(
                                                     color: isCheckedIn
-                                                        ? Colors.greenAccent
+                                                        ? (isDark ? Colors.greenAccent : Colors.green.shade600)
                                                             .withValues(
                                                                 alpha: 0.35)
                                                         : widget.accent
@@ -955,7 +955,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                                     : Icons.radio_button_unchecked,
                                                 size: 16,
                                                 color: isCheckedIn
-                                                    ? Colors.greenAccent
+                                                    ? (isDark ? Colors.greenAccent : Colors.green.shade600)
                                                     : widget.accent,
                                               ),
                                             ),
