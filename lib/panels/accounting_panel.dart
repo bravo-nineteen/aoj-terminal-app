@@ -741,7 +741,6 @@ class _LedgerCard extends StatelessWidget {
         children: [
           InkWell(
             onTap: onExpand,
-            cursor: onExpand != null ? SystemMouseCursors.click : MouseCursor.defer,
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),

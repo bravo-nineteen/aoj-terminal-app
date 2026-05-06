@@ -486,6 +486,8 @@ class _BookingsPanelState extends State<BookingsPanel> {
                               group.primary.checkInStatus.trim().isEmpty
                                   ? 'Not Checked In'
                                   : group.primary.checkInStatus.trim();
+                            final isCheckedIn =
+                              checkInStatus == 'Checked In';
                           final total = BookingUtils.grandTotal(group, widget.event);
                           final balance = BookingUtils.balance(group, widget.event);
                           final hasOutstanding = balance > 0;
@@ -493,8 +495,6 @@ class _BookingsPanelState extends State<BookingsPanel> {
 
                           if (_checkInMode) {
                             // ── Check-in mode: large card ──
-                            final isCheckedIn =
-                                checkInStatus == 'Checked In';
                             return Container(
                               margin: const EdgeInsets.only(bottom: 6),
                               decoration: BoxDecoration(
