@@ -37,7 +37,7 @@ class MessagesService {
   static Future<List<MessageRecord>> fetchMessages({String? eventId}) async {
     try {
       return await _withHostLookupRetry(() async {
-        final query = _db.from('messages').select().order('created_at');
+        final query = _db.from('messages').select().order('created_at', ascending: false);
         final List<Map<String, dynamic>> rows =
             List<Map<String, dynamic>>.from(await query);
         return rows

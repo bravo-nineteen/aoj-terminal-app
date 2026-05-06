@@ -382,6 +382,7 @@ class _MessagesPanelState extends State<MessagesPanel> {
                           )
                         : ListView.builder(
                             controller: _scrollController,
+                            reverse: true,
                             itemCount: _messages.length,
                             itemBuilder: (context, i) {
                               final m = _messages[i];
