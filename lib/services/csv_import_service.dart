@@ -657,20 +657,25 @@ class CsvImportService {
 
       final rawTotal = _normalizeMoney(_cellAt(row, totalIndex));
       final rawTotalPaid = _normalizeMoney(_cellAt(row, totalPaidIndex));
+      final rawTransactionId = _cellAt(row, transactionIdIndex).trim();
       final rawPaymentMethod = _cellAt(row, paymentMethodIndex);
       final normalizedPaymentMethod = _normalizePaymentMethod(rawPaymentMethod);
+      final effectivePaymentMethod = _effectivePaymentMethod(
+        normalizedPaymentMethod,
+        rawTransactionId,
+      );
       final rawPaymentStatus = _cellAt(row, paymentStatusIndex);
       final rawCheckInStatus = _cellAt(row, checkInStatusIndex);
 
       final resolvedPaymentStatus = _resolvePaymentStatus(
-        paymentMethod: normalizedPaymentMethod,
+        paymentMethod: effectivePaymentMethod,
         paymentStatus: rawPaymentStatus,
         total: rawTotal,
         totalPaid: rawTotalPaid,
       );
 
       final resolvedTotalPaid = _resolveTotalPaid(
-        paymentMethod: normalizedPaymentMethod,
+        paymentMethod: effectivePaymentMethod,
         paymentStatus: rawPaymentStatus,
         total: rawTotal,
         totalPaid: rawTotalPaid,
@@ -683,9 +688,9 @@ class CsvImportService {
           PaymentRecord(
             id: _makeId('payment', imported.length),
             amount: resolvedTotalPaid,
-            method: normalizedPaymentMethod.isEmpty
+            method: effectivePaymentMethod.isEmpty
                 ? 'Imported'
-                : normalizedPaymentMethod,
+                : effectivePaymentMethod,
             note: 'Imported from booking file',
             date: _cellAt(row, bookingDateIndex).isEmpty
                 ? DateTime.now().toIso8601String()
@@ -708,8 +713,8 @@ class CsvImportService {
               : _cellAt(row, eventNameIndex),
           total: rawTotal,
           totalPaid: resolvedTotalPaid,
-          transactionId: _cellAt(row, transactionIdIndex),
-            paymentMethod: normalizedPaymentMethod,
+          transactionId: rawTransactionId,
+          paymentMethod: effectivePaymentMethod,
           paymentStatus: resolvedPaymentStatus,
           checkInStatus:
               rawCheckInStatus.isEmpty ? 'Not Checked In' : rawCheckInStatus,
@@ -1643,6 +1648,16 @@ class CsvImportService {
 
     return trimmed;
 
+  }
+
+  static String _effectivePaymentMethod(
+    String normalizedPaymentMethod,
+    String transactionId,
+  ) {
+    if (transactionId.trim().isNotEmpty) {
+      return 'Credit Card';
+    }
+    return normalizedPaymentMethod;
   }
 
   static bool _looksPaid(String raw) {

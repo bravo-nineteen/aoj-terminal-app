@@ -349,6 +349,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
     double chargeableTotal = 0;
     double paymentsRecorded = 0;
     double cardFees = 0;
+    int cardPaymentCount = 0;
     double manualExpensesTotal = 0;
 
     for (final group in groups) {
@@ -371,7 +372,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
       chargeableTotal += BookingUtils.grandTotal(group, widget.event);
       paymentsRecorded += BookingUtils.paymentsTotal(group);
 
-      for (final payment in BookingUtils.dedupePayments(group.primary.payments)) {
+      for (final payment in BookingUtils.groupPayments(group)) {
         final amount = _toDouble(payment.amount);
         if (amount <= 0) continue;
 
@@ -389,6 +390,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
 
         if (_isCardMethod(payment.method)) {
           final fee = amount * 0.04;
+          cardPaymentCount++;
           cardFees += fee;
           deductionLines.add(
             _LedgerLine(
@@ -437,9 +439,10 @@ class _AccountingPanelState extends State<AccountingPanel> {
       );
     }
 
-    final totalDeductions = cardFees + manualExpensesTotal;
-    final incomeValue = grandTotal;  // Total gross income from all sources
-    final netAfterAllDeductions = incomeValue - totalDeductions;  // Income minus deductions
+    final totalDeductions =
+      cardFees + manualExpensesTotal + ticketValueByPeople;
+    final operatingIncome = ticketCostTotal + salesTotal;
+    final netAfterAllDeductions = operatingIncome - totalDeductions;
     final outstandingBalance = chargeableTotal - paymentsRecorded;
     final accent = widget.accent;
     final accountingNotes = widget.event!.accountingNotes;
@@ -629,8 +632,9 @@ class _AccountingPanelState extends State<AccountingPanel> {
                                 '¥ ${MoneyUtils.formatMoney(paymentsRecorded)}',
                           ),
                           _SummaryStat(
-                            label: 'Card Fees',
-                            value: '¥ ${MoneyUtils.formatMoney(cardFees)}',
+                            label: 'Card Fee Auto (4%)',
+                            value:
+                                '¥ ${MoneyUtils.formatMoney(cardFees)}  ($cardPaymentCount payments)',
                           ),
                           _SummaryStat(
                             label: 'Manual Expenses',

@@ -98,8 +98,16 @@ class BookingUtils {
     );
   }
 
+  static List<PaymentRecord> groupPayments(BookingGroup group) {
+    final all = <PaymentRecord>[];
+    for (final row in group.rows) {
+      all.addAll(row.payments);
+    }
+    return dedupePayments(all);
+  }
+
   static double paymentsTotal(BookingGroup group) {
-    final payments = dedupePayments(group.primary.payments);
+    final payments = groupPayments(group);
     return payments.fold<double>(0.0, (sum, payment) {
       final amount = MoneyUtils.parseMoney(payment.amount);
       if (payment.method.trim().toLowerCase() == 'refund') return sum - amount;
