@@ -209,13 +209,14 @@ class _EventPanelState extends State<EventPanel> {
               separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
                 final row = rows[index];
-                return Container(
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+              return Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
-                    color: const Color(0x66121813),
+                    color: isDark ? const Color(0x66121813) : const Color(0x22000000),
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.08),
+                      color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.10),
                     ),
                   ),
                   child: Column(
@@ -346,15 +347,19 @@ class _EventPanelState extends State<EventPanel> {
   Widget _buildReadOnlyRow({
     required String label,
     required String value,
+    required BuildContext context,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          color: const Color(0x66121813),
+          border: Border.all(
+            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.12),
+          ),
+          color: isDark ? const Color(0x66121813) : const Color(0x18000000),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -367,7 +372,7 @@ class _EventPanelState extends State<EventPanel> {
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.5,
-                  color: Colors.white.withValues(alpha: 0.62),
+                  color: isDark ? Colors.white.withValues(alpha: 0.62) : Colors.black.withValues(alpha: 0.55),
                 ),
               ),
             ),
@@ -389,17 +394,19 @@ class _EventPanelState extends State<EventPanel> {
   Widget _buildRosterCard({
     required String title,
     required List<BookingGroup> groups,
+    required BuildContext context,
     Widget? topExtra,
     String emptyText = 'NONE',
     bool editable = false,
     Future<void> Function(BookingGroup)? onRename,
     Future<void> Function(BookingGroup)? onRemove,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
-        color: const Color(0xCC101511),
+        color: isDark ? const Color(0xCC101511) : const Color(0xFFE8EFE5),
         border: Border.all(color: widget.accent.withValues(alpha: 0.30)),
       ),
       child: Column(
@@ -441,9 +448,9 @@ class _EventPanelState extends State<EventPanel> {
                         ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(10),
-                          color: Colors.white.withValues(alpha: 0.03),
+                          color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.04),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.05),
+                            color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.08),
                           ),
                         ),
                         child: Row(
@@ -500,6 +507,7 @@ class _EventPanelState extends State<EventPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final event = widget.event;
 
     final pickupGroups =
@@ -635,9 +643,9 @@ class _EventPanelState extends State<EventPanel> {
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(10),
-                              color: const Color(0x66121813),
+                              color: isDark ? const Color(0x66121813) : const Color(0x18000000),
                               border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.08),
+                                color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.12),
                               ),
                             ),
                             child: Column(
@@ -731,31 +739,38 @@ class _EventPanelState extends State<EventPanel> {
                           _buildReadOnlyRow(
                             label: 'Event Name',
                             value: event.name,
+                            context: context,
                           ),
                           _buildReadOnlyRow(
                             label: 'Venue',
                             value: event.venue,
+                            context: context,
                           ),
                           _buildReadOnlyRow(
                             label: 'Date',
                             value: event.date,
+                            context: context,
                           ),
                           _buildReadOnlyRow(
                             label: 'Time',
                             value: event.time,
+                            context: context,
                           ),
                           _buildReadOnlyRow(
                             label: 'Ticket Cost Per Person',
                             value:
                                 '¥ ${MoneyUtils.formatMoney(_ticketCostPerPersonNumber(event))}',
+                            context: context,
                           ),
                           _buildReadOnlyRow(
                             label: 'Lunch Options',
                             value: _lunchOptionsSummary(event),
+                            context: context,
                           ),
                           _buildReadOnlyRow(
                             label: 'Notes',
                             value: event.notes,
+                            context: context,
                           ),
                         ],
                         const SizedBox(height: 4),
@@ -825,6 +840,7 @@ class _EventPanelState extends State<EventPanel> {
                           child: _buildRosterCard(
                             title: 'Pickup Roster',
                             groups: pickupGroups,
+                            context: context,
                             emptyText: 'NO PICKUPS',
                             editable: _isEditing,
                             onRename:
@@ -843,6 +859,7 @@ class _EventPanelState extends State<EventPanel> {
                                 child: _buildRosterCard(
                                   title: 'Training Roster',
                                   groups: trainingGroups,
+                                  context: context,
                                   emptyText: 'NO TRAINING REQUESTS',
                                   editable: _isEditing,
                                   onRename:
@@ -932,11 +949,13 @@ class _EventPanelState extends State<EventPanel> {
                                           decoration: BoxDecoration(
                                             borderRadius:
                                                 BorderRadius.circular(10),
-                                            color: Colors.white
-                                                .withValues(alpha: 0.03),
+                                            color: isDark
+                                                ? Colors.white.withValues(alpha: 0.03)
+                                                : Colors.black.withValues(alpha: 0.04),
                                             border: Border.all(
-                                              color: Colors.white
-                                                  .withValues(alpha: 0.06),
+                                              color: isDark
+                                                  ? Colors.white.withValues(alpha: 0.06)
+                                                  : Colors.black.withValues(alpha: 0.10),
                                             ),
                                           ),
                                           child: Text(
@@ -964,7 +983,7 @@ class _EventPanelState extends State<EventPanel> {
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(14),
-                                      color: const Color(0xCC101511),
+                                      color: isDark ? const Color(0xCC101511) : const Color(0xFFE8EFE5),
                                       border: Border.all(
                                         color: widget.accent
                                             .withValues(alpha: 0.30),
@@ -989,8 +1008,9 @@ class _EventPanelState extends State<EventPanel> {
                                               'Tap for details',
                                               style: TextStyle(
                                                 fontSize: 10,
-                                                color: Colors.white
-                                                    .withValues(alpha: 0.65),
+                                                color: isDark
+                                                    ? Colors.white.withValues(alpha: 0.65)
+                                                    : Colors.black.withValues(alpha: 0.50),
                                               ),
                                             ),
                                           ],
