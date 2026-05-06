@@ -371,8 +371,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
     try {
       final loaded = await AppStateService.load();
       if (loaded == null) return;
-      final cleaned = _cleanupDuplicatePaymentsInState(loaded);
-      if (cleaned) {
+      final normalized = _normalizePaymentDataInState(loaded);
+      if (normalized) {
         await AppStateService.save(loaded);
       }
       setState(() {
@@ -380,8 +380,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
         selectedBookingIndex = 0;
         selectedMemberIndex =
             activeEvent?.members.isNotEmpty == true ? 0 : null;
-        systemStatus = cleaned
-            ? 'LOCAL DATA LOADED (PAYMENTS CLEANED)'
+        systemStatus = normalized
+            ? 'LOCAL DATA LOADED (PAYMENTS NORMALIZED)'
             : 'LOCAL DATA LOADED';
       });
     } catch (_) {
@@ -456,7 +456,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     try {
       final merged = await SupabaseService.syncMergeAppState(appState)
           .timeout(const Duration(seconds: 30));
-      _cleanupDuplicatePaymentsInState(merged);
+      _normalizePaymentDataInState(merged);
       await AppStateService.save(merged);
       if (mounted) {
         setState(() {
@@ -489,7 +489,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     try {
       final merged = await SupabaseService.syncMergeAppState(appState)
           .timeout(const Duration(seconds: 30));
-      _cleanupDuplicatePaymentsInState(merged);
+      _normalizePaymentDataInState(merged);
       await AppStateService.save(merged);
       if (mounted) {
         setState(() {
@@ -525,9 +525,12 @@ class _AOJDesktopState extends State<AOJDesktop> {
     });
   }
 
-  bool _cleanupDuplicatePaymentsInState(AppStateData state) {
+  bool _normalizePaymentDataInState(AppStateData state) {
     var changed = false;
     for (final event in state.events) {
+      if (BookingUtils.migrateTransactionIdPaymentsToCreditCard(event)) {
+        changed = true;
+      }
       if (BookingUtils.cleanupDuplicatePaymentsInEvent(event)) {
         changed = true;
       }

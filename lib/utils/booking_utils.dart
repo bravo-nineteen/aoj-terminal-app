@@ -71,6 +71,37 @@ class BookingUtils {
     return changed;
   }
 
+  static bool migrateTransactionIdPaymentsToCreditCard(EventRecord event) {
+    var changed = false;
+
+    for (final booking in event.bookings) {
+      final hasTransactionId = booking.transactionId.trim().isNotEmpty;
+      if (!hasTransactionId) continue;
+
+      final method = booking.paymentMethod.trim().toLowerCase();
+      if (method.isEmpty || method == 'imported') {
+        booking.paymentMethod = 'Credit Card';
+        changed = true;
+      }
+
+      for (final payment in booking.payments) {
+        final paymentMethod = payment.method.trim().toLowerCase();
+        if (paymentMethod == 'refund') continue;
+        if (paymentMethod == 'credit card') continue;
+        if (paymentMethod == 'imported' || paymentMethod.isEmpty) {
+          payment.method = 'Credit Card';
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      recalculateAllTotals(event);
+    }
+
+    return changed;
+  }
+
   static bool _samePaymentList(List<PaymentRecord> a, List<PaymentRecord> b) {
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
