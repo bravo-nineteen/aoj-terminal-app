@@ -160,7 +160,8 @@ class _BookingsPanelState extends State<BookingsPanel> {
     return options;
   }
 
-  Widget _buildStatsBar() {
+  Widget _buildStatsBar(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final groups = widget.groups;
     final total = groups.length;
     final checkedIn = groups
@@ -183,9 +184,9 @@ class _BookingsPanelState extends State<BookingsPanel> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.black.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+        border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.07) : Colors.black.withValues(alpha: 0.10)),
       ),
       child: Row(
         children: [
@@ -268,6 +269,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Column(
@@ -447,7 +449,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
             ],
           ),
           const SizedBox(height: 6),
-          if (widget.event != null) _buildStatsBar(),
+          if (widget.event != null) _buildStatsBar(context),
           const SizedBox(height: 6),
           if (widget.event == null)
             const Expanded(
@@ -460,7 +462,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
-                  color: const Color(0xCC101511),
+                  color: isDark ? const Color(0xCC101511) : const Color(0xFFE8EFE5),
                   border:
                       Border.all(color: widget.accent.withValues(alpha: 0.30)),
                 ),
@@ -471,7 +473,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
                         itemCount: widget.groups.length,
                         separatorBuilder: (_, __) => Divider(
                           height: 1,
-                          color: Colors.white.withValues(alpha: 0.05),
+                          color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.08),
                         ),
                         itemBuilder: (context, index) {
                           final group = widget.groups[index];
@@ -506,7 +508,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                   color: isCheckedIn
                                       ? Colors.greenAccent
                                           .withValues(alpha: 0.40)
-                                      : Colors.white.withValues(alpha: 0.06),
+                                      : (isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.10)),
                                 ),
                               ),
                               child: Padding(
@@ -637,7 +639,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
                               border: Border.all(
                                 color: active
                                     ? widget.accent.withValues(alpha: 0.35)
-                                    : Colors.white.withValues(alpha: 0.03),
+                                    : (isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.06)),
                               ),
                             ),
                             child: InkWell(
@@ -696,7 +698,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                                         checkInStatus),
                                                   ),
                                                   dropdownColor:
-                                                      const Color(0xFF1A211C),
+                                                      isDark ? const Color(0xFF1A211C) : const Color(0xFFF0F5ED),
                                                   items: widget.checkInStatuses
                                                       .map(
                                                         (e) => DropdownMenuItem<

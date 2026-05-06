@@ -170,15 +170,17 @@ class _MembersPanelState extends State<MembersPanel> {
   Widget _buildCompactReadOnlyRow({
     required String label,
     required String value,
+    required BuildContext context,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          color: const Color(0x66121813),
+          border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.12)),
+          color: isDark ? const Color(0x66121813) : const Color(0x18000000),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,7 +193,7 @@ class _MembersPanelState extends State<MembersPanel> {
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.5,
-                  color: Colors.white.withValues(alpha: 0.62),
+                  color: isDark ? Colors.white.withValues(alpha: 0.62) : Colors.black.withValues(alpha: 0.55),
                 ),
               ),
             ),
@@ -210,7 +212,8 @@ class _MembersPanelState extends State<MembersPanel> {
     );
   }
 
-  Widget _buildCompactRatingRow(MemberRecord member) {
+  Widget _buildCompactRatingRow(MemberRecord member, BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final rating = _getRating(member);
 
     return Padding(
@@ -219,8 +222,8 @@ class _MembersPanelState extends State<MembersPanel> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-          color: const Color(0x66121813),
+          border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.12)),
+          color: isDark ? const Color(0x66121813) : const Color(0x18000000),
         ),
         child: Row(
           children: [
@@ -232,7 +235,7 @@ class _MembersPanelState extends State<MembersPanel> {
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.5,
-                  color: Colors.white.withValues(alpha: 0.62),
+                  color: isDark ? Colors.white.withValues(alpha: 0.62) : Colors.black.withValues(alpha: 0.55),
                 ),
               ),
             ),
@@ -266,6 +269,7 @@ class _MembersPanelState extends State<MembersPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final member = widget.selectedMember;
     final filteredMembers = _filteredMembers();
     final filteredSelectedIndex =
@@ -371,7 +375,7 @@ class _MembersPanelState extends State<MembersPanel> {
                           child: Container(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(16),
-                              color: const Color(0xCC101511),
+                              color: isDark ? const Color(0xCC101511) : const Color(0xFFE8EFE5),
                               border: Border.all(
                                 color: widget.accent.withValues(alpha: 0.30),
                               ),
@@ -384,7 +388,7 @@ class _MembersPanelState extends State<MembersPanel> {
                                     separatorBuilder: (_, __) => Divider(
                                       height: 1,
                                       color:
-                                          Colors.white.withValues(alpha: 0.05),
+                                          isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.08),
                                     ),
                                     itemBuilder: (context, index) {
                                       final row = filteredMembers[index];
@@ -469,7 +473,7 @@ class _MembersPanelState extends State<MembersPanel> {
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
-                        color: const Color(0xCC101511),
+                        color: isDark ? const Color(0xCC101511) : const Color(0xFFE8EFE5),
                         border: Border.all(
                           color: widget.accent.withValues(alpha: 0.30),
                         ),
