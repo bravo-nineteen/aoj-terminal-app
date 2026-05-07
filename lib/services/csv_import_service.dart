@@ -1269,7 +1269,7 @@ class CsvImportService {
 
     final inMemoryBytes = file.bytes;
     if (inMemoryBytes != null && inMemoryBytes.isNotEmpty) {
-      if (expectedSize <= 0 || inMemoryBytes.length >= expectedSize) {
+      if (expectedSize > 0 && inMemoryBytes.length >= expectedSize) {
         return inMemoryBytes;
       }
       bestEffortBytes = inMemoryBytes;
@@ -1283,7 +1283,7 @@ class CsvImportService {
       }
       final bytes = builder.takeBytes();
       if (bytes.isNotEmpty) {
-        if (expectedSize <= 0 || bytes.length >= expectedSize) return bytes;
+        if (expectedSize > 0 && bytes.length >= expectedSize) return bytes;
         if (bestEffortBytes == null || bytes.length > bestEffortBytes.length) {
           bestEffortBytes = bytes;
         }
@@ -1293,7 +1293,7 @@ class CsvImportService {
     try {
       final xFileBytes = await file.xFile.readAsBytes();
       if (xFileBytes.isNotEmpty) {
-        if (expectedSize <= 0 || xFileBytes.length >= expectedSize) {
+        if (expectedSize > 0 && xFileBytes.length >= expectedSize) {
           return xFileBytes;
         }
         if (bestEffortBytes == null || xFileBytes.length > bestEffortBytes.length) {
@@ -1311,7 +1311,7 @@ class CsvImportService {
       if (await fsFile.exists()) {
         final bytes = await fsFile.readAsBytes();
         if (bytes.isNotEmpty) {
-          if (expectedSize <= 0 || bytes.length >= expectedSize) return bytes;
+          if (expectedSize > 0 && bytes.length >= expectedSize) return bytes;
           if (bestEffortBytes == null || bytes.length > bestEffortBytes.length) {
             bestEffortBytes = bytes;
           }

@@ -4,7 +4,6 @@ import '../models/aoj_models.dart';
 import '../utils/booking_utils.dart';
 import '../utils/money_utils.dart';
 import '../widgets/persistent_edit_field.dart';
-import '../widgets/ui_components.dart';
 
 class EventPanel extends StatefulWidget {
   final Color accent;
@@ -105,53 +104,8 @@ class _EventPanelState extends State<EventPanel> {
         .join(', ');
   }
 
-  double _ticketRevenue(EventRecord event) {
-    return BookingUtils.eventTicketValue(event);
-  }
-
-  double _donationTicketRevenue(EventRecord event) {
-    return BookingUtils.eventDonationValue(event);
-  }
-
-  double _salesRevenue(EventRecord event) {
-    return BookingUtils.eventSalesValue(event);
-  }
-
-  int _bookedPersons(EventRecord event) {
-    return BookingUtils.eventBookedPersons(event);
-  }
-
   double _ticketCostPerPersonNumber(EventRecord event) {
     return _parseMoney(_eventTicketCostPerPerson(event));
-  }
-
-  double _ticketCostTotal(EventRecord event) {
-    return _bookedPersons(event) * _ticketCostPerPersonNumber(event);
-  }
-
-  double _estimatedProfit(EventRecord event) {
-    final manualExpensesTotal = event.expenses.fold<double>(
-      0.0,
-      (sum, e) => sum + _parseMoney(e.amount),
-    );
-    final ticketAndDonations =
-        _ticketRevenue(event) + _donationTicketRevenue(event);
-    return ticketAndDonations -
-        _ticketCostTotal(event) +
-        _salesRevenue(event) -
-        manualExpensesTotal;
-  }
-
-  int _lunchOrderCount(EventRecord event) {
-    return BookingUtils.lunchBreakdown(event)
-        .fold<int>(0, (sum, item) => sum + item.count);
-  }
-
-  double _lunchPassThroughTotal(EventRecord event) {
-    return BookingUtils.groupedBookingsForEvent(event).fold<double>(
-      0,
-      (sum, group) => sum + BookingUtils.lunchTotal(group, event),
-    );
   }
 
   List<_LunchOrderPerson> _lunchOrdersByPerson(EventRecord event) {
@@ -773,61 +727,6 @@ class _EventPanelState extends State<EventPanel> {
                             context: context,
                           ),
                         ],
-                        const SizedBox(height: 4),
-                        InfoCard(
-                          title: 'Event Totals',
-                          accent: widget.accent,
-                          children: [
-                            InfoLine(
-                              'Booked Persons',
-                              _bookedPersons(event).toString(),
-                            ),
-                            InfoLine(
-                              'Ticket Value',
-                              '¥ ${MoneyUtils.formatMoney(_ticketCostTotal(event))}',
-                            ),
-                            InfoLine(
-                              'Ticket Cost Total',
-                              '¥ ${MoneyUtils.formatMoney(_ticketRevenue(event))}',
-                            ),
-                            InfoLine(
-                              'Donation Tickets',
-                              '¥ ${MoneyUtils.formatMoney(_donationTicketRevenue(event))}',
-                            ),
-                            InfoLine(
-                              'Sales Value',
-                              '¥ ${MoneyUtils.formatMoney(_salesRevenue(event))}',
-                            ),
-                            InfoLine(
-                              'Estimated Profit',
-                              '¥ ${MoneyUtils.formatMoney(_estimatedProfit(event))}',
-                            ),
-                            InfoLine(
-                              'Rental Gun Sets',
-                              BookingUtils.eventRentalCount(event).toString(),
-                            ),
-                            InfoLine(
-                              'Pickup Bookings',
-                              BookingUtils.pickupGroups(event)
-                                  .length
-                                  .toString(),
-                            ),
-                            InfoLine(
-                              'Lunch Orders',
-                              _lunchOrderCount(event).toString(),
-                            ),
-                            InfoLine(
-                              'Lunch Fees (Pass-through)',
-                              '¥ ${MoneyUtils.formatMoney(_lunchPassThroughTotal(event))}',
-                            ),
-                            InfoLine(
-                              'Training Requests',
-                              BookingUtils.trainingGroups(event)
-                                  .length
-                                  .toString(),
-                            ),
-                          ],
-                        ),
                       ],
                     ),
                   ),

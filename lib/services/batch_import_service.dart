@@ -176,28 +176,56 @@ class BatchImportService {
 
     final inMemoryBytes = file.bytes;
     if (inMemoryBytes != null && inMemoryBytes.isNotEmpty) {
-      if (expectedSize <= 0 || inMemoryBytes.length >= expectedSize) {
+      if (expectedSize > 0 && inMemoryBytes.length >= expectedSize) {
         return inMemoryBytes;
       }
       bestEffortBytes = inMemoryBytes;
     }
 
     final stream = file.readStream;
-    if (stream == null) {
-      return bestEffortBytes;
+    if (stream != null) {
+      final builder = BytesBuilder(copy: false);
+      await for (final chunk in stream) {
+        builder.add(chunk);
+      }
+      final streamedBytes = builder.takeBytes();
+      if (streamedBytes.isNotEmpty) {
+        if (expectedSize > 0 && streamedBytes.length >= expectedSize) {
+          return streamedBytes;
+        }
+        if (bestEffortBytes == null || streamedBytes.length > bestEffortBytes.length) {
+          bestEffortBytes = streamedBytes;
+        }
+      }
     }
 
-    final builder = BytesBuilder(copy: false);
-    await for (final chunk in stream) {
-      builder.add(chunk);
-    }
-    final streamedBytes = builder.takeBytes();
-    if (streamedBytes.isNotEmpty) {
-      if (expectedSize <= 0 || streamedBytes.length >= expectedSize) {
-        return streamedBytes;
+    try {
+      final xFileBytes = await file.xFile.readAsBytes();
+      if (xFileBytes.isNotEmpty) {
+        if (expectedSize > 0 && xFileBytes.length >= expectedSize) {
+          return xFileBytes;
+        }
+        if (bestEffortBytes == null || xFileBytes.length > bestEffortBytes.length) {
+          bestEffortBytes = xFileBytes;
+        }
       }
-      if (bestEffortBytes == null || streamedBytes.length > bestEffortBytes.length) {
-        bestEffortBytes = streamedBytes;
+    } catch (_) {
+      // Fall through to file path lookup.
+    }
+
+    final filePath = file.path;
+    if (filePath != null && filePath.isNotEmpty) {
+      final fsFile = File(filePath);
+      if (await fsFile.exists()) {
+        final pathBytes = await fsFile.readAsBytes();
+        if (pathBytes.isNotEmpty) {
+          if (expectedSize > 0 && pathBytes.length >= expectedSize) {
+            return pathBytes;
+          }
+          if (bestEffortBytes == null || pathBytes.length > bestEffortBytes.length) {
+            bestEffortBytes = pathBytes;
+          }
+        }
       }
     }
 
