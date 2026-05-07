@@ -402,6 +402,7 @@ class SupabaseService {
             'time': e.time,
             'notes': e.notes,
             'ticket_cost_per_person': e.ticketCostPerPerson,
+            'ticket_cost_type': e.ticketCostType,
             'training_trainer': e.trainingTrainer,
             'lunch_options': e.lunchOptions.map((o) => o.toJson()).toList(),
             'field_map_base64': e.fieldMapBase64,
@@ -514,9 +515,13 @@ class SupabaseService {
       existingRowsById[id] = row;
     }
 
-    // Safety: if local has fewer events than cloud, we may have a partial load.
-    // Skip all deletions to avoid wiping events that simply haven't loaded locally yet.
-    if (localEvents.length < existingRowsById.length) return;
+    // Safety: if local has dramatically fewer events than cloud, we may have a
+    // partial load. Only block deletions in that case; allow normal "delete one
+    // event" flows to propagate.
+    final minTrustedLocalCount = (existingRowsById.length * 0.5).ceil();
+    if (existingRowsById.isNotEmpty && localEvents.length < minTrustedLocalCount) {
+      return;
+    }
 
     final existingIds = existingRowsById.keys.toSet();
 
@@ -692,10 +697,6 @@ class SupabaseService {
     required String eventId,
     required List<Map<String, dynamic>> rows,
   }) async {
-    // If local has no rows for this table/event, skip entirely.
-    // Treat as "nothing to contribute" rather than "delete all cloud records".
-    if (rows.isEmpty) return;
-
     final existingRows = List<Map<String, dynamic>>.from(
       await db.from(table).select('id, updated_at').eq('event_id', eventId),
     );
@@ -752,10 +753,6 @@ class SupabaseService {
         .where((id) => !desiredIds.contains(id))
         .toList();
     if (idsToDelete.isEmpty) return;
-
-    // Safety: if local has fewer rows than cloud for this table/event, skip deletion.
-    // This prevents a partial local load from pruning cloud-only rows that belong here.
-    if (desiredIds.length < existingIds.length) return;
 
     await _writeDeletionTombstones(
       db: db,
@@ -1258,6 +1255,7 @@ class SupabaseService {
           time: row['time'] as String? ?? '',
           notes: row['notes'] as String? ?? '',
           ticketCostPerPerson: row['ticket_cost_per_person'] as String? ?? '0',
+          ticketCostType: row['ticket_cost_type'] as String? ?? 'perPerson',
           trainingTrainer: row['training_trainer'] as String? ?? '',
           lunchOptions: lunchOptions,
           fieldMapBase64: row['field_map_base64'] as String?,
@@ -1365,6 +1363,7 @@ class SupabaseService {
 
     return EventRecord(
       id: local.id,
+      updatedAt: _preferString(local.updatedAt, cloud.updatedAt),
       name: name,
       venue: venue,
       date: _preferString(local.date, cloud.date),
@@ -1374,6 +1373,7 @@ class SupabaseService {
         local.ticketCostPerPerson,
         cloud.ticketCostPerPerson,
       ),
+      ticketCostType: _preferString(local.ticketCostType, cloud.ticketCostType),
       trainingTrainer: trainingTrainer,
       lunchOptions: _mergeById(
         local.lunchOptions,
