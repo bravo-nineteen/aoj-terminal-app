@@ -24,6 +24,7 @@ class BookingsPanel extends StatefulWidget {
   final Future<void> Function(BookingGroup) onOpenBookingEditor;
   final Future<void> Function() onAddManualBooking;
   final Future<void> Function(BookingGroup)? onAddPayment;
+  final Future<void> Function(BookingGroup, List<String>)? onQuickSetLunch;
 
   const BookingsPanel({
     super.key,
@@ -46,6 +47,7 @@ class BookingsPanel extends StatefulWidget {
     required this.onOpenBookingEditor,
     required this.onAddManualBooking,
     this.onAddPayment,
+    this.onQuickSetLunch,
   });
 
   @override
@@ -139,6 +141,67 @@ class _BookingsPanelState extends State<BookingsPanel> {
         .whereType<LunchOptionRecord>()
         .map((o) => o.name.trim().isEmpty ? 'Lunch' : o.name.trim())
         .toList();
+  }
+
+  Future<void> _showQuickLunchDialog(BuildContext context, BookingGroup group) async {
+    final event = widget.event;
+    if (event == null || event.lunchOptions.isEmpty) return;
+
+    final selected = Set<String>.from(group.primary.lunchOrderIds);
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.lunch_dining_outlined, size: 18),
+                const SizedBox(width: 8),
+                Text('Lunch — ${group.displayName}', style: const TextStyle(fontSize: 15)),
+              ],
+            ),
+            content: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: event.lunchOptions.map((option) {
+                final isOn = selected.contains(option.id);
+                return FilterChip(
+                  label: Text(
+                    option.name.trim().isEmpty ? 'Lunch' : option.name.trim(),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  selected: isOn,
+                  onSelected: (value) {
+                    setDialogState(() {
+                      if (value) {
+                        selected.add(option.id);
+                      } else {
+                        selected.remove(option.id);
+                      }
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  widget.onQuickSetLunch?.call(group, selected.toList());
+                  if (mounted) setState(() {});
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   List<String> _ticketTypeFilterOptions() {
@@ -799,7 +862,8 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                               ),
                                             ),
                                           if (group.primary.needsPickup ||
-                                              group.primary.needsTraining)
+                                              group.primary.needsTraining ||
+                                              BookingUtils.groupRentalCount(group) > 0)
                                             Padding(
                                               padding: const EdgeInsets.only(
                                                   top: 3),
@@ -819,6 +883,12 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                                       'TRAINING',
                                                       Icons.school_outlined,
                                                       isDark ? Colors.purpleAccent : Colors.purple.shade600,
+                                                    ),
+                                                  if (BookingUtils.groupRentalCount(group) > 0)
+                                                    _flagBadge(
+                                                      'RENTAL ×${BookingUtils.groupRentalCount(group)}',
+                                                      Icons.sports_esports_outlined,
+                                                      isDark ? Colors.tealAccent : Colors.teal.shade700,
                                                     ),
                                                 ],
                                               ),
@@ -870,6 +940,35 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                       ),
                                     ),
                                     const SizedBox(width: 8),
+                                    if (widget.onQuickSetLunch != null && widget.event != null && widget.event!.lunchOptions.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(right: 4),
+                                        child: Tooltip(
+                                          message: 'Quick-set lunch',
+                                          child: Material(
+                                            color: Colors.amber.withValues(alpha: 0.14),
+                                            borderRadius: BorderRadius.circular(10),
+                                            child: InkWell(
+                                              borderRadius: BorderRadius.circular(10),
+                                              onTap: () => _showQuickLunchDialog(context, group),
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                                decoration: BoxDecoration(
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  border: Border.all(
+                                                    color: Colors.amber.withValues(alpha: 0.40),
+                                                  ),
+                                                ),
+                                                child: Icon(
+                                                  Icons.lunch_dining_outlined,
+                                                  size: 16,
+                                                  color: isDark ? Colors.amber : Colors.amber.shade800,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
                                     if (widget.onAddPayment != null)
                                       Padding(
                                         padding:

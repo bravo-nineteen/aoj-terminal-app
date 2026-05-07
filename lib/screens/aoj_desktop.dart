@@ -1589,6 +1589,14 @@ class _AOJDesktopState extends State<AOJDesktop> {
     });
   }
 
+  Future<void> _quickSetLunch(BookingGroup group, List<String> lunchIds) async {
+    group.primary.lunchOrderIds = lunchIds;
+    await _saveGroupedBooking(group);
+    setState(() {
+      systemStatus = 'LUNCH UPDATED';
+    });
+  }
+
   Future<void> _checkInAllBookings() async {
     final event = activeEvent;
     if (event == null) return;
