@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/aoj_models.dart';
+import '../services/debug_logger.dart';
 import '../utils/booking_utils.dart';
 
 class WorkbookImportResult {
@@ -496,7 +497,10 @@ class CsvImportService {
       'E-mail',
       'Total',
     ]);
-    if (headerRowIndex == -1) return [];
+    if (headerRowIndex == -1) {
+      DebugLogger.instance.error('Bookings import: no recognisable header row found. File may be empty or unsupported format.');
+      return [];
+    }
 
     final header = rows[headerRowIndex].map((e) => _cleanCell(e)).toList();
     final dataRows = rows.skip(headerRowIndex + 1);
@@ -731,6 +735,7 @@ class CsvImportService {
       );
     }
 
+    DebugLogger.instance.info('Bookings import: parsed ${imported.length} booking rows.');
     return imported;
   }
 
@@ -745,7 +750,10 @@ class CsvImportService {
       'Ticket Spaces',
       'Ticket Total',
     ]);
-    if (headerRowIndex == -1) return [];
+    if (headerRowIndex == -1) {
+      DebugLogger.instance.error('Tickets import: no recognisable header row found. File may be empty or unsupported format.');
+      return [];
+    }
 
     final header = rows[headerRowIndex].map((e) => _cleanCell(e)).toList();
     final dataRows = rows.skip(headerRowIndex + 1);
@@ -887,7 +895,10 @@ class CsvImportService {
       'Email',
       'Membership Level',
     ]);
-    if (headerRowIndex == -1) return [];
+    if (headerRowIndex == -1) {
+      DebugLogger.instance.error('Members import: no recognisable header row found. File may be empty or unsupported format.');
+      return [];
+    }
 
     final header = rows[headerRowIndex].map((e) => _cleanCell(e)).toList();
     final dataRows = rows.skip(headerRowIndex + 1);
@@ -1020,7 +1031,10 @@ class CsvImportService {
       'Time',
       'Activity',
     ]);
-    if (headerRowIndex == -1) return [];
+    if (headerRowIndex == -1) {
+      DebugLogger.instance.error('Schedule import: no recognisable header row found. File may be empty or unsupported format.');
+      return [];
+    }
 
     final header = rows[headerRowIndex].map((e) => _cleanCell(e)).toList();
     final dataRows = rows.skip(headerRowIndex + 1);
@@ -1207,8 +1221,8 @@ class CsvImportService {
       if (best != null && best.isNotEmpty) {
         return best;
       }
-    } catch (_) {
-      // Fall back to CSV parse below.
+    } catch (e) {
+      DebugLogger.instance.warn('Excel decode failed, falling back to CSV parse: $e');
     }
 
     final text = _decodeCsvBytes(bytes);
@@ -1300,7 +1314,8 @@ class CsvImportService {
           bestEffortBytes = xFileBytes;
         }
       }
-    } catch (_) {
+    } catch (e) {
+      DebugLogger.instance.warn('xFile.readAsBytes failed: $e');
       // Fall through to file path lookup.
     }
 
@@ -1530,17 +1545,31 @@ class CsvImportService {
   static int _findColumnIndex(List<String> header, List<String> candidates) {
     for (final candidate in candidates) {
       final normalizedCandidate = _normalizeHeader(candidate);
+      final compactCandidate = _compactHeader(normalizedCandidate);
 
       final index = header.indexWhere(
-        (h) => _normalizeHeader(h) == normalizedCandidate,
+        (h) {
+          final normalizedHeader = _normalizeHeader(h);
+          if (normalizedHeader == normalizedCandidate) return true;
+          return _compactHeader(normalizedHeader) == compactCandidate;
+        },
       );
 
       if (index != -1) return index;
 
       final fuzzyIndex = header.indexWhere((h) {
         final normalizedHeader = _normalizeHeader(h);
+        final compactHeader = _compactHeader(normalizedHeader);
+
+        // Very short aliases like "id" should match token boundaries only,
+        // not substrings (for example "paid" must not satisfy "id").
+        if (normalizedCandidate.length <= 3) {
+          final tokens = normalizedHeader.split(' ');
+          return tokens.contains(normalizedCandidate);
+        }
+
         return normalizedHeader.contains(normalizedCandidate) ||
-            normalizedCandidate.contains(normalizedHeader);
+            compactHeader.contains(compactCandidate);
       });
 
       if (fuzzyIndex != -1) return fuzzyIndex;
@@ -1562,6 +1591,10 @@ class CsvImportService {
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim()
         .toLowerCase();
+  }
+
+  static String _compactHeader(String value) {
+    return value.replaceAll(' ', '');
   }
 
   static String _cellAt(List<dynamic> row, int index) {
@@ -1633,11 +1666,11 @@ class CsvImportService {
     required String total,
     required String totalPaid,
   }) {
-    if (_isCardPayment(paymentMethod)) {
+    if (_isCardPayment(paymentMethod) && total.isNotEmpty) {
       return total;
     }
 
-    if (_looksPaid(paymentStatus) && totalPaid.isEmpty) {
+    if (_looksPaid(paymentStatus) && totalPaid.isEmpty && total.isNotEmpty) {
       return total;
     }
 

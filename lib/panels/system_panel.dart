@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/aoj_models.dart';
+import '../services/debug_logger.dart';
 import '../services/device_identity_service.dart';
 import '../widgets/ui_components.dart';
 
@@ -568,8 +569,178 @@ class _SystemPanelState extends State<SystemPanel> {
                     ),
             ),
           ),
+          const SizedBox(height: 14),
+          // ── Debug Log ────────────────────────────────────────────────────
+          _DebugLogPanel(accent: widget.accent),
         ],
       ),
+    );
+  }
+}
+
+// ── DebugLogPanel ─────────────────────────────────────────────────────────────
+class _DebugLogPanel extends StatelessWidget {
+  final Color accent;
+
+  const _DebugLogPanel({required this.accent});
+
+  static Color _levelColor(DebugLogLevel level, bool isDark) {
+    switch (level) {
+      case DebugLogLevel.error:
+        return Colors.redAccent;
+      case DebugLogLevel.warn:
+        return Colors.orange;
+      case DebugLogLevel.info:
+        return isDark ? Colors.white70 : Colors.black87;
+    }
+  }
+
+  static String _fmt(DateTime dt) {
+    return '${dt.hour.toString().padLeft(2, '0')}:'
+        '${dt.minute.toString().padLeft(2, '0')}:'
+        '${dt.second.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor =
+        isDark ? const Color(0xCC101511) : const Color(0xFFE8EFE5);
+
+    return ListenableBuilder(
+      listenable: DebugLogger.instance,
+      builder: (context, _) {
+        final entries = DebugLogger.instance.entries.reversed.toList();
+
+        return Container(
+          height: 180,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: bgColor,
+            border: Border.all(color: accent.withValues(alpha: 0.30)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(12)),
+                  color: accent.withValues(alpha: isDark ? 0.12 : 0.08),
+                  border: Border(
+                      bottom:
+                          BorderSide(color: accent.withValues(alpha: 0.25))),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.terminal, size: 14, color: accent),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'DEBUG LOG  (${entries.length})',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: accent,
+                        ),
+                      ),
+                    ),
+                    if (entries.isNotEmpty)
+                      TextButton(
+                        onPressed: DebugLogger.instance.clear,
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 0),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          'Clear',
+                          style:
+                              TextStyle(fontSize: 11, color: accent),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              // Log entries
+              Expanded(
+                child: entries.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No log entries yet.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark
+                                ? Colors.white38
+                                : Colors.black38,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 4, horizontal: 10),
+                        itemCount: entries.length,
+                        itemBuilder: (context, index) {
+                          final entry = entries[index];
+                          final color =
+                              _levelColor(entry.level, isDark);
+                          return Padding(
+                            padding:
+                                const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _fmt(entry.timestamp),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontFamily: 'monospace',
+                                    color: isDark
+                                        ? Colors.white38
+                                        : Colors.black38,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                SizedBox(
+                                  width: 38,
+                                  child: Text(
+                                    entry.levelLabel,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      fontFamily: 'monospace',
+                                      color: color,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    entry.message,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontFamily: 'monospace',
+                                      color: color,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

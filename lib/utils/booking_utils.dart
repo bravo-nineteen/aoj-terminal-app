@@ -1,4 +1,5 @@
 import '../models/aoj_models.dart';
+import '../services/debug_logger.dart';
 import 'money_utils.dart';
 
 class LunchBreakdownItem {
@@ -431,7 +432,7 @@ class BookingUtils {
     final groups = groupedBookingsForEvent(event);
 
     for (final group in groups) {
-      final grand = grandTotal(group);
+      final grand = grandTotal(group, event);
       final paid = paymentsTotal(group);
       final remaining = grand - paid;
 
@@ -445,6 +446,17 @@ class BookingUtils {
             : remaining <= 0
               ? 'Paid'
               : 'Part Paid';
+
+      if (remaining < 0) {
+        DebugLogger.instance.warn(
+          'Overpaid booking: ${group.displayName} — paid ¥${MoneyUtils.formatMoney(paid)} of ¥${MoneyUtils.formatMoney(grand)}',
+        );
+      }
+      if (grand < 0) {
+        DebugLogger.instance.error(
+          'Negative grand total for booking: ${group.displayName} (¥${MoneyUtils.formatMoney(grand)})',
+        );
+      }
 
       for (final row in group.rows) {
         row.total = total;
