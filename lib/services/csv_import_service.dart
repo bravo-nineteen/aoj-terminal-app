@@ -1264,7 +1264,16 @@ class CsvImportService {
   }
 
   static Future<Uint8List?> _readPlatformFileBytes(PlatformFile file) async {
-    if (file.bytes != null && file.bytes!.isNotEmpty) return file.bytes;
+    final expectedSize = file.size;
+    Uint8List? bestEffortBytes;
+
+    final inMemoryBytes = file.bytes;
+    if (inMemoryBytes != null && inMemoryBytes.isNotEmpty) {
+      if (expectedSize <= 0 || inMemoryBytes.length >= expectedSize) {
+        return inMemoryBytes;
+      }
+      bestEffortBytes = inMemoryBytes;
+    }
 
     final stream = file.readStream;
     if (stream != null) {
@@ -1273,12 +1282,24 @@ class CsvImportService {
         builder.add(chunk);
       }
       final bytes = builder.takeBytes();
-      if (bytes.isNotEmpty) return bytes;
+      if (bytes.isNotEmpty) {
+        if (expectedSize <= 0 || bytes.length >= expectedSize) return bytes;
+        if (bestEffortBytes == null || bytes.length > bestEffortBytes.length) {
+          bestEffortBytes = bytes;
+        }
+      }
     }
 
     try {
       final xFileBytes = await file.xFile.readAsBytes();
-      if (xFileBytes.isNotEmpty) return xFileBytes;
+      if (xFileBytes.isNotEmpty) {
+        if (expectedSize <= 0 || xFileBytes.length >= expectedSize) {
+          return xFileBytes;
+        }
+        if (bestEffortBytes == null || xFileBytes.length > bestEffortBytes.length) {
+          bestEffortBytes = xFileBytes;
+        }
+      }
     } catch (_) {
       // Fall through to file path lookup.
     }
@@ -1289,11 +1310,16 @@ class CsvImportService {
       final fsFile = File(filePath);
       if (await fsFile.exists()) {
         final bytes = await fsFile.readAsBytes();
-        if (bytes.isNotEmpty) return bytes;
+        if (bytes.isNotEmpty) {
+          if (expectedSize <= 0 || bytes.length >= expectedSize) return bytes;
+          if (bestEffortBytes == null || bytes.length > bestEffortBytes.length) {
+            bestEffortBytes = bytes;
+          }
+        }
       }
     }
 
-    return null;
+    return bestEffortBytes;
   }
 
   static String _resolvePickedFileExtension(PlatformFile file) {

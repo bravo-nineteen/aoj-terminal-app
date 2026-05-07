@@ -82,7 +82,7 @@ class MessagesService {
       await _db.storage.from(_attachmentsBucket).upload(
             path,
             file,
-            fileOptions: FileOptions(upsert: false),
+            fileOptions: const FileOptions(upsert: false),
           );
     });
     return _db.storage.from(_attachmentsBucket).getPublicUrl(path);

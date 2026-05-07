@@ -171,16 +171,37 @@ class BatchImportService {
   }
 
   static Future<Uint8List?> _readFileBytes(PlatformFile file) async {
-    if (file.bytes != null && file.bytes!.isNotEmpty) return file.bytes;
+    final expectedSize = file.size;
+    Uint8List? bestEffortBytes;
+
+    final inMemoryBytes = file.bytes;
+    if (inMemoryBytes != null && inMemoryBytes.isNotEmpty) {
+      if (expectedSize <= 0 || inMemoryBytes.length >= expectedSize) {
+        return inMemoryBytes;
+      }
+      bestEffortBytes = inMemoryBytes;
+    }
 
     final stream = file.readStream;
-    if (stream == null) return null;
+    if (stream == null) {
+      return bestEffortBytes;
+    }
 
     final builder = BytesBuilder(copy: false);
     await for (final chunk in stream) {
       builder.add(chunk);
     }
-    return builder.takeBytes();
+    final streamedBytes = builder.takeBytes();
+    if (streamedBytes.isNotEmpty) {
+      if (expectedSize <= 0 || streamedBytes.length >= expectedSize) {
+        return streamedBytes;
+      }
+      if (bestEffortBytes == null || streamedBytes.length > bestEffortBytes.length) {
+        bestEffortBytes = streamedBytes;
+      }
+    }
+
+    return bestEffortBytes;
   }
 
   static List<List<dynamic>> _parseFileToRows(
