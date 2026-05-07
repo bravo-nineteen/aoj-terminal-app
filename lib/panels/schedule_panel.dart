@@ -167,6 +167,7 @@ class _SchedulePanelState extends State<SchedulePanel> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final fieldMapBytes = _fieldMapBytes();
     final event = widget.event;
 
@@ -186,7 +187,7 @@ class _SchedulePanelState extends State<SchedulePanel> {
                     child: Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(18),
-                        color: const Color(0xCC101511),
+                        color: isDark ? const Color(0xCC101511) : const Color(0xFFE8EFE5),
                         border: Border.all(
                             color: widget.accent.withValues(alpha: 0.35)),
                       ),
@@ -309,11 +310,13 @@ class _SchedulePanelState extends State<SchedulePanel> {
                                           decoration: BoxDecoration(
                                             borderRadius:
                                                 BorderRadius.circular(12),
-                                            color: Colors.white
-                                                .withValues(alpha: 0.03),
+                                            color: isDark
+                                              ? Colors.white.withValues(alpha: 0.03)
+                                              : Colors.black.withValues(alpha: 0.03),
                                             border: Border.all(
-                                              color: Colors.white
-                                                  .withValues(alpha: 0.06),
+                                                color: isDark
+                                                  ? Colors.white.withValues(alpha: 0.06)
+                                                  : Colors.black.withValues(alpha: 0.09),
                                             ),
                                           ),
                                           child: Column(
@@ -407,7 +410,7 @@ class _SchedulePanelState extends State<SchedulePanel> {
                     child: Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(18),
-                        color: const Color(0xCC101511),
+                        color: isDark ? const Color(0xCC101511) : const Color(0xFFE8EFE5),
                         border: Border.all(
                             color: widget.accent.withValues(alpha: 0.35)),
                       ),

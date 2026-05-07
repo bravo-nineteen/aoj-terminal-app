@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/aoj_models.dart';
 import '../services/device_identity_service.dart';
@@ -547,13 +548,39 @@ class _MessageBubble extends StatelessWidget {
     if (type == 'image') {
       return [
         const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(
-            url,
-            width: 200,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const Text('(Image failed to load)'),
+        GestureDetector(
+          onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+          child: Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  url,
+                  width: 200,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Text('(Image failed to load)'),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(4),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withAlpha(140),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.download_outlined, size: 12, color: Colors.white),
+                      SizedBox(width: 2),
+                      Text('Open', style: TextStyle(fontSize: 10, color: Colors.white)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ];
@@ -562,28 +589,31 @@ class _MessageBubble extends StatelessWidget {
     // File link
     return [
       const SizedBox(height: 6),
-      Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.insert_drive_file_outlined,
-            size: 16,
-            color: isMine ? Colors.white70 : Colors.grey,
-          ),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              name,
-              style: TextStyle(
-                fontSize: 12,
-                decoration: TextDecoration.underline,
-                color: isMine ? Colors.white70 : Colors.blueAccent,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+      GestureDetector(
+        onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.download_outlined,
+              size: 16,
+              color: isMine ? Colors.white70 : Colors.blueAccent,
             ),
-          ),
-        ],
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                name,
+                style: TextStyle(
+                  fontSize: 12,
+                  decoration: TextDecoration.underline,
+                  color: isMine ? Colors.white70 : Colors.blueAccent,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
     ];
   }
