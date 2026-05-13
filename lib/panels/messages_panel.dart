@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/aoj_models.dart';
@@ -41,22 +43,84 @@ class _MessagesPanelState extends State<MessagesPanel> {
   bool _uploadingAttachment = false;
 
   _MessageScope _scope = _MessageScope.all;
+  RealtimeChannel? _messagesChannel;
+  Timer? _fallbackRefreshTimer;
+  Timer? _searchDebounceTimer;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_handleScroll);
+    _loadLastReadCursor();
     _loadUsername();
     _load();
+    _subscribeToRealtimeMessages();
+    _startFallbackRefresh();
   }
 
   @override
   void dispose() {
+    final channel = _messagesChannel;
+    if (channel != null) {
+      unawaited(MessagesService.unsubscribeFromChanges(channel));
+      _messagesChannel = null;
+    }
+    _fallbackRefreshTimer?.cancel();
+    _searchDebounceTimer?.cancel();
     _scrollController.removeListener(_handleScroll);
     _bodyController.dispose();
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _subscribeToRealtimeMessages() {
+    _messagesChannel?.unsubscribe();
+    _messagesChannel = MessagesService.subscribeToMessageChanges(
+      onChange: (insertedMessage) async {
+        if (!mounted) return;
+
+        if (insertedMessage == null) {
+          await _load();
+          return;
+        }
+
+        final alreadyExists =
+            _allMessages.any((existing) => existing.id == insertedMessage.id);
+        if (alreadyExists) return;
+
+        final nextAll = <MessageRecord>[insertedMessage, ..._allMessages];
+        setState(() {
+          _allMessages = nextAll;
+          _applyFiltersAndUnread();
+        });
+        _markAsReadIfNearBottom();
+      },
+      onError: (_) async {
+        if (!mounted) return;
+        await _load();
+      },
+    );
+  }
+
+  void _startFallbackRefresh() {
+    _fallbackRefreshTimer?.cancel();
+    _fallbackRefreshTimer = Timer.periodic(
+      const Duration(minutes: 3),
+      (_) async {
+        if (!mounted) return;
+        await _load();
+      },
+    );
+  }
+
+  Future<void> _loadLastReadCursor() async {
+    final saved = await DeviceIdentityService.getMessagesLastReadAt('panel');
+    if (!mounted || saved == null) return;
+    setState(() {
+      _lastReadAt = saved;
+      _unreadCount = _computeUnreadCount(_messages);
+    });
   }
 
   Future<void> _loadUsername() async {
@@ -84,10 +148,12 @@ class _MessagesPanelState extends State<MessagesPanel> {
       final all = await MessagesService.fetchMessages();
       if (!mounted) return;
       _lastReadAt ??= DateTime.now();
+      if (_lastReadAt != null) {
+        unawaited(DeviceIdentityService.setMessagesLastReadAt('panel', _lastReadAt!));
+      }
       setState(() {
         _allMessages = all;
-        _messages = _applyFilters(all);
-        _unreadCount = _computeUnreadCount(_messages);
+        _applyFiltersAndUnread();
         _loading = false;
       });
       _scrollToBottom();
@@ -141,6 +207,22 @@ class _MessagesPanelState extends State<MessagesPanel> {
     return count;
   }
 
+  void _applyFiltersAndUnread() {
+    _messages = _applyFilters(_allMessages);
+    _unreadCount = _computeUnreadCount(_messages);
+  }
+
+  void _queueSearchFilterApply(String value) {
+    _searchQuery = value;
+    _searchDebounceTimer?.cancel();
+    _searchDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+      if (!mounted) return;
+      setState(() {
+        _applyFiltersAndUnread();
+      });
+    });
+  }
+
   bool _isNearBottom() {
     if (!_scrollController.hasClients) return true;
     final position = _scrollController.position;
@@ -148,10 +230,12 @@ class _MessagesPanelState extends State<MessagesPanel> {
   }
 
   void _markAsRead() {
+    final now = DateTime.now();
     setState(() {
-      _lastReadAt = DateTime.now();
+      _lastReadAt = now;
       _unreadCount = 0;
     });
+    unawaited(DeviceIdentityService.setMessagesLastReadAt('panel', now));
   }
 
   void _markAsReadIfNearBottom() {
@@ -305,8 +389,7 @@ class _MessagesPanelState extends State<MessagesPanel> {
                 onSelected: (_) {
                   setState(() {
                     _scope = _MessageScope.all;
-                    _messages = _applyFilters(_allMessages);
-                    _unreadCount = _computeUnreadCount(_messages);
+                    _applyFiltersAndUnread();
                   });
                 },
               ),
@@ -316,8 +399,7 @@ class _MessagesPanelState extends State<MessagesPanel> {
                 onSelected: (_) {
                   setState(() {
                     _scope = _MessageScope.globalOnly;
-                    _messages = _applyFilters(_allMessages);
-                    _unreadCount = _computeUnreadCount(_messages);
+                    _applyFiltersAndUnread();
                   });
                 },
               ),
@@ -328,8 +410,7 @@ class _MessagesPanelState extends State<MessagesPanel> {
                   onSelected: (_) {
                     setState(() {
                       _scope = _MessageScope.activeEventOnly;
-                      _messages = _applyFilters(_allMessages);
-                      _unreadCount = _computeUnreadCount(_messages);
+                      _applyFiltersAndUnread();
                     });
                   },
                 ),
@@ -347,11 +428,7 @@ class _MessagesPanelState extends State<MessagesPanel> {
               isDense: true,
             ),
             onChanged: (value) {
-              setState(() {
-                _searchQuery = value;
-                _messages = _applyFilters(_allMessages);
-                _unreadCount = _computeUnreadCount(_messages);
-              });
+              _queueSearchFilterApply(value);
             },
           ),
           const Divider(height: 8),
