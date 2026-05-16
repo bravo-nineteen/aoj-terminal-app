@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../models/aoj_models.dart';
@@ -56,6 +58,7 @@ class BookingsPanel extends StatefulWidget {
 
 class _BookingsPanelState extends State<BookingsPanel> {
   final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounceTimer;
   bool _checkInMode = false;
 
   @override
@@ -68,8 +71,17 @@ class _BookingsPanelState extends State<BookingsPanel> {
 
   @override
   void dispose() {
+    _searchDebounceTimer?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _queueSearchChanged(String value) {
+    _searchDebounceTimer?.cancel();
+    _searchDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+      if (!mounted) return;
+      widget.onSearchChanged(value);
+    });
   }
 
   String _membershipLevelForGroup(EventRecord? event, BookingGroup group) {
@@ -365,7 +377,10 @@ class _BookingsPanelState extends State<BookingsPanel> {
                 flex: 2,
                 child: TextField(
                   controller: _searchController,
-                  onChanged: widget.onSearchChanged,
+                  onChanged: (value) {
+                    setState(() {});
+                    _queueSearchChanged(value);
+                  },
                   decoration: InputDecoration(
                     labelText: 'Search booking',
                     border: const OutlineInputBorder(),
@@ -378,6 +393,7 @@ class _BookingsPanelState extends State<BookingsPanel> {
                             icon: const Icon(Icons.clear, size: 16),
                             tooltip: 'Clear search',
                             onPressed: () {
+                              _searchDebounceTimer?.cancel();
                               _searchController.clear();
                               widget.onSearchChanged('');
                               setState(() {});

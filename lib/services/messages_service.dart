@@ -34,27 +34,41 @@ class MessagesService {
     throw lastError ?? StateError('Unknown host lookup failure');
   }
 
-  static Future<List<MessageRecord>> fetchMessages({String? eventId}) async {
+  static MessageRecord _fromDatabaseRow(Map<String, dynamic> row) {
+    return MessageRecord(
+      id: row['id'] as String? ?? '',
+      sender: row['sender'] as String? ?? '',
+      body: row['body'] as String? ?? '',
+      createdAt: (row['created_at'] as String?) ?? '',
+      eventId: row['event_id'] as String?,
+      attachmentUrl: row['attachment_url'] as String?,
+      attachmentType: row['attachment_type'] as String?,
+      attachmentName: row['attachment_name'] as String?,
+    );
+  }
+
+  static Future<List<MessageRecord>> fetchMessages({
+    String? eventId,
+    DateTime? since,
+    int? limit,
+  }) async {
     try {
       return await _withHostLookupRetry(() async {
-        final query = _db.from('messages').select().order('created_at', ascending: false);
+        dynamic query = _db.from('messages').select();
+        if (eventId != null) {
+          query = query.eq('event_id', eventId);
+        }
+        if (since != null) {
+          query = query.gt('created_at', since.toUtc().toIso8601String());
+        }
+        query = query.order('created_at', ascending: false);
+        if (limit != null && limit > 0) {
+          query = query.limit(limit);
+        }
+
         final List<Map<String, dynamic>> rows =
             List<Map<String, dynamic>>.from(await query);
-        return rows
-            .where((r) => eventId == null || (r['event_id'] as String?) == eventId)
-            .map(
-              (r) => MessageRecord(
-                id: r['id'] as String? ?? '',
-                sender: r['sender'] as String? ?? '',
-                body: r['body'] as String? ?? '',
-                createdAt: (r['created_at'] as String?) ?? '',
-                eventId: r['event_id'] as String?,
-                attachmentUrl: r['attachment_url'] as String?,
-                attachmentType: r['attachment_type'] as String?,
-                attachmentName: r['attachment_name'] as String?,
-              ),
-            )
-            .toList();
+        return rows.map(_fromDatabaseRow).toList();
       });
     } on PostgrestException catch (e) {
       if (e.code == 'PGRST205') {
@@ -69,6 +83,39 @@ class MessagesService {
       }
       rethrow;
     }
+  }
+
+  static RealtimeChannel subscribeToMessageChanges({
+    required void Function(MessageRecord? insertedMessage) onChange,
+    void Function(Object error)? onError,
+  }) {
+    final channel = _db.channel('public:messages:live');
+
+    channel
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'messages',
+          callback: (payload) {
+            try {
+              final inserted = payload.newRecord;
+              if (inserted.isNotEmpty) {
+                onChange(_fromDatabaseRow(inserted));
+                return;
+              }
+              onChange(null);
+            } catch (e) {
+              onError?.call(e);
+            }
+          },
+        )
+        .subscribe();
+
+    return channel;
+  }
+
+  static Future<void> unsubscribeFromChanges(RealtimeChannel channel) async {
+    await _db.removeChannel(channel);
   }
 
   /// Uploads a file to Supabase Storage and returns the public URL.

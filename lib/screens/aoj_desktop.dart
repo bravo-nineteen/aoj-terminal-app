@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/aoj_models.dart';
 import '../panels/accounting_panel.dart';
@@ -18,6 +19,7 @@ import '../services/app_state_service.dart';
 import '../services/csv_import_service.dart';
 import '../services/device_identity_service.dart';
 import '../services/export_service.dart';
+import '../services/messages_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/booking_utils.dart';
 import '../widgets/desktop_widgets.dart';
@@ -145,8 +147,17 @@ class _AOJDesktopState extends State<AOJDesktop> {
   String propControlStatus = 'PROP CONSOLE OFFLINE';
   int desktopMessagesUnreadCount = 0;
   DateTime? _desktopMessagesLastReadAt;
-  Timer? _desktopMessagesPollTimer;
+  RealtimeChannel? _desktopMessagesChannel;
+  Timer? _desktopMessagesFallbackTimer;
   String _desktopUsername = '';
+
+  Timer? _saveDebounceTimer;
+  bool _isFlushingLocalSave = false;
+  final List<Completer<void>> _pendingSaveCompleters = <Completer<void>>[];
+
+  String? _cachedGroupingEventId;
+  String _cachedGroupingFingerprint = '';
+  List<BookingGroup> _cachedGroupedBookings = <BookingGroup>[];
 
   void _refresh([VoidCallback? updates]) {
     if (!mounted) return;
@@ -213,31 +224,74 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
   @override
   void dispose() {
-    _desktopMessagesPollTimer?.cancel();
+    _desktopMessagesChannel?.unsubscribe();
+    _desktopMessagesFallbackTimer?.cancel();
+    _saveDebounceTimer?.cancel();
+    if (_pendingSaveCompleters.isNotEmpty) {
+      unawaited(_flushPendingLocalSave(updateStatus: false));
+    }
     propIpController.dispose();
     super.dispose();
   }
 
   Future<void> _initializeDesktopMessageBadge() async {
-    _desktopMessagesLastReadAt ??= DateTime.now();
+    _desktopMessagesLastReadAt ??=
+        await DeviceIdentityService.getMessagesLastReadAt('desktop_badge') ??
+            DateTime.now();
     try {
       _desktopUsername = await DeviceIdentityService.getUsername();
     } catch (_) {
       _desktopUsername = '';
     }
     await _refreshDesktopMessageUnreadCount();
-    _desktopMessagesPollTimer?.cancel();
-    _desktopMessagesPollTimer =
-        Timer.periodic(const Duration(seconds: 20), (_) async {
-      await _refreshDesktopMessageUnreadCount();
-    });
+
+    _desktopMessagesChannel?.unsubscribe();
+    _desktopMessagesChannel = MessagesService.subscribeToMessageChanges(
+      onChange: (insertedMessage) async {
+        final lastRead = _desktopMessagesLastReadAt;
+        if (lastRead == null || !mounted) return;
+
+        if (insertedMessage != null) {
+          if (_desktopUsername.isNotEmpty &&
+              insertedMessage.sender == _desktopUsername) {
+            return;
+          }
+          try {
+            final created = DateTime.parse(insertedMessage.createdAt).toLocal();
+            if (created.isAfter(lastRead)) {
+              setState(() {
+                desktopMessagesUnreadCount++;
+              });
+            }
+            return;
+          } catch (_) {
+            // Fallback to count refresh if date parsing fails.
+          }
+        }
+
+        await _refreshDesktopMessageUnreadCount();
+      },
+      onError: (_) async {
+        if (!mounted) return;
+        await _refreshDesktopMessageUnreadCount();
+      },
+    );
+
+    _desktopMessagesFallbackTimer?.cancel();
+    _desktopMessagesFallbackTimer = Timer.periodic(
+      const Duration(minutes: 3),
+      (_) async {
+        if (!mounted) return;
+        await _refreshDesktopMessageUnreadCount();
+      },
+    );
   }
 
   Future<void> _refreshDesktopMessageUnreadCount() async {
     final lastRead = _desktopMessagesLastReadAt;
     if (lastRead == null) return;
     try {
-      final messages = await SupabaseService.fetchMessages();
+      final messages = await MessagesService.fetchMessages(since: lastRead);
       var unread = 0;
       for (final m in messages) {
         if (_desktopUsername.isNotEmpty && m.sender == _desktopUsername) {
@@ -263,11 +317,13 @@ class _AOJDesktopState extends State<AOJDesktop> {
   }
 
   Future<void> _markDesktopMessagesRead() async {
+    final now = DateTime.now();
     if (!mounted) return;
     setState(() {
-      _desktopMessagesLastReadAt = DateTime.now();
+      _desktopMessagesLastReadAt = now;
       desktopMessagesUnreadCount = 0;
     });
+    await DeviceIdentityService.setMessagesLastReadAt('desktop_badge', now);
   }
 
   EventRecord? get activeEvent {
@@ -409,11 +465,52 @@ class _AOJDesktopState extends State<AOJDesktop> {
   }
 
   Future<void> _saveLocalState() async {
-    await AppStateService.save(appState);
-    if (mounted) {
-      setState(() {
-        systemStatus = 'AUTO-SAVED';
-      });
+    final completer = Completer<void>();
+    _pendingSaveCompleters.add(completer);
+
+    _saveDebounceTimer?.cancel();
+    _saveDebounceTimer = Timer(const Duration(milliseconds: 550), () {
+      unawaited(_flushPendingLocalSave());
+    });
+
+    return completer.future;
+  }
+
+  Future<void> _flushPendingLocalSave({bool updateStatus = true}) async {
+    if (_isFlushingLocalSave) return;
+    if (_pendingSaveCompleters.isEmpty) return;
+
+    _isFlushingLocalSave = true;
+    final pending = List<Completer<void>>.from(_pendingSaveCompleters);
+    _pendingSaveCompleters.clear();
+
+    try {
+      await AppStateService.save(appState);
+      if (updateStatus && mounted) {
+        setState(() {
+          systemStatus = 'AUTO-SAVED';
+        });
+      }
+      for (final completer in pending) {
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
+      }
+    } catch (e, stackTrace) {
+      for (final completer in pending) {
+        if (!completer.isCompleted) {
+          completer.completeError(e, stackTrace);
+        }
+      }
+      rethrow;
+    } finally {
+      _isFlushingLocalSave = false;
+      if (_pendingSaveCompleters.isNotEmpty) {
+        _saveDebounceTimer?.cancel();
+        _saveDebounceTimer = Timer(const Duration(milliseconds: 250), () {
+          unawaited(_flushPendingLocalSave(updateStatus: updateStatus));
+        });
+      }
     }
   }
 
@@ -1497,7 +1594,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
   List<BookingGroup> _groupedBookingsForActiveEvent() {
     final event = activeEvent;
     if (event == null) return [];
-    final groups = BookingUtils.groupedBookingsForEvent(event);
+    final groups = _groupedBookingsForEventCached(event);
 
     final query = bookingSearch.trim().toLowerCase();
     final hasSearch = query.isNotEmpty;
@@ -1539,11 +1636,37 @@ class _AOJDesktopState extends State<AOJDesktop> {
     final event = activeEvent;
     if (event == null) return null;
 
-    final groups = BookingUtils.groupedBookingsForEvent(event);
+    final groups = _groupedBookingsForEventCached(event);
     for (final group in groups) {
       if (group.primary.id == primaryId) return group;
     }
     return null;
+  }
+
+  String _groupingFingerprint(EventRecord event) {
+    final bookingHash = Object.hashAll(
+      event.bookings.map(
+        (b) => Object.hash(b.id, b.bookingId, b.ticketIds.length, b.updatedAt),
+      ),
+    );
+    final ticketHash = Object.hashAll(
+      event.tickets.map((t) => Object.hash(t.id, t.bookingId, t.updatedAt)),
+    );
+    return '${event.id}|${event.updatedAt}|${event.bookings.length}|${event.tickets.length}|$bookingHash|$ticketHash';
+  }
+
+  List<BookingGroup> _groupedBookingsForEventCached(EventRecord event) {
+    final fingerprint = _groupingFingerprint(event);
+    if (_cachedGroupingEventId == event.id &&
+        _cachedGroupingFingerprint == fingerprint) {
+      return _cachedGroupedBookings;
+    }
+
+    final groups = BookingUtils.groupedBookingsForEvent(event);
+    _cachedGroupingEventId = event.id;
+    _cachedGroupingFingerprint = fingerprint;
+    _cachedGroupedBookings = groups;
+    return groups;
   }
 
   String _membershipLevelForGroup(EventRecord? event, BookingGroup group) {
