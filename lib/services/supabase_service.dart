@@ -31,19 +31,18 @@ class SupabaseService {
   static const String _tableDeletedRecords = 'deleted_records';
   static const String _tableSyncLog = 'sync_log';
 
-  static SyncDiagnosticsRecord _syncDiagnostics =
-    SyncDiagnosticsRecord.empty();
+  static SyncDiagnosticsRecord _syncDiagnostics = SyncDiagnosticsRecord.empty();
   static SchemaHealthRecord _schemaHealth =
-    SchemaHealthRecord.unchecked(expectedVersion: _kExpectedSchemaVersion);
+      SchemaHealthRecord.unchecked(expectedVersion: _kExpectedSchemaVersion);
   static final List<MergeConflictRecord> _recentMergeConflicts =
-    <MergeConflictRecord>[];
+      <MergeConflictRecord>[];
   static final Map<String, _TableSyncStats> _lastSyncTableStats =
-    <String, _TableSyncStats>{};
+      <String, _TableSyncStats>{};
 
   static SyncDiagnosticsRecord get syncDiagnostics => _syncDiagnostics;
   static SchemaHealthRecord get schemaHealth => _schemaHealth;
   static List<MergeConflictRecord> get recentMergeConflicts =>
-    List<MergeConflictRecord>.unmodifiable(_recentMergeConflicts);
+      List<MergeConflictRecord>.unmodifiable(_recentMergeConflicts);
 
   static String get resolvedSupabaseUrl => _resolvedSupabaseUrl ?? '';
 
@@ -83,7 +82,8 @@ class SupabaseService {
     int deleted = 0,
   }) {
     if (uploaded == 0 && deleted == 0) return;
-    final stats = _lastSyncTableStats.putIfAbsent(table, () => _TableSyncStats());
+    final stats =
+        _lastSyncTableStats.putIfAbsent(table, () => _TableSyncStats());
     stats.uploaded += uploaded;
     stats.deleted += deleted;
   }
@@ -96,10 +96,12 @@ class SupabaseService {
   static String _stripOuterQuotes(String value) {
     var current = value.trim();
     while (current.length >= 2) {
-      final startsWithQuote =
-          current.startsWith('"') || current.startsWith("'") || current.startsWith('`');
-      final endsWithQuote =
-          current.endsWith('"') || current.endsWith("'") || current.endsWith('`');
+      final startsWithQuote = current.startsWith('"') ||
+          current.startsWith("'") ||
+          current.startsWith('`');
+      final endsWithQuote = current.endsWith('"') ||
+          current.endsWith("'") ||
+          current.endsWith('`');
       if (!startsWithQuote || !endsWithQuote) break;
       current = current.substring(1, current.length - 1).trim();
     }
@@ -130,9 +132,7 @@ class SupabaseService {
       value = defineMatch.group(1) ?? value;
     }
 
-    value = _stripOuterQuotes(value)
-        .replaceAll(RegExp(r'[,;]+$'), '')
-        .trim();
+    value = _stripOuterQuotes(value).replaceAll(RegExp(r'[,;]+$'), '').trim();
 
     if (value.startsWith('https://https://')) {
       value = value.substring('https://'.length);
@@ -209,6 +209,7 @@ class SupabaseService {
   }
 
   static SupabaseClient get _db => Supabase.instance.client;
+
   /// Safely convert a field that might be a JSON string or already a list.
   /// If the value is a string, decode it as JSON. Otherwise, treat it as a list.
   static List<dynamic> _safeJsonToList(dynamic value) {
@@ -240,7 +241,6 @@ class SupabaseService {
     }
     return <String, dynamic>{};
   }
-
 
   static bool _isHostLookupError(Object error) {
     final message = error.toString().toLowerCase();
@@ -349,8 +349,12 @@ class SupabaseService {
     await checkTable(_tableExpenses);
     await checkTable(_tableGameModes);
     // deleted_records and messages are optional — missing tables are noted but do not block sync
-    try { await _db.from(_tableDeletedRecords).select().limit(1); } catch (_) {}
-    try { await _db.from('messages').select().limit(1); } catch (_) {}
+    try {
+      await _db.from(_tableDeletedRecords).select().limit(1);
+    } catch (_) {}
+    try {
+      await _db.from('messages').select().limit(1);
+    } catch (_) {}
 
     try {
       final row = await _db
@@ -429,13 +433,16 @@ class SupabaseService {
       final id = row['id']?.toString() ?? '';
       if (id.isEmpty) continue;
       final localUpdatedAt = row['updated_at']?.toString() ?? '';
+      final effectiveLocalUpdatedAt =
+          localUpdatedAt.trim().isEmpty ? _nowIsoUtc() : localUpdatedAt;
       final cloudUpdatedAt = existingEventUpdatedAt[id] ?? '';
-      if (_updatedAtMicros(cloudUpdatedAt) > _updatedAtMicros(localUpdatedAt)) {
+      if (_updatedAtMicros(cloudUpdatedAt) >
+          _updatedAtMicros(effectiveLocalUpdatedAt)) {
         continue;
       }
       final normalized = Map<String, dynamic>.from(row);
       if (localUpdatedAt.trim().isEmpty) {
-        normalized['updated_at'] = _nowIsoUtc();
+        normalized['updated_at'] = effectiveLocalUpdatedAt;
       }
       eventRowsToUpsert.add(normalized);
     }
@@ -519,7 +526,8 @@ class SupabaseService {
     // partial load. Only block deletions in that case; allow normal "delete one
     // event" flows to propagate.
     final minTrustedLocalCount = (existingRowsById.length * 0.5).ceil();
-    if (existingRowsById.isNotEmpty && localEvents.length < minTrustedLocalCount) {
+    if (existingRowsById.isNotEmpty &&
+        localEvents.length < minTrustedLocalCount) {
       return;
     }
 
@@ -600,7 +608,10 @@ class SupabaseService {
   ) async {
     if (eventIds.isEmpty) return 0;
     final existingRows = List<Map<String, dynamic>>.from(
-      await db.from(table).select('id, event_id').inFilter('event_id', eventIds),
+      await db
+          .from(table)
+          .select('id, event_id')
+          .inFilter('event_id', eventIds),
     );
     final existingIds = <String>[];
     final idsByEvent = <String, List<String>>{};
@@ -724,10 +735,12 @@ class SupabaseService {
       if (id.isEmpty) continue;
 
       final localUpdatedAtRaw = row['updated_at']?.toString() ?? '';
+      final effectiveLocalUpdatedAt =
+          localUpdatedAtRaw.trim().isEmpty ? _nowIsoUtc() : localUpdatedAtRaw;
       final cloudUpdatedAtRaw = existingById[id] ?? '';
       final deletedAtRaw = deletionTombstones[id] ?? '';
 
-      final localTs = _updatedAtMicros(localUpdatedAtRaw);
+      final localTs = _updatedAtMicros(effectiveLocalUpdatedAt);
       final cloudTs = _updatedAtMicros(cloudUpdatedAtRaw);
       final deletedTs = _updatedAtMicros(deletedAtRaw);
       if (cloudTs > localTs) {
@@ -739,7 +752,7 @@ class SupabaseService {
 
       final normalized = Map<String, dynamic>.from(row);
       if (localUpdatedAtRaw.trim().isEmpty) {
-        normalized['updated_at'] = _nowIsoUtc();
+        normalized['updated_at'] = effectiveLocalUpdatedAt;
       }
       rowsToUpsert.add(normalized);
     }
@@ -749,9 +762,8 @@ class SupabaseService {
     }
     _recordSyncSummaryCount(table, uploaded: rowsToUpsert.length);
 
-    final idsToDelete = existingIds
-        .where((id) => !desiredIds.contains(id))
-        .toList();
+    final idsToDelete =
+        existingIds.where((id) => !desiredIds.contains(id)).toList();
     if (idsToDelete.isEmpty) return;
 
     await _writeDeletionTombstones(
@@ -777,40 +789,38 @@ class SupabaseService {
     SupabaseClient db,
     EventRecord event,
   ) async {
-    final rows = event.bookings
-        .map(
-          (b) {
-            final dedupedPayments = _dedupePayments(b.payments);
-            return <String, dynamic>{
-            'id': b.id,
-            'event_id': event.id,
-            'booking_id': b.bookingId,
-            'booking_date': b.bookingDate,
-            'first_name': b.firstName,
-            'last_name': b.lastName,
-            'email': b.email,
-            'phone': b.phone,
-            'event': b.event,
-            'total': b.total,
-            'total_paid': b.totalPaid,
-            'transaction_id': b.transactionId,
-            'payment_method': b.paymentMethod,
-            'payment_status': b.paymentStatus,
-            'check_in_status': b.checkInStatus,
-            'notes': b.notes,
-            'needs_pickup': b.needsPickup,
-            'needs_training': b.needsTraining,
-            'guest_names': b.guestNames,
-            'language_preference': b.languagePreference,
-            'lunch_order_ids': b.lunchOrderIds,
-            'ticket_ids': b.ticketIds,
-            'sales': b.sales.map((s) => s.toJson()).toList(),
-            'payments': dedupedPayments.map((p) => p.toJson()).toList(),
-            'updated_at': b.updatedAt,
-          };
-          },
-        )
-        .toList();
+    final rows = event.bookings.map(
+      (b) {
+        final dedupedPayments = _dedupePayments(b.payments);
+        return <String, dynamic>{
+          'id': b.id,
+          'event_id': event.id,
+          'booking_id': b.bookingId,
+          'booking_date': b.bookingDate,
+          'first_name': b.firstName,
+          'last_name': b.lastName,
+          'email': b.email,
+          'phone': b.phone,
+          'event': b.event,
+          'total': b.total,
+          'total_paid': b.totalPaid,
+          'transaction_id': b.transactionId,
+          'payment_method': b.paymentMethod,
+          'payment_status': b.paymentStatus,
+          'check_in_status': b.checkInStatus,
+          'notes': b.notes,
+          'needs_pickup': b.needsPickup,
+          'needs_training': b.needsTraining,
+          'guest_names': b.guestNames,
+          'language_preference': b.languagePreference,
+          'lunch_order_ids': b.lunchOrderIds,
+          'ticket_ids': b.ticketIds,
+          'sales': b.sales.map((s) => s.toJson()).toList(),
+          'payments': dedupedPayments.map((p) => p.toJson()).toList(),
+          'updated_at': b.updatedAt,
+        };
+      },
+    ).toList();
 
     await _syncEventScopedTable(
       db: db,
@@ -868,7 +878,8 @@ class SupabaseService {
             'method': payment.method,
             'note': payment.note,
             'date': payment.date,
-            'updated_at': payment.updatedAt.isNotEmpty ? payment.updatedAt : _nowIsoUtc(),
+            'updated_at':
+                payment.updatedAt.isNotEmpty ? payment.updatedAt : _nowIsoUtc(),
           },
         );
       }
@@ -1002,8 +1013,8 @@ class SupabaseService {
           await _db.from(_tableBookings).select('id'),
         );
         final cloudBookingCount = cloudBookingCountRows.length;
-        final localBookingCount = localState.events
-            .fold<int>(0, (sum, e) => sum + e.bookings.length);
+        final localBookingCount =
+            localState.events.fold<int>(0, (sum, e) => sum + e.bookings.length);
         // Allow push only if local has at least 50% of cloud bookings, or cloud is empty.
         final tooFewLocal = cloudBookingCount > 0 &&
             localBookingCount < (cloudBookingCount * 0.5).ceil();
@@ -1113,22 +1124,21 @@ class SupabaseService {
               .toList()
           : _safeJsonToList(row['game_modes'])
               .map(
-                (g) =>
-                    GameModeRecord.fromJson(Map<String, dynamic>.from(g as Map)),
+                (g) => GameModeRecord.fromJson(
+                    Map<String, dynamic>.from(g as Map)),
               )
               .toList();
 
-      final accountingNotes =
-          _safeJsonToList(row['accounting_notes'])
-              .map(
-                (n) =>
-                    NoteRecord.fromJson(Map<String, dynamic>.from(n as Map)),
-              )
-              .toList();
+      final accountingNotes = _safeJsonToList(row['accounting_notes'])
+          .map(
+            (n) => NoteRecord.fromJson(Map<String, dynamic>.from(n as Map)),
+          )
+          .toList();
 
       final lunchOptions = _safeJsonToList(row['lunch_options'])
           .map(
-            (o) => LunchOptionRecord.fromJson(Map<String, dynamic>.from(o as Map)),
+            (o) =>
+                LunchOptionRecord.fromJson(Map<String, dynamic>.from(o as Map)),
           )
           .toList();
 
@@ -1154,7 +1164,7 @@ class SupabaseService {
           needsTraining: b['needs_training'] as bool? ?? false,
           guestNames: b['guest_names'] as String? ?? '',
           languagePreference: b['language_preference'] as String? ?? '',
-            lunchOrderIds: _safeJsonToList(b['lunch_order_ids'])
+          lunchOrderIds: _safeJsonToList(b['lunch_order_ids'])
               .map((e) => e.toString())
               .toList(),
           ticketIds: _safeJsonToList(b['ticket_ids'])
@@ -1422,8 +1432,10 @@ class SupabaseService {
   }
 
   static BookingRecord _mergeBooking(BookingRecord local, BookingRecord cloud) {
-    final paymentStatus = _preferString(local.paymentStatus, cloud.paymentStatus);
-    final checkInStatus = _preferString(local.checkInStatus, cloud.checkInStatus);
+    final paymentStatus =
+        _preferString(local.paymentStatus, cloud.paymentStatus);
+    final checkInStatus =
+        _preferString(local.checkInStatus, cloud.checkInStatus);
     final notes = _preferString(local.notes, cloud.notes);
     _recordConflict(
       entityType: 'booking',
@@ -1473,7 +1485,8 @@ class SupabaseService {
         local.languagePreference,
         cloud.languagePreference,
       ),
-      lunchOrderIds: _mergeUniqueStrings(local.lunchOrderIds, cloud.lunchOrderIds),
+      lunchOrderIds:
+          _mergeUniqueStrings(local.lunchOrderIds, cloud.lunchOrderIds),
       ticketIds: _mergeUniqueStrings(local.ticketIds, cloud.ticketIds),
       sales: _mergeById(local.sales, cloud.sales, (x) => x.id, _mergeSale),
       payments: _dedupePayments(
@@ -1641,10 +1654,10 @@ class SupabaseService {
     for (final payment in payments) {
       final method = payment.method.trim().toLowerCase();
       final note = payment.note.trim().toLowerCase();
-      final amount =
-          (double.tryParse(payment.amount.replaceAll(RegExp(r'[^\\d.\\-]'), '')) ??
-                  0)
-              .toStringAsFixed(2);
+      final amount = (double.tryParse(
+                  payment.amount.replaceAll(RegExp(r'[^\\d.\\-]'), '')) ??
+              0)
+          .toStringAsFixed(2);
       final date = payment.date.trim();
       final exact = '$method|$note|$amount|$date';
       if (seenExact.contains(exact)) continue;
@@ -1685,7 +1698,8 @@ class SupabaseService {
     return l.length >= c.length ? local : cloud;
   }
 
-  static Future<void> _tryWriteSyncLog(SyncDiagnosticsRecord diagnostics) async {
+  static Future<void> _tryWriteSyncLog(
+      SyncDiagnosticsRecord diagnostics) async {
     try {
       await _db.from(_tableSyncLog).insert(<String, dynamic>{
         'operation': diagnostics.operation,
