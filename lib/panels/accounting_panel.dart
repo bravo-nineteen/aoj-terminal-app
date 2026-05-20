@@ -342,14 +342,13 @@ class _AccountingPanelState extends State<AccountingPanel> {
     final int ticketCountBasis =
         BookingUtils.eventEffectiveTicketCount(widget.event!);
 
-    // Calculate ticket cost based on the type (per person or grand total)
-    final double ticketValueByPeople = _getTicketCostValue(widget.event!);
-    double ticketCostTotal = 0;
-    double donationTicketsTotal = 0;
+    // Ticket cost basis deduction (from event settings)
+    final double ticketCostBasisDeduction = _getTicketCostValue(widget.event!);
+
+    // Income and cost tracking
+    double ticketIncomeTotal = 0;
     double lunchPassThroughTotal = 0;
     double salesTotal = 0;
-    double grandTotal = 0;
-    double chargeableTotal = 0;
     double paymentsRecorded = 0;
     double cardFees = 0;
     int cardPaymentCount = 0;
@@ -360,9 +359,8 @@ class _AccountingPanelState extends State<AccountingPanel> {
         checkedInCount++;
       }
 
-      final groupTicketCost =
-          BookingUtils.groupTicketRevenueExcludingDonations(group);
-      final groupDonationTickets = BookingUtils.groupDonationTotal(group);
+      // All ticket revenue (includes donations)
+      final groupTicketIncome = BookingUtils.ticketsTotal(group);
       final groupLunchPassThrough =
           BookingUtils.lunchTotal(group, widget.event!);
       final groupSales = BookingUtils.salesTotal(group);
@@ -384,12 +382,9 @@ class _AccountingPanelState extends State<AccountingPanel> {
           ? (groupProfitEligiblePaymentBase / groupNonRefundPositivePayments)
           : 0.0;
 
-      ticketCostTotal += groupTicketCost;
-      donationTicketsTotal += groupDonationTickets;
+      ticketIncomeTotal += groupTicketIncome;
       lunchPassThroughTotal += groupLunchPassThrough;
       salesTotal += groupSales;
-      grandTotal += groupTicketCost + groupSales + groupDonationTickets;
-      chargeableTotal += BookingUtils.grandTotal(group, widget.event);
       paymentsRecorded += BookingUtils.paymentsTotal(group);
 
       for (final payment in groupPayments) {
@@ -441,6 +436,31 @@ class _AccountingPanelState extends State<AccountingPanel> {
       }
     }
 
+    // Add ticket income to income ledger
+    incomeLines.insert(
+      0,
+      _LedgerLine(
+        id: 'ticket_income',
+        title: 'All Bookings',
+        subtitle: 'TICKET INCOME',
+        amount: ticketIncomeTotal,
+        isDeletable: false,
+      ),
+    );
+
+    // Add ticket cost basis to deductions
+    deductionLines.insert(
+      0,
+      _LedgerLine(
+        id: 'ticket_cost_basis',
+        title: 'Event Setting',
+        subtitle:
+            'TICKET COST BASIS ($ticketCountBasis tickets × ¥${MoneyUtils.formatMoney(ticketCostBasisDeduction / ticketCountBasis.clamp(1, ticketCountBasis))})',
+        amount: ticketCostBasisDeduction,
+        isDeletable: false,
+      ),
+    );
+
     for (final expense in widget.event!.expenses) {
       final amount = _toDouble(expense.amount);
       if (amount <= 0) continue;
@@ -459,11 +479,11 @@ class _AccountingPanelState extends State<AccountingPanel> {
       );
     }
 
+    final totalIncome = ticketIncomeTotal + salesTotal;
     final totalDeductions =
-        cardFees + manualExpensesTotal + ticketValueByPeople;
-    final operatingIncome = ticketCostTotal + salesTotal;
-    final netAfterAllDeductions = operatingIncome - totalDeductions;
-    final outstandingBalance = chargeableTotal - paymentsRecorded;
+        ticketCostBasisDeduction + manualExpensesTotal + cardFees;
+    final netAfterAllDeductions = totalIncome - totalDeductions;
+    final outstandingBalance = totalIncome - paymentsRecorded;
     final accent = widget.accent;
     final accountingNotes = widget.event!.accountingNotes;
 
@@ -627,19 +647,9 @@ class _AccountingPanelState extends State<AccountingPanel> {
                             value: checkedInCount.toString(),
                           ),
                           _SummaryStat(
-                            label: 'Ticket Value',
+                            label: 'Ticket Income',
                             value:
-                                '¥ ${MoneyUtils.formatMoney(ticketValueByPeople)}',
-                          ),
-                          _SummaryStat(
-                            label: 'Ticket Cost Total',
-                            value:
-                                '¥ ${MoneyUtils.formatMoney(ticketCostTotal)}',
-                          ),
-                          _SummaryStat(
-                            label: 'Donation Tickets',
-                            value:
-                                '¥ ${MoneyUtils.formatMoney(donationTicketsTotal)}',
+                                '¥ ${MoneyUtils.formatMoney(ticketIncomeTotal)}',
                           ),
                           _SummaryStat(
                             label: 'Sales Value',
@@ -651,18 +661,13 @@ class _AccountingPanelState extends State<AccountingPanel> {
                                 '¥ ${MoneyUtils.formatMoney(lunchPassThroughTotal)}',
                           ),
                           _SummaryStat(
-                            label: 'Gross Event Value',
-                            value: '¥ ${MoneyUtils.formatMoney(grandTotal)}',
+                            label: 'Total Income',
+                            value: '¥ ${MoneyUtils.formatMoney(totalIncome)}',
                           ),
                           _SummaryStat(
-                            label: 'Payments Recorded',
+                            label: 'Ticket Cost Basis',
                             value:
-                                '¥ ${MoneyUtils.formatMoney(paymentsRecorded)}',
-                          ),
-                          _SummaryStat(
-                            label: 'Card Fee Auto (4%)',
-                            value:
-                                '¥ ${MoneyUtils.formatMoney(cardFees)}  ($cardPaymentCount payments)',
+                                '¥ ${MoneyUtils.formatMoney(ticketCostBasisDeduction)}',
                           ),
                           _SummaryStat(
                             label: 'Manual Expenses',
@@ -670,14 +675,24 @@ class _AccountingPanelState extends State<AccountingPanel> {
                                 '¥ ${MoneyUtils.formatMoney(manualExpensesTotal)}',
                           ),
                           _SummaryStat(
-                            label: 'Total Deductions',
+                            label: 'Card Fees (4%)',
+                            value:
+                                '¥ ${MoneyUtils.formatMoney(cardFees)}  ($cardPaymentCount payments)',
+                          ),
+                          _SummaryStat(
+                            label: 'Total Costs',
                             value:
                                 '¥ ${MoneyUtils.formatMoney(totalDeductions)}',
                           ),
                           _SummaryStat(
-                            label: 'Net After Deductions',
+                            label: 'Event Profit',
                             value:
                                 '¥ ${MoneyUtils.formatMoney(netAfterAllDeductions)}',
+                          ),
+                          _SummaryStat(
+                            label: 'Payments Recorded',
+                            value:
+                                '¥ ${MoneyUtils.formatMoney(paymentsRecorded)}',
                           ),
                           _SummaryStat(
                             label: 'Outstanding Balance',
