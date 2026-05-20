@@ -348,6 +348,21 @@ class BookingUtils {
     return eventDefaultTicketCount(event);
   }
 
+  static bool groupIsActive(BookingGroup group) {
+    final checkInStatus = group.primary.checkInStatus.trim();
+    return checkInStatus != 'Cancelled' && checkInStatus != 'No Show';
+  }
+
+  static int eventActiveBookingCount(EventRecord event) {
+    return groupedBookingsForEvent(event).where(groupIsActive).length;
+  }
+
+  static int eventEffectiveActiveTicketCount(EventRecord event) {
+    final parsed = int.tryParse(event.ticketCountOverride.trim()) ?? 0;
+    if (parsed > 0) return parsed;
+    return eventActiveBookingCount(event);
+  }
+
   static double eventTicketValue(EventRecord event) {
     return groupedBookingsForEvent(event).fold<double>(
       0,

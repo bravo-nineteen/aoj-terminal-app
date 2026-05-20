@@ -323,9 +323,12 @@ class ExportService {
         (sum, group) =>
             sum + _toDouble(BookingUtils.paymentsTotal(group).toString()),
       );
+      final activeTicketCount =
+          BookingUtils.eventEffectiveActiveTicketCount(event);
       final ticketCostBasis = event.ticketCostType == 'grandTotal'
           ? _toDouble(event.ticketCostPerPerson)
-          : BookingUtils.eventTicketCostTotal(event);
+          : BookingUtils.eventTicketCostTotal(event,
+              ticketCount: activeTicketCount);
       final totalOutstandingBalance = groups.fold<double>(
         0,
         (sum, group) => sum + _toDouble(BookingUtils.balance(group).toString()),
@@ -459,9 +462,12 @@ class ExportService {
       }
       final manualExpenses =
           event.expenses.fold<double>(0, (s, e) => s + _toDouble(e.amount));
+      final activeTicketCount =
+          BookingUtils.eventEffectiveActiveTicketCount(event);
       final ticketCostBasis = event.ticketCostType == 'grandTotal'
           ? _toDouble(event.ticketCostPerPerson)
-          : BookingUtils.eventTicketCostTotal(event);
+          : BookingUtils.eventTicketCostTotal(event,
+              ticketCount: activeTicketCount);
       final totalDeductions = cardFees + manualExpenses + ticketCostBasis;
       final net = (ticketsTotal + salesTotal) - totalDeductions;
 

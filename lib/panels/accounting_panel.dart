@@ -165,8 +165,11 @@ class _AccountingPanelState extends State<AccountingPanel> {
       // For grand total mode, just return the value as-is (don't multiply by person count)
       return _toDouble(event.ticketCostPerPerson);
     } else {
-      // For per-person mode, use editable ticket-count basis (default: booking count)
-      return BookingUtils.eventTicketCostTotal(event);
+      // For per-person mode, use active ticket-count basis (excludes cancelled/no-show)
+      final activeTicketCount =
+          BookingUtils.eventEffectiveActiveTicketCount(event);
+      return BookingUtils.eventTicketCostTotal(event,
+          ticketCount: activeTicketCount);
     }
   }
 
@@ -340,7 +343,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
     final int bookingCount = groups.length;
     final int bookedPersons = BookingUtils.eventBookedPersons(widget.event!);
     final int ticketCountBasis =
-        BookingUtils.eventEffectiveTicketCount(widget.event!);
+        BookingUtils.eventEffectiveActiveTicketCount(widget.event!);
 
     // Ticket cost basis deduction (from event settings)
     final double ticketCostBasisDeduction = _getTicketCostValue(widget.event!);
