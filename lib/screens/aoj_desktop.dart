@@ -548,6 +548,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
   }
 
   Future<void> _syncPush() async {
+    await _flushPendingLocalSave(updateStatus: false);
     setState(() => syncStatus = 'SYNCING TO CLOUD...');
     _showSyncMessage('Sync started: pushing local snapshot to Supabase...');
     try {
@@ -581,8 +582,10 @@ class _AOJDesktopState extends State<AOJDesktop> {
   }
 
   Future<void> _syncPull() async {
+    await _flushPendingLocalSave(updateStatus: false);
     setState(() => syncStatus = 'SYNCING FROM CLOUD...');
-    _showSyncMessage('Sync started: reconciling local snapshot with Supabase...');
+    _showSyncMessage(
+        'Sync started: reconciling local snapshot with Supabase...');
     try {
       final merged = await SupabaseService.syncMergeAppState(appState)
           .timeout(const Duration(seconds: 30));
@@ -827,8 +830,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     setState(() {
       selectedBookingIndex = event.bookings.isNotEmpty ? 0 : null;
       selectedMemberIndex = event.members.isNotEmpty ? 0 : null;
-      systemStatus =
-          'WORKBOOK IMPORTED: ${result.totalImported} ITEMS';
+      systemStatus = 'WORKBOOK IMPORTED: ${result.totalImported} ITEMS';
     });
 
     await _saveLocalState();
@@ -1007,10 +1009,13 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
     if (result != true) return;
 
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
     setState(() {
       event.expenses.add(
         ExpenseRecord(
           id: DateTime.now().microsecondsSinceEpoch.toString(),
+          updatedAt: nowIso,
           item: itemController.text.trim(),
           amount: amountController.text.trim().isEmpty
               ? '0'
@@ -1020,6 +1025,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
           category: categoryController.text.trim(),
         ),
       );
+      event.updatedAt = nowIso;
       systemStatus = 'EXPENSE ADDED';
     });
 
@@ -1132,12 +1138,12 @@ class _AOJDesktopState extends State<AOJDesktop> {
     final uniqueTicketNames = _uniqueTicketNamesForEvent(event);
     bool useExistingTicketName = uniqueTicketNames.isNotEmpty;
     String? selectedTicketName =
-      uniqueTicketNames.isNotEmpty ? uniqueTicketNames.first : null;
+        uniqueTicketNames.isNotEmpty ? uniqueTicketNames.first : null;
 
     final nameController = TextEditingController();
     final initialPrice = selectedTicketName == null
-      ? '0'
-      : _suggestedPriceForTicketName(event, selectedTicketName);
+        ? '0'
+        : _suggestedPriceForTicketName(event, selectedTicketName);
     final priceController = TextEditingController(text: initialPrice);
 
     final result = await showDialog<bool>(
@@ -1353,10 +1359,12 @@ class _AOJDesktopState extends State<AOJDesktop> {
     if (result != true) return;
 
     final now = DateTime.now();
+    final nowIso = now.toUtc().toIso8601String();
     final id = now.microsecondsSinceEpoch.toString();
     final bookingId = 'MAN-${now.millisecondsSinceEpoch}';
     final booking = BookingRecord(
       id: id,
+      updatedAt: nowIso,
       bookingId: bookingId,
       bookingDate: now.toIso8601String().split('T').first,
       firstName: firstNameController.text.trim(),
@@ -1383,6 +1391,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
     setState(() {
       event.bookings.add(booking);
+      event.updatedAt = nowIso;
       BookingUtils.linkTicketsToBookings(event);
       BookingUtils.recalculateAllTotals(event);
       selectedBookingIndex = 0;
@@ -1469,9 +1478,9 @@ class _AOJDesktopState extends State<AOJDesktop> {
         if (!isImportedSeed) return false;
         if (methodLower == 'imported') return false;
         if (enteredAmount <= 0) return false;
-        final existingAmount =
-            double.tryParse(p.amount.trim().replaceAll(RegExp(r'[^\d.\-]'), '')) ??
-                0;
+        final existingAmount = double.tryParse(
+                p.amount.trim().replaceAll(RegExp(r'[^\d.\-]'), '')) ??
+            0;
         return (existingAmount - enteredAmount).abs() < 0.01;
       });
 
@@ -1602,11 +1611,11 @@ class _AOJDesktopState extends State<AOJDesktop> {
     final hasPaymentFilter = paymentFilter != 'All Payments';
     final ticketTypeFilter = bookingTicketTypeFilter.trim().toLowerCase();
     final availableTicketTypes = event.tickets
-      .map((t) => t.ticketName.trim().toLowerCase())
-      .where((name) => name.isNotEmpty)
-      .toSet();
+        .map((t) => t.ticketName.trim().toLowerCase())
+        .where((name) => name.isNotEmpty)
+        .toSet();
     final hasTicketTypeFilter = ticketTypeFilter != 'all ticket types' &&
-      availableTicketTypes.contains(ticketTypeFilter);
+        availableTicketTypes.contains(ticketTypeFilter);
 
     return groups.where((g) {
       final paymentStatus = g.primary.paymentStatus.trim().isEmpty
@@ -1953,9 +1962,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     if (gameModeSearch.trim().isEmpty) return event.gameModes;
 
     final q = gameModeSearch.trim().toLowerCase();
-    return event.gameModes
-        .where((g) => g.searchableText.contains(q))
-        .toList();
+    return event.gameModes.where((g) => g.searchableText.contains(q)).toList();
   }
 
   Future<void> _openGameModeFromSchedule(String gameModeTitle) async {
@@ -2010,7 +2017,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
       row.needsTraining = group.primary.needsTraining;
       row.guestNames = group.primary.guestNames;
       row.languagePreference = group.primary.languagePreference;
-        row.lunchOrderIds = List<String>.from(group.primary.lunchOrderIds);
+      row.lunchOrderIds = List<String>.from(group.primary.lunchOrderIds);
       row.sales = group.primary.sales
           .map((s) => SaleRecord(id: s.id, product: s.product, price: s.price))
           .toList();
@@ -2157,7 +2164,8 @@ class _AOJDesktopState extends State<AOJDesktop> {
                   ),
                 ),
               ),
-              if (widget.startupError != null && widget.startupError!.trim().isNotEmpty)
+              if (widget.startupError != null &&
+                  widget.startupError!.trim().isNotEmpty)
                 Positioned(
                   top: 14,
                   right: 14,
@@ -2291,9 +2299,9 @@ class _AOJDesktopState extends State<AOJDesktop> {
                                 icon: app.icon,
                                 accent: app.accent,
                                 unreadCount: app.id == 'messages'
-                                  ? desktopMessagesUnreadCount
-                                  : 0,
-                                ),
+                                    ? desktopMessagesUnreadCount
+                                    : 0,
+                              ),
                               const SizedBox(height: 8),
                               Text(
                                 app.title,

@@ -407,6 +407,7 @@ class SupabaseService {
             'notes': e.notes,
             'ticket_cost_per_person': e.ticketCostPerPerson,
             'ticket_cost_type': e.ticketCostType,
+            'ticket_count_override': e.ticketCountOverride,
             'training_trainer': e.trainingTrainer,
             'lunch_options': e.lunchOptions.map((o) => o.toJson()).toList(),
             'field_map_base64': e.fieldMapBase64,
@@ -1266,6 +1267,7 @@ class SupabaseService {
           notes: row['notes'] as String? ?? '',
           ticketCostPerPerson: row['ticket_cost_per_person'] as String? ?? '0',
           ticketCostType: row['ticket_cost_type'] as String? ?? 'perPerson',
+          ticketCountOverride: row['ticket_count_override'] as String? ?? '',
           trainingTrainer: row['training_trainer'] as String? ?? '',
           lunchOptions: lunchOptions,
           fieldMapBase64: row['field_map_base64'] as String?,
@@ -1384,6 +1386,10 @@ class SupabaseService {
         cloud.ticketCostPerPerson,
       ),
       ticketCostType: _preferString(local.ticketCostType, cloud.ticketCostType),
+      ticketCountOverride: _preferString(
+        local.ticketCountOverride,
+        cloud.ticketCountOverride,
+      ),
       trainingTrainer: trainingTrainer,
       lunchOptions: _mergeById(
         local.lunchOptions,

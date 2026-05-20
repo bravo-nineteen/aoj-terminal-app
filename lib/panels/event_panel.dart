@@ -59,6 +59,20 @@ class _EventPanelState extends State<EventPanel> {
         : event.ticketCostPerPerson.trim();
   }
 
+  int _defaultTicketCountFromBookings(EventRecord event) {
+    return BookingUtils.eventDefaultTicketCount(event);
+  }
+
+  int _effectiveTicketCount(EventRecord event) {
+    return BookingUtils.eventEffectiveTicketCount(event);
+  }
+
+  String _ticketCountFieldValue(EventRecord event) {
+    final raw = event.ticketCountOverride.trim();
+    if (raw.isNotEmpty) return raw;
+    return _defaultTicketCountFromBookings(event).toString();
+  }
+
   Future<void> _setEventTicketCostPerPerson(
     EventRecord event,
     String value,
@@ -67,8 +81,23 @@ class _EventPanelState extends State<EventPanel> {
     await _saveAndRefresh();
   }
 
+  Future<void> _setEventTicketCountOverride(
+    EventRecord event,
+    String value,
+  ) async {
+    final cleaned = value.replaceAll(RegExp(r'[^0-9]'), '').trim();
+    if (cleaned.isEmpty) {
+      event.ticketCountOverride = '';
+    } else {
+      final parsed = int.tryParse(cleaned) ?? 0;
+      event.ticketCountOverride = parsed > 0 ? parsed.toString() : '';
+    }
+    await _saveAndRefresh();
+  }
+
   Future<void> _toggleTicketCostType(EventRecord event) async {
-    event.ticketCostType = event.ticketCostType == 'perPerson' ? 'grandTotal' : 'perPerson';
+    event.ticketCostType =
+        event.ticketCostType == 'perPerson' ? 'grandTotal' : 'perPerson';
     await _saveAndRefresh();
   }
 
@@ -100,7 +129,8 @@ class _EventPanelState extends State<EventPanel> {
   String _lunchOptionsSummary(EventRecord event) {
     if (event.lunchOptions.isEmpty) return '—';
     return event.lunchOptions
-        .map((o) => '${o.name.isEmpty ? 'Unnamed' : o.name} (¥ ${MoneyUtils.formatMoney(_parseMoney(o.fee))})')
+        .map((o) =>
+            '${o.name.isEmpty ? 'Unnamed' : o.name} (¥ ${MoneyUtils.formatMoney(_parseMoney(o.fee))})')
         .join(', ');
   }
 
@@ -141,7 +171,8 @@ class _EventPanelState extends State<EventPanel> {
     }
 
     rows.sort(
-      (a, b) => a.personName.toLowerCase().compareTo(b.personName.toLowerCase()),
+      (a, b) =>
+          a.personName.toLowerCase().compareTo(b.personName.toLowerCase()),
     );
     return rows;
   }
@@ -164,13 +195,17 @@ class _EventPanelState extends State<EventPanel> {
               itemBuilder: (context, index) {
                 final row = rows[index];
                 final isDark = Theme.of(context).brightness == Brightness.dark;
-              return Container(
+                return Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
-                    color: isDark ? const Color(0x66121813) : const Color(0x22000000),
+                    color: isDark
+                        ? const Color(0x66121813)
+                        : const Color(0x22000000),
                     border: Border.all(
-                      color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.10),
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : Colors.black.withValues(alpha: 0.10),
                     ),
                   ),
                   child: Column(
@@ -311,7 +346,9 @@ class _EventPanelState extends State<EventPanel> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.12),
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.12),
           ),
           color: isDark ? const Color(0x66121813) : const Color(0x18000000),
         ),
@@ -326,7 +363,9 @@ class _EventPanelState extends State<EventPanel> {
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.5,
-                  color: isDark ? Colors.white.withValues(alpha: 0.62) : Colors.black.withValues(alpha: 0.55),
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.62)
+                      : Colors.black.withValues(alpha: 0.55),
                 ),
               ),
             ),
@@ -402,9 +441,13 @@ class _EventPanelState extends State<EventPanel> {
                         ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(10),
-                          color: isDark ? Colors.white.withValues(alpha: 0.03) : Colors.black.withValues(alpha: 0.04),
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.03)
+                              : Colors.black.withValues(alpha: 0.04),
                           border: Border.all(
-                            color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.08),
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.05)
+                                : Colors.black.withValues(alpha: 0.08),
                           ),
                         ),
                         child: Row(
@@ -465,10 +508,10 @@ class _EventPanelState extends State<EventPanel> {
     final event = widget.event;
 
     final pickupGroups =
-      event == null ? <BookingGroup>[] : BookingUtils.pickupGroups(event);
+        event == null ? <BookingGroup>[] : BookingUtils.pickupGroups(event);
 
     final trainingGroups =
-      event == null ? <BookingGroup>[] : BookingUtils.trainingGroups(event);
+        event == null ? <BookingGroup>[] : BookingUtils.trainingGroups(event);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
@@ -567,6 +610,14 @@ class _EventPanelState extends State<EventPanel> {
                               await _setEventTicketCostPerPerson(event, v);
                             },
                           ),
+                          PersistentEditField(
+                            label: 'Ticket Count (Cost Basis)',
+                            value: _ticketCountFieldValue(event),
+                            keyboardType: TextInputType.number,
+                            onChanged: (v) async {
+                              await _setEventTicketCountOverride(event, v);
+                            },
+                          ),
                           Padding(
                             padding: const EdgeInsets.only(bottom: 12),
                             child: ElevatedButton(
@@ -597,9 +648,13 @@ class _EventPanelState extends State<EventPanel> {
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(10),
-                              color: isDark ? const Color(0x66121813) : const Color(0x18000000),
+                              color: isDark
+                                  ? const Color(0x66121813)
+                                  : const Color(0x18000000),
                               border: Border.all(
-                                color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.12),
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.black.withValues(alpha: 0.12),
                               ),
                             ),
                             child: Column(
@@ -652,7 +707,8 @@ class _EventPanelState extends State<EventPanel> {
                                             child: PersistentEditField(
                                               label: 'Fee (JPY)',
                                               value: option.fee,
-                                              keyboardType: const TextInputType.numberWithOptions(
+                                              keyboardType: const TextInputType
+                                                  .numberWithOptions(
                                                 decimal: true,
                                               ),
                                               onChanged: (v) async {
@@ -717,6 +773,12 @@ class _EventPanelState extends State<EventPanel> {
                             context: context,
                           ),
                           _buildReadOnlyRow(
+                            label: 'Ticket Count (Cost Basis)',
+                            value:
+                                '${_effectiveTicketCount(event)} (default: ${_defaultTicketCountFromBookings(event)} from bookings)',
+                            context: context,
+                          ),
+                          _buildReadOnlyRow(
                             label: 'Lunch Options',
                             value: _lunchOptionsSummary(event),
                             context: context,
@@ -742,8 +804,7 @@ class _EventPanelState extends State<EventPanel> {
                             context: context,
                             emptyText: 'NO PICKUPS',
                             editable: _isEditing,
-                            onRename:
-                                _isEditing ? _renameRosterName : null,
+                            onRename: _isEditing ? _renameRosterName : null,
                             onRemove: _isEditing
                                 ? (group) =>
                                     _removeFromRoster(group, pickup: true)
@@ -762,11 +823,11 @@ class _EventPanelState extends State<EventPanel> {
                                   emptyText: 'NO TRAINING REQUESTS',
                                   editable: _isEditing,
                                   onRename:
-                                    _isEditing ? _renameRosterName : null,
+                                      _isEditing ? _renameRosterName : null,
                                   onRemove: _isEditing
-                                    ? (group) =>
-                                      _removeFromRoster(group, pickup: false)
-                                    : null,
+                                      ? (group) => _removeFromRoster(group,
+                                          pickup: false)
+                                      : null,
                                   topExtra: _isEditing
                                       ? (event.members.isEmpty
                                           ? PersistentEditField(
@@ -780,9 +841,8 @@ class _EventPanelState extends State<EventPanel> {
                                           : Container(
                                               margin: const EdgeInsets.only(
                                                   bottom: 8),
-                                              child:
-                                                  DropdownButtonFormField<
-                                                      String>(
+                                              child: DropdownButtonFormField<
+                                                  String>(
                                                 initialValue: event.members.any(
                                                   (m) =>
                                                       m.fullName.trim() ==
@@ -795,8 +855,7 @@ class _EventPanelState extends State<EventPanel> {
                                                 decoration:
                                                     const InputDecoration(
                                                   labelText: 'Trainer',
-                                                  border:
-                                                      OutlineInputBorder(),
+                                                  border: OutlineInputBorder(),
                                                   isDense: true,
                                                   contentPadding:
                                                       EdgeInsets.symmetric(
@@ -813,8 +872,7 @@ class _EventPanelState extends State<EventPanel> {
                                                   ...event.members.map(
                                                     (m) {
                                                       final name =
-                                                          m.fullName
-                                                              .trim();
+                                                          m.fullName.trim();
                                                       return DropdownMenuItem<
                                                           String>(
                                                         value: name.isEmpty
@@ -824,9 +882,8 @@ class _EventPanelState extends State<EventPanel> {
                                                           name.isEmpty
                                                               ? 'Unnamed'
                                                               : name,
-                                                          overflow:
-                                                              TextOverflow
-                                                                  .ellipsis,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
                                                         ),
                                                       );
                                                     },
@@ -849,18 +906,20 @@ class _EventPanelState extends State<EventPanel> {
                                             borderRadius:
                                                 BorderRadius.circular(10),
                                             color: isDark
-                                                ? Colors.white.withValues(alpha: 0.03)
-                                                : Colors.black.withValues(alpha: 0.04),
+                                                ? Colors.white
+                                                    .withValues(alpha: 0.03)
+                                                : Colors.black
+                                                    .withValues(alpha: 0.04),
                                             border: Border.all(
                                               color: isDark
-                                                  ? Colors.white.withValues(alpha: 0.06)
-                                                  : Colors.black.withValues(alpha: 0.10),
+                                                  ? Colors.white
+                                                      .withValues(alpha: 0.06)
+                                                  : Colors.black
+                                                      .withValues(alpha: 0.10),
                                             ),
                                           ),
                                           child: Text(
-                                            event.trainingTrainer
-                                                    .trim()
-                                                    .isEmpty
+                                            event.trainingTrainer.trim().isEmpty
                                                 ? 'Trainer: —'
                                                 : 'Trainer: ${event.trainingTrainer}',
                                             style: const TextStyle(
@@ -876,13 +935,16 @@ class _EventPanelState extends State<EventPanel> {
                                 height: 170,
                                 child: InkWell(
                                   borderRadius: BorderRadius.circular(14),
-                                  onTap: () => _showLunchBreakdownDetails(event),
+                                  onTap: () =>
+                                      _showLunchBreakdownDetails(event),
                                   child: Container(
                                     width: double.infinity,
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(14),
-                                      color: isDark ? const Color(0xCC101511) : const Color(0xFFE8EFE5),
+                                      color: isDark
+                                          ? const Color(0xCC101511)
+                                          : const Color(0xFFE8EFE5),
                                       border: Border.all(
                                         color: widget.accent
                                             .withValues(alpha: 0.30),
@@ -908,8 +970,10 @@ class _EventPanelState extends State<EventPanel> {
                                               style: TextStyle(
                                                 fontSize: 10,
                                                 color: isDark
-                                                    ? Colors.white.withValues(alpha: 0.65)
-                                                    : Colors.black.withValues(alpha: 0.50),
+                                                    ? Colors.white
+                                                        .withValues(alpha: 0.65)
+                                                    : Colors.black.withValues(
+                                                        alpha: 0.50),
                                               ),
                                             ),
                                           ],
@@ -924,7 +988,8 @@ class _EventPanelState extends State<EventPanel> {
                                               );
                                               if (breakdown.isEmpty) {
                                                 return const Center(
-                                                  child: Text('NO LUNCH ORDERS'),
+                                                  child:
+                                                      Text('NO LUNCH ORDERS'),
                                                 );
                                               }
                                               return ListView.separated(
@@ -932,8 +997,7 @@ class _EventPanelState extends State<EventPanel> {
                                                 separatorBuilder: (_, __) =>
                                                     const SizedBox(height: 4),
                                                 itemBuilder: (context, index) {
-                                                  final item =
-                                                      breakdown[index];
+                                                  final item = breakdown[index];
                                                   return Row(
                                                     children: [
                                                       Expanded(

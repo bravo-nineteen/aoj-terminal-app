@@ -114,12 +114,11 @@ class BookingUtils {
   }
 
   static double ticketsTotal(BookingGroup group) {
-    return group.tickets
-        .where(ticketIsActive)
-        .fold<double>(
+    return group.tickets.where(ticketIsActive).fold<double>(
           0.0,
           (sum, ticket) =>
-              sum + (MoneyUtils.parseMoney(ticket.price) * ticketQuantity(ticket)),
+              sum +
+              (MoneyUtils.parseMoney(ticket.price) * ticketQuantity(ticket)),
         );
   }
 
@@ -192,7 +191,8 @@ class BookingUtils {
         if (ticketIds.contains(ticket.id)) return true;
 
         final ticketBookingId = _norm(ticket.bookingId);
-        if (ticketBookingId.isNotEmpty && bookingIds.contains(ticketBookingId)) {
+        if (ticketBookingId.isNotEmpty &&
+            bookingIds.contains(ticketBookingId)) {
           return true;
         }
 
@@ -213,7 +213,8 @@ class BookingUtils {
     }).toList();
 
     result.sort(
-      (a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
+      (a, b) =>
+          a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
     );
 
     return result;
@@ -247,7 +248,8 @@ class BookingUtils {
 
         // If ticket has bookingId, only use bookingId matching.
         if (ticketBookingId.isNotEmpty) {
-          return bookingBookingId.isNotEmpty && ticketBookingId == bookingBookingId;
+          return bookingBookingId.isNotEmpty &&
+              ticketBookingId == bookingBookingId;
         }
 
         // Fallback to name matching only when ticket has no bookingId.
@@ -336,12 +338,21 @@ class BookingUtils {
         .fold<int>(0, (sum, group) => sum + groupPersonCount(group));
   }
 
+  static int eventDefaultTicketCount(EventRecord event) {
+    return groupedBookingsForEvent(event).length;
+  }
+
+  static int eventEffectiveTicketCount(EventRecord event) {
+    final parsed = int.tryParse(event.ticketCountOverride.trim()) ?? 0;
+    if (parsed > 0) return parsed;
+    return eventDefaultTicketCount(event);
+  }
+
   static double eventTicketValue(EventRecord event) {
-    return groupedBookingsForEvent(event)
-        .fold<double>(
-          0,
-          (sum, group) => sum + groupTicketRevenueExcludingDonations(group),
-        );
+    return groupedBookingsForEvent(event).fold<double>(
+      0,
+      (sum, group) => sum + groupTicketRevenueExcludingDonations(group),
+    );
   }
 
   static double eventDonationValue(EventRecord event) {
@@ -394,14 +405,17 @@ class BookingUtils {
         .toList();
   }
 
-  static double eventTicketCostTotal(EventRecord event) {
-    final ticketCostPerPerson = MoneyUtils.parseMoney(event.ticketCostPerPerson);
-    final bookedPersons = eventBookedPersons(event);
-    return ticketCostPerPerson * bookedPersons;
+  static double eventTicketCostTotal(EventRecord event, {int? ticketCount}) {
+    final ticketCostPerPerson =
+        MoneyUtils.parseMoney(event.ticketCostPerPerson);
+    final count = ticketCount ?? eventEffectiveTicketCount(event);
+    return ticketCostPerPerson * count;
   }
 
   static double eventEstimatedProfit(EventRecord event) {
-    return eventTicketValue(event) - eventTicketCostTotal(event) + eventSalesValue(event);
+    return eventTicketValue(event) -
+        eventTicketCostTotal(event) +
+        eventSalesValue(event);
   }
 
   static List<LunchBreakdownItem> lunchBreakdown(EventRecord event) {
@@ -442,10 +456,10 @@ class BookingUtils {
       final nextStatus = paid <= 0
           ? 'Unpaid'
           : remaining < 0
-            ? 'Overpaid'
-            : remaining <= 0
-              ? 'Paid'
-              : 'Part Paid';
+              ? 'Overpaid'
+              : remaining <= 0
+                  ? 'Paid'
+                  : 'Part Paid';
 
       if (remaining < 0) {
         DebugLogger.instance.warn(

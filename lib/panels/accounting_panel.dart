@@ -165,7 +165,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
       // For grand total mode, just return the value as-is (don't multiply by person count)
       return _toDouble(event.ticketCostPerPerson);
     } else {
-      // For per-person mode, use the standard calculation
+      // For per-person mode, use editable ticket-count basis (default: booking count)
       return BookingUtils.eventTicketCostTotal(event);
     }
   }
@@ -339,6 +339,8 @@ class _AccountingPanelState extends State<AccountingPanel> {
     int checkedInCount = 0;
     final int bookingCount = groups.length;
     final int bookedPersons = BookingUtils.eventBookedPersons(widget.event!);
+    final int ticketCountBasis =
+        BookingUtils.eventEffectiveTicketCount(widget.event!);
 
     // Calculate ticket cost based on the type (per person or grand total)
     final double ticketValueByPeople = _getTicketCostValue(widget.event!);
@@ -364,6 +366,23 @@ class _AccountingPanelState extends State<AccountingPanel> {
       final groupLunchPassThrough =
           BookingUtils.lunchTotal(group, widget.event!);
       final groupSales = BookingUtils.salesTotal(group);
+      final groupPayments = BookingUtils.groupPayments(group);
+
+      double groupNonRefundPositivePayments = 0;
+      for (final payment in groupPayments) {
+        final amount = _toDouble(payment.amount);
+        if (amount <= 0) continue;
+        final isRefund = payment.method.trim().toLowerCase() == 'refund';
+        if (isRefund) continue;
+        groupNonRefundPositivePayments += amount;
+      }
+
+      final groupProfitEligiblePaymentBase =
+          (groupNonRefundPositivePayments - groupLunchPassThrough)
+              .clamp(0.0, groupNonRefundPositivePayments);
+      final groupProfitEligibleRatio = groupNonRefundPositivePayments > 0
+          ? (groupProfitEligiblePaymentBase / groupNonRefundPositivePayments)
+          : 0.0;
 
       ticketCostTotal += groupTicketCost;
       donationTicketsTotal += groupDonationTickets;
@@ -373,7 +392,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
       chargeableTotal += BookingUtils.grandTotal(group, widget.event);
       paymentsRecorded += BookingUtils.paymentsTotal(group);
 
-      for (final payment in BookingUtils.groupPayments(group)) {
+      for (final payment in groupPayments) {
         final amount = _toDouble(payment.amount);
         if (amount <= 0) continue;
 
@@ -390,7 +409,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
         );
 
         if (_isCardMethod(payment.method)) {
-          final fee = amount * 0.04;
+          final fee = amount * 0.04 * groupProfitEligibleRatio;
           cardPaymentCount++;
           cardFees += fee;
           deductionLines.add(
@@ -441,7 +460,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
     }
 
     final totalDeductions =
-      cardFees + manualExpensesTotal + ticketValueByPeople;
+        cardFees + manualExpensesTotal + ticketValueByPeople;
     final operatingIncome = ticketCostTotal + salesTotal;
     final netAfterAllDeductions = operatingIncome - totalDeductions;
     final outstandingBalance = chargeableTotal - paymentsRecorded;
@@ -466,7 +485,8 @@ class _AccountingPanelState extends State<AccountingPanel> {
                           lines: incomeLines,
                           onDeleteLine: null,
                           onViewExpenseNotes: null,
-                          onExpand: () => _showExpandedLedger('Income Ledger', incomeLines, accent),
+                          onExpand: () => _showExpandedLedger(
+                              'Income Ledger', incomeLines, accent),
                         ),
                       ),
                       const SizedBox(width: 14),
@@ -489,7 +509,8 @@ class _AccountingPanelState extends State<AccountingPanel> {
                             icon: const Icon(Icons.add, size: 16),
                             label: const Text('ADD EXPENSE'),
                           ),
-                          onExpand: () => _showExpandedLedger('Deductions Ledger', deductionLines, accent),
+                          onExpand: () => _showExpandedLedger(
+                              'Deductions Ledger', deductionLines, accent),
                         ),
                       ),
                     ],
@@ -500,9 +521,10 @@ class _AccountingPanelState extends State<AccountingPanel> {
                 Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
-                    color: isDark ? const Color(0xCC101511) : const Color(0xFFE8EFE5),
-                    border:
-                        Border.all(color: accent.withValues(alpha: 0.30)),
+                    color: isDark
+                        ? const Color(0xCC101511)
+                        : const Color(0xFFE8EFE5),
+                    border: Border.all(color: accent.withValues(alpha: 0.30)),
                   ),
                   child: Theme(
                     data: Theme.of(context)
@@ -536,8 +558,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
                           )
                         else
                           ConstrainedBox(
-                            constraints:
-                                const BoxConstraints(maxHeight: 150),
+                            constraints: const BoxConstraints(maxHeight: 150),
                             child: ListView.separated(
                               shrinkWrap: true,
                               padding: const EdgeInsets.symmetric(
@@ -568,7 +589,9 @@ class _AccountingPanelState extends State<AccountingPanel> {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(18),
-                    color: isDark ? const Color(0xCC101511) : const Color(0xFFE8EFE5),
+                    color: isDark
+                        ? const Color(0xCC101511)
+                        : const Color(0xFFE8EFE5),
                     border: Border.all(color: accent.withValues(alpha: 0.35)),
                   ),
                   child: Column(
@@ -594,6 +617,10 @@ class _AccountingPanelState extends State<AccountingPanel> {
                           _SummaryStat(
                             label: 'Booked Persons',
                             value: bookedPersons.toString(),
+                          ),
+                          _SummaryStat(
+                            label: 'Ticket Count (Cost Basis)',
+                            value: ticketCountBasis.toString(),
                           ),
                           _SummaryStat(
                             label: 'Checked In',
@@ -667,8 +694,7 @@ class _AccountingPanelState extends State<AccountingPanel> {
                           children: [
                             ElevatedButton.icon(
                               onPressed: widget.onExportSummary,
-                              icon: const Icon(
-                                  Icons.summarize_outlined,
+                              icon: const Icon(Icons.summarize_outlined,
                                   size: 16),
                               label: const Text('EVENT SUMMARY'),
                             ),
@@ -734,7 +760,9 @@ class _LedgerCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xCC101511) : const Color(0xFFF0F5ED);
     final headerBgColor = accent.withValues(alpha: isDark ? 0.12 : 0.08);
-    final dividerColor = isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.08);
+    final dividerColor = isDark
+        ? Colors.white.withValues(alpha: 0.06)
+        : Colors.black.withValues(alpha: 0.08);
 
     return Container(
       decoration: BoxDecoration(
@@ -794,14 +822,19 @@ class _LedgerCard extends StatelessWidget {
                     ),
                     itemBuilder: (context, index) {
                       final line = lines[index];
-                      final isLightTheme = Theme.of(context).brightness == Brightness.light;
-                      final defaultTextColor = isLightTheme ? Colors.black87 : Colors.white;
-                      final defaultSubtitleColor = isLightTheme ? Colors.black54 : Colors.white70;
-                      
+                      final isLightTheme =
+                          Theme.of(context).brightness == Brightness.light;
+                      final defaultTextColor =
+                          isLightTheme ? Colors.black87 : Colors.white;
+                      final defaultSubtitleColor =
+                          isLightTheme ? Colors.black54 : Colors.white70;
+
                       final titleStyle = TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: line.isRefund ? Colors.blueAccent : defaultTextColor,
+                        color: line.isRefund
+                            ? Colors.blueAccent
+                            : defaultTextColor,
                       );
                       final subtitleStyle = TextStyle(
                         fontSize: 11,
@@ -838,9 +871,7 @@ class _LedgerCard extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
-                                color: line.isRefund
-                                    ? Colors.blueAccent
-                                    : null,
+                                color: line.isRefund ? Colors.blueAccent : null,
                               ),
                             ),
                             if (line.isDeletable && onDeleteLine != null) ...[
@@ -858,8 +889,7 @@ class _LedgerCard extends StatelessWidget {
                                 alignment: Alignment.topRight,
                                 children: [
                                   IconButton(
-                                    onPressed: () =>
-                                        onViewExpenseNotes!(line),
+                                    onPressed: () => onViewExpenseNotes!(line),
                                     icon: const Icon(
                                         Icons.sticky_note_2_outlined,
                                         size: 18),

@@ -224,9 +224,28 @@ class ExportService {
       ]);
 
       for (final group in groups) {
-        for (final payment in group.primary.payments) {
+        final groupLunchPassThrough = BookingUtils.lunchTotal(group, event);
+        final groupPayments = BookingUtils.groupPayments(group);
+        double groupNonRefundPositivePayments = 0;
+        for (final payment in groupPayments) {
           final amount = _toDouble(payment.amount);
-          final fee = _isCardMethod(payment.method) ? amount * 0.04 : 0;
+          if (amount <= 0) continue;
+          final isRefund = payment.method.trim().toLowerCase() == 'refund';
+          if (isRefund) continue;
+          groupNonRefundPositivePayments += amount;
+        }
+        final groupProfitEligiblePaymentBase =
+            (groupNonRefundPositivePayments - groupLunchPassThrough)
+                .clamp(0.0, groupNonRefundPositivePayments);
+        final groupProfitEligibleRatio = groupNonRefundPositivePayments > 0
+            ? (groupProfitEligiblePaymentBase / groupNonRefundPositivePayments)
+            : 0.0;
+
+        for (final payment in groupPayments) {
+          final amount = _toDouble(payment.amount);
+          final fee = _isCardMethod(payment.method)
+              ? amount * 0.04 * groupProfitEligibleRatio
+              : 0;
           totalCardFees += fee;
 
           rows.add([
@@ -304,6 +323,9 @@ class ExportService {
         (sum, group) =>
             sum + _toDouble(BookingUtils.paymentsTotal(group).toString()),
       );
+      final ticketCostBasis = event.ticketCostType == 'grandTotal'
+          ? _toDouble(event.ticketCostPerPerson)
+          : BookingUtils.eventTicketCostTotal(event);
       final totalOutstandingBalance = groups.fold<double>(
         0,
         (sum, group) => sum + _toDouble(BookingUtils.balance(group).toString()),
@@ -312,8 +334,10 @@ class ExportService {
           .where((g) => g.primary.checkInStatus.trim() == 'Checked In')
           .length;
 
-      final totalDeductions = totalCardFees + totalManualExpenses;
-      final netAfterDeductions = totalPaymentsRecorded - totalDeductions;
+      final totalDeductions =
+          totalCardFees + totalManualExpenses + ticketCostBasis;
+      final netAfterDeductions =
+          (totalTicketValue + totalSalesValue) - totalDeductions;
 
       rows.add([]);
       rows.add(['SUMMARY']);
@@ -321,6 +345,7 @@ class ExportService {
       rows.add(['Checked In', checkedInCount]);
       rows.add(['Ticket Value', totalTicketValue.toStringAsFixed(0)]);
       rows.add(['Sales Value', totalSalesValue.toStringAsFixed(0)]);
+      rows.add(['Ticket Cost Basis', ticketCostBasis.toStringAsFixed(0)]);
       rows.add(['Gross Event Value', totalGrandValue.toStringAsFixed(0)]);
       rows.add(['Payments Recorded', totalPaymentsRecorded.toStringAsFixed(0)]);
       rows.add(['Card Fees 4%', totalCardFees.toStringAsFixed(0)]);
@@ -395,27 +420,50 @@ class ExportService {
       final groups = BookingUtils.groupedBookingsForEvent(event);
       final checkedIn =
           groups.where((g) => g.primary.checkInStatus == 'Checked In').length;
-      final ticketsTotal = groups.fold<double>(
-          0, (s, g) => s + BookingUtils.ticketsTotal(g));
+      final ticketsTotal =
+          groups.fold<double>(0, (s, g) => s + BookingUtils.ticketsTotal(g));
       final salesTotal =
           groups.fold<double>(0, (s, g) => s + BookingUtils.salesTotal(g));
       final grandTotal =
           groups.fold<double>(0, (s, g) => s + BookingUtils.grandTotal(g));
       final payments =
           groups.fold<double>(0, (s, g) => s + BookingUtils.paymentsTotal(g));
+      final lunchPassThrough = groups.fold<double>(
+          0, (s, g) => s + BookingUtils.lunchTotal(g, event));
       final outstanding =
           groups.fold<double>(0, (s, g) => s + BookingUtils.balance(g));
       double cardFees = 0;
       for (final g in groups) {
-        for (final p in g.primary.payments) {
+        final groupLunchPassThrough = BookingUtils.lunchTotal(g, event);
+        final groupPayments = BookingUtils.groupPayments(g);
+        double groupNonRefundPositivePayments = 0;
+        for (final p in groupPayments) {
           final amt = _toDouble(p.amount);
-          if (amt > 0 && _isCardMethod(p.method)) cardFees += amt * 0.04;
+          if (amt <= 0) continue;
+          if (p.method.trim().toLowerCase() == 'refund') continue;
+          groupNonRefundPositivePayments += amt;
+        }
+        final groupProfitEligiblePaymentBase =
+            (groupNonRefundPositivePayments - groupLunchPassThrough)
+                .clamp(0.0, groupNonRefundPositivePayments);
+        final groupProfitEligibleRatio = groupNonRefundPositivePayments > 0
+            ? (groupProfitEligiblePaymentBase / groupNonRefundPositivePayments)
+            : 0.0;
+
+        for (final p in groupPayments) {
+          final amt = _toDouble(p.amount);
+          if (amt > 0 && _isCardMethod(p.method)) {
+            cardFees += amt * 0.04 * groupProfitEligibleRatio;
+          }
         }
       }
       final manualExpenses =
           event.expenses.fold<double>(0, (s, e) => s + _toDouble(e.amount));
-      final totalDeductions = cardFees + manualExpenses;
-      final net = payments - totalDeductions;
+      final ticketCostBasis = event.ticketCostType == 'grandTotal'
+          ? _toDouble(event.ticketCostPerPerson)
+          : BookingUtils.eventTicketCostTotal(event);
+      final totalDeductions = cardFees + manualExpenses + ticketCostBasis;
+      final net = (ticketsTotal + salesTotal) - totalDeductions;
 
       final buf = StringBuffer();
       buf.writeln('EVENT SUMMARY');
@@ -433,10 +481,15 @@ class ExportService {
       buf.writeln('Sales Value:        ¥ ${salesTotal.toStringAsFixed(0)}');
       buf.writeln('Gross Event Value:  ¥ ${grandTotal.toStringAsFixed(0)}');
       buf.writeln('Payments Recorded:  ¥ ${payments.toStringAsFixed(0)}');
+      buf.writeln(
+          'Lunch Pass-through: ¥ ${lunchPassThrough.toStringAsFixed(0)}');
       buf.writeln('Outstanding:        ¥ ${outstanding.toStringAsFixed(0)}');
+      buf.writeln(
+          'Ticket Cost Basis:  ¥ ${ticketCostBasis.toStringAsFixed(0)}');
       buf.writeln('Card Fees (4%):     ¥ ${cardFees.toStringAsFixed(0)}');
       buf.writeln('Manual Expenses:    ¥ ${manualExpenses.toStringAsFixed(0)}');
-      buf.writeln('Total Deductions:   ¥ ${totalDeductions.toStringAsFixed(0)}');
+      buf.writeln(
+          'Total Deductions:   ¥ ${totalDeductions.toStringAsFixed(0)}');
       buf.writeln('Net After Deducts:  ¥ ${net.toStringAsFixed(0)}');
 
       if (event.schedule.isNotEmpty) {

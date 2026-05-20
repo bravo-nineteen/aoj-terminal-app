@@ -79,7 +79,8 @@ class EventRecord {
   String time;
   String notes;
   String ticketCostPerPerson;
-  String ticketCostType;  // 'perPerson' or 'grandTotal'
+  String ticketCostType; // 'perPerson' or 'grandTotal'
+  String ticketCountOverride;
   String trainingTrainer;
   List<LunchOptionRecord> lunchOptions;
   String? fieldMapBase64;
@@ -101,6 +102,7 @@ class EventRecord {
     required this.notes,
     required this.ticketCostPerPerson,
     this.ticketCostType = 'perPerson',
+    this.ticketCountOverride = '',
     required this.trainingTrainer,
     required this.lunchOptions,
     required this.fieldMapBase64,
@@ -115,7 +117,7 @@ class EventRecord {
 
   Map<String, dynamic> toJson() => {
         'id': id,
-      'updatedAt': updatedAt,
+        'updatedAt': updatedAt,
         'name': name,
         'venue': venue,
         'date': date,
@@ -123,6 +125,7 @@ class EventRecord {
         'notes': notes,
         'ticketCostPerPerson': ticketCostPerPerson,
         'ticketCostType': ticketCostType,
+        'ticketCountOverride': ticketCountOverride,
         'trainingTrainer': trainingTrainer,
         'lunchOptions': lunchOptions.map((e) => e.toJson()).toList(),
         'fieldMapBase64': fieldMapBase64,
@@ -146,8 +149,9 @@ class EventRecord {
       notes: json['notes']?.toString() ?? '',
       ticketCostPerPerson: json['ticketCostPerPerson']?.toString() ?? '0',
       ticketCostType: json['ticketCostType']?.toString() ?? 'perPerson',
+      ticketCountOverride: json['ticketCountOverride']?.toString() ?? '',
       trainingTrainer: json['trainingTrainer']?.toString() ?? '',
-        lunchOptions: (json['lunchOptions'] as List<dynamic>? ?? [])
+      lunchOptions: (json['lunchOptions'] as List<dynamic>? ?? [])
           .map((e) => LunchOptionRecord.fromJson(Map<String, dynamic>.from(e)))
           .toList(),
       fieldMapBase64: json['fieldMapBase64']?.toString(),
@@ -233,7 +237,7 @@ class BookingRecord {
 
   Map<String, dynamic> toJson() => {
         'id': id,
-      'updatedAt': updatedAt,
+        'updatedAt': updatedAt,
         'bookingId': bookingId,
         'bookingDate': bookingDate,
         'firstName': firstName,
@@ -280,7 +284,7 @@ class BookingRecord {
       needsTraining: json['needsTraining'] == true,
       guestNames: json['guestNames']?.toString() ?? '',
       languagePreference: json['languagePreference']?.toString() ?? '',
-        lunchOrderIds: (json['lunchOrderIds'] as List<dynamic>? ?? [])
+      lunchOrderIds: (json['lunchOrderIds'] as List<dynamic>? ?? [])
           .map((e) => e.toString())
           .toList(),
       ticketIds: (json['ticketIds'] as List<dynamic>? ?? [])
@@ -324,7 +328,7 @@ class TicketRecord {
 
   Map<String, dynamic> toJson() => {
         'id': id,
-      'updatedAt': updatedAt,
+        'updatedAt': updatedAt,
         'bookingId': bookingId,
         'bookingName': bookingName,
         'ticketName': ticketName,
@@ -341,9 +345,7 @@ class TicketRecord {
       bookingName: json['bookingName']?.toString() ?? '',
       ticketName: json['ticketName']?.toString() ?? '',
       price: json['price']?.toString() ?? '0',
-      spaces: json['spaces']?.toString() ??
-          json['quantity']?.toString() ??
-          '1',
+      spaces: json['spaces']?.toString() ?? json['quantity']?.toString() ?? '1',
       status: json['status']?.toString() ?? 'Active',
     );
   }
@@ -436,7 +438,7 @@ class ExpenseRecord {
 
   Map<String, dynamic> toJson() => {
         'id': id,
-      'updatedAt': updatedAt,
+        'updatedAt': updatedAt,
         'item': item,
         'amount': amount,
         'note': note,
@@ -492,7 +494,7 @@ class MemberRecord {
 
   Map<String, dynamic> toJson() => {
         'id': id,
-      'updatedAt': updatedAt,
+        'updatedAt': updatedAt,
         'firstName': firstName,
         'lastName': lastName,
         'username': username,
@@ -546,17 +548,17 @@ class ScheduleRecord {
         'Activity': activity,
         'Location': location,
         'Notes': notes,
-      'GameModeTitle': gameModeTitle,
+        'GameModeTitle': gameModeTitle,
       };
 
   Map<String, dynamic> toJson() => {
         'id': id,
-      'updatedAt': updatedAt,
+        'updatedAt': updatedAt,
         'time': time,
         'activity': activity,
         'location': location,
         'notes': notes,
-      'gameModeTitle': gameModeTitle,
+        'gameModeTitle': gameModeTitle,
       };
 
   factory ScheduleRecord.fromJson(Map<String, dynamic> json) {
@@ -628,8 +630,8 @@ class GameModeRecord {
   String get gameFlowDescription => _firstNonEmpty(
       ['Game flow description', 'Game Flow', 'Flow Description']);
 
-  String get spawnAreaFlow => _firstNonEmpty(
-      ['Spawn area flow', 'Spawn Flow', 'Checkpoint Flow']);
+  String get spawnAreaFlow =>
+      _firstNonEmpty(['Spawn area flow', 'Spawn Flow', 'Checkpoint Flow']);
 
   String get searchableText {
     return [

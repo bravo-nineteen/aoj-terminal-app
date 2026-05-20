@@ -16,6 +16,7 @@ create table if not exists events (
   time                  text not null default '',
   notes                 text not null default '',
   ticket_cost_per_person text not null default '0',
+  ticket_count_override text not null default '',
   training_trainer      text not null default '',
   lunch_options         jsonb not null default '[]',
   field_map_base64      text,
