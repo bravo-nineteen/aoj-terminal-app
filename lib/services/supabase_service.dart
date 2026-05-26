@@ -1125,21 +1125,19 @@ class SupabaseService {
               .toList()
           : _safeJsonToList(row['game_modes'])
               .map(
-                (g) => GameModeRecord.fromJson(
-                    Map<String, dynamic>.from(g as Map)),
+                (g) => GameModeRecord.fromJson(_safeJsonToMap(g)),
               )
               .toList();
 
       final accountingNotes = _safeJsonToList(row['accounting_notes'])
           .map(
-            (n) => NoteRecord.fromJson(Map<String, dynamic>.from(n as Map)),
+            (n) => NoteRecord.fromJson(_safeJsonToMap(n)),
           )
           .toList();
 
       final lunchOptions = _safeJsonToList(row['lunch_options'])
           .map(
-            (o) =>
-                LunchOptionRecord.fromJson(Map<String, dynamic>.from(o as Map)),
+            (o) => LunchOptionRecord.fromJson(_safeJsonToMap(o)),
           )
           .toList();
 
@@ -1173,17 +1171,13 @@ class SupabaseService {
               .toList(),
           sales: _safeJsonToList(b['sales'])
               .map(
-                (s) => SaleRecord.fromJson(
-                  Map<String, dynamic>.from(s as Map),
-                ),
+                (s) => SaleRecord.fromJson(_safeJsonToMap(s)),
               )
               .toList(),
           payments: _dedupePayments(
             _safeJsonToList(b['payments'])
                 .map(
-                  (p) => PaymentRecord.fromJson(
-                    Map<String, dynamic>.from(p as Map),
-                  ),
+                  (p) => PaymentRecord.fromJson(_safeJsonToMap(p)),
                 )
                 .toList(),
           ),
@@ -1248,9 +1242,7 @@ class SupabaseService {
               date: e['date'] as String? ?? '',
               category: e['category'] as String? ?? '',
               notes: _safeJsonToList(e['notes'])
-                  .map((n) => NoteRecord.fromJson(
-                        Map<String, dynamic>.from(n as Map),
-                      ))
+                  .map((n) => NoteRecord.fromJson(_safeJsonToMap(n)))
                   .toList(),
             ),
           )

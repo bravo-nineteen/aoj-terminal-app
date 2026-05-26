@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 class DesktopAppItem {
@@ -63,7 +65,7 @@ class AppStateData {
   factory AppStateData.fromJson(Map<String, dynamic> json) {
     return AppStateData(
       events: (json['events'] as List<dynamic>? ?? [])
-          .map((e) => EventRecord.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => EventRecord.fromJson(_safeToMap(e)))
           .toList(),
       activeEventId: json['activeEventId']?.toString(),
     );
@@ -152,29 +154,29 @@ class EventRecord {
       ticketCountOverride: json['ticketCountOverride']?.toString() ?? '',
       trainingTrainer: json['trainingTrainer']?.toString() ?? '',
       lunchOptions: (json['lunchOptions'] as List<dynamic>? ?? [])
-          .map((e) => LunchOptionRecord.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => LunchOptionRecord.fromJson(_safeToMap(e)))
           .toList(),
       fieldMapBase64: json['fieldMapBase64']?.toString(),
       bookings: (json['bookings'] as List<dynamic>? ?? [])
-          .map((e) => BookingRecord.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => BookingRecord.fromJson(_safeToMap(e)))
           .toList(),
       tickets: (json['tickets'] as List<dynamic>? ?? [])
-          .map((e) => TicketRecord.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => TicketRecord.fromJson(_safeToMap(e)))
           .toList(),
       members: (json['members'] as List<dynamic>? ?? [])
-          .map((e) => MemberRecord.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => MemberRecord.fromJson(_safeToMap(e)))
           .toList(),
       schedule: (json['schedule'] as List<dynamic>? ?? [])
-          .map((e) => ScheduleRecord.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => ScheduleRecord.fromJson(_safeToMap(e)))
           .toList(),
       gameModes: (json['gameModes'] as List<dynamic>? ?? [])
-          .map((e) => GameModeRecord.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => GameModeRecord.fromJson(_safeToMap(e)))
           .toList(),
       expenses: (json['expenses'] as List<dynamic>? ?? [])
-          .map((e) => ExpenseRecord.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => ExpenseRecord.fromJson(_safeToMap(e)))
           .toList(),
       accountingNotes: (json['accountingNotes'] as List<dynamic>? ?? [])
-          .map((e) => NoteRecord.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => NoteRecord.fromJson(_safeToMap(e)))
           .toList(),
     );
   }
@@ -291,10 +293,10 @@ class BookingRecord {
           .map((e) => e.toString())
           .toList(),
       sales: (json['sales'] as List<dynamic>? ?? [])
-          .map((e) => SaleRecord.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => SaleRecord.fromJson(_safeToMap(e)))
           .toList(),
       payments: (json['payments'] as List<dynamic>? ?? [])
-          .map((e) => PaymentRecord.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => PaymentRecord.fromJson(_safeToMap(e)))
           .toList(),
     );
   }
@@ -457,7 +459,7 @@ class ExpenseRecord {
       date: json['date']?.toString() ?? '',
       category: json['category']?.toString() ?? '',
       notes: (json['notes'] as List<dynamic>? ?? [])
-          .map((e) => NoteRecord.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => NoteRecord.fromJson(_safeToMap(e)))
           .toList(),
     );
   }
@@ -563,7 +565,8 @@ class ScheduleRecord {
 
   factory ScheduleRecord.fromJson(Map<String, dynamic> json) {
     if (json.containsKey('data')) {
-      final data = Map<String, String>.from(json['data'] as Map? ?? {});
+      final data = _safeToMap(json['data'])
+          .map((k, v) => MapEntry(k.toString(), v?.toString() ?? ''));
       return ScheduleRecord(
         id: data['ID']?.toString() ?? '',
         updatedAt: json['updatedAt']?.toString() ?? '',
@@ -662,7 +665,7 @@ class GameModeRecord {
       };
 
   factory GameModeRecord.fromJson(Map<String, dynamic> json) {
-    final raw = Map<String, dynamic>.from(json['data'] as Map? ?? {});
+    final raw = _safeToMap(json['data']);
     return GameModeRecord(
       data: raw.map((k, v) => MapEntry(k.toString(), v?.toString() ?? '')),
       updatedAt: json['updatedAt']?.toString() ?? '',
@@ -748,6 +751,28 @@ int _parseInt(dynamic value, {int fallback = 0}) {
   if (value is int) return value;
   if (value is num) return value.toInt();
   return int.tryParse(value.toString()) ?? fallback;
+}
+
+/// Safely converts a dynamic value to [Map<String, dynamic>].
+///
+/// Handles:
+/// - [Map] values (converted via [Map.from])
+/// - [String] values that are JSON-encoded maps (decoded then converted)
+/// - null and unexpected types (returns empty map)
+///
+/// This prevents the "String is not a subtype of Map<dynamic, dynamic>" runtime
+/// error that occurs when a field stored as a JSON text column is returned as a
+/// [String] instead of an already-decoded [Map].
+Map<String, dynamic> _safeToMap(dynamic value) {
+  if (value == null) return <String, dynamic>{};
+  if (value is Map) return Map<String, dynamic>.from(value);
+  if (value is String) {
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+  }
+  return <String, dynamic>{};
 }
 
 // ── NoteRecord ────────────────────────────────────────────────────────────────
