@@ -242,6 +242,28 @@ class SupabaseService {
     return <String, dynamic>{};
   }
 
+  static List<Map<String, dynamic>> _safeJsonToMapList(dynamic value) {
+    final list = _safeJsonToList(value);
+    final output = <Map<String, dynamic>>[];
+    for (final item in list) {
+      if (item is Map) {
+        output.add(Map<String, dynamic>.from(item));
+      }
+    }
+    return output;
+  }
+
+  static List<Map<String, dynamic>> _coerceRowList(dynamic value) {
+    if (value is! List) return <Map<String, dynamic>>[];
+    final output = <Map<String, dynamic>>[];
+    for (final row in value) {
+      if (row is Map) {
+        output.add(Map<String, dynamic>.from(row));
+      }
+    }
+    return output;
+  }
+
   static bool _isHostLookupError(Object error) {
     final message = error.toString().toLowerCase();
     return message.contains('failed host lookup') ||
@@ -336,7 +358,7 @@ class SupabaseService {
       final end =
           (i + chunkSize > eventIds.length) ? eventIds.length : i + chunkSize;
       final chunk = eventIds.sublist(i, end);
-      final chunkRows = List<Map<String, dynamic>>.from(
+      final chunkRows = _coerceRowList(
         await db.from(table).select().inFilter('event_id', chunk),
       );
       rows.addAll(chunkRows);
@@ -358,7 +380,7 @@ class SupabaseService {
           ? bookingRowIds.length
           : i + chunkSize;
       final chunk = bookingRowIds.sublist(i, end);
-      final chunkRows = List<Map<String, dynamic>>.from(
+      final chunkRows = _coerceRowList(
         await db
             .from(_tablePayments)
             .select()
@@ -517,7 +539,7 @@ class SupabaseService {
         )
         .toList();
 
-    final existingEventRows = List<Map<String, dynamic>>.from(
+    final existingEventRows = _coerceRowList(
       await db.from(_tableEvents).select('id, updated_at'),
     );
     final existingEventUpdatedAt = <String, String>{};
@@ -611,7 +633,7 @@ class SupabaseService {
         .map((e) => _updatedAtMicros(e.updatedAt))
         .fold<int>(0, (maxTs, ts) => ts > maxTs ? ts : maxTs);
 
-    final existingRows = List<Map<String, dynamic>>.from(
+    final existingRows = _coerceRowList(
       await db.from(_tableEvents).select('id, updated_at'),
     );
     final existingRowsById = <String, Map<String, dynamic>>{};
@@ -706,7 +728,7 @@ class SupabaseService {
     List<String> eventIds,
   ) async {
     if (eventIds.isEmpty) return 0;
-    final existingRows = List<Map<String, dynamic>>.from(
+    final existingRows = _coerceRowList(
       await db
           .from(table)
           .select('id, event_id')
@@ -750,7 +772,7 @@ class SupabaseService {
     required String eventId,
   }) async {
     try {
-      final rows = List<Map<String, dynamic>>.from(
+      final rows = _coerceRowList(
         await db
             .from(_tableDeletedRecords)
             .select('record_id, deleted_at')
@@ -807,7 +829,7 @@ class SupabaseService {
     required String eventId,
     required List<Map<String, dynamic>> rows,
   }) async {
-    final existingRows = List<Map<String, dynamic>>.from(
+    final existingRows = _coerceRowList(
       await db.from(table).select('id, updated_at').eq('event_id', eventId),
     );
     final existingById = <String, String>{};
@@ -1110,7 +1132,7 @@ class SupabaseService {
         // Pre-flight safety check: count total local bookings vs cloud bookings.
         // If local has far fewer bookings than cloud, local is likely partially loaded.
         // Abort the push to prevent data loss.
-        final cloudBookingCountRows = List<Map<String, dynamic>>.from(
+        final cloudBookingCountRows = _coerceRowList(
           await _db.from(_tableBookings).select('id'),
         );
         final cloudBookingCount = cloudBookingCountRows.length;
@@ -1189,8 +1211,7 @@ class SupabaseService {
         (rawActiveId == null || rawActiveId.isEmpty) ? null : rawActiveId;
 
     // Events
-    final List<Map<String, dynamic>> eventRows =
-        List<Map<String, dynamic>>.from(
+    final List<Map<String, dynamic>> eventRows = _coerceRowList(
       await db.from(_tableEvents).select(),
     );
 
@@ -1283,7 +1304,8 @@ class SupabaseService {
     final events = <EventRecord>[];
 
     for (final row in eventRows) {
-      final eventId = row['id'] as String;
+      final eventId = row['id']?.toString() ?? '';
+      if (eventId.isEmpty) continue;
 
       final eventBookingRows =
           bookingsByEventId[eventId] ?? const <Map<String, dynamic>>[];
@@ -1309,34 +1331,30 @@ class SupabaseService {
                 ),
               )
               .toList()
-          : _safeJsonToList(row['game_modes'])
+          : _safeJsonToMapList(row['game_modes'])
               .map(
-                (g) => GameModeRecord.fromJson(
-                    Map<String, dynamic>.from(g as Map)),
+                (g) => GameModeRecord.fromJson(g),
               )
               .toList();
 
-      final accountingNotes = _safeJsonToList(row['accounting_notes'])
+      final accountingNotes = _safeJsonToMapList(row['accounting_notes'])
           .map(
-            (n) => NoteRecord.fromJson(Map<String, dynamic>.from(n as Map)),
+            (n) => NoteRecord.fromJson(n),
           )
           .toList();
 
-      final lunchOptions = _safeJsonToList(row['lunch_options'])
+      final lunchOptions = _safeJsonToMapList(row['lunch_options'])
           .map(
-            (o) =>
-                LunchOptionRecord.fromJson(Map<String, dynamic>.from(o as Map)),
+            (o) => LunchOptionRecord.fromJson(o),
           )
           .toList();
 
       final bookings = eventBookingRows.map((b) {
         final bookingRowId = b['id'] as String? ?? '';
         final bookingId = b['booking_id'] as String? ?? '';
-        final paymentsFromJson = _safeJsonToList(b['payments'])
+        final paymentsFromJson = _safeJsonToMapList(b['payments'])
             .map(
-              (p) => PaymentRecord.fromJson(
-                Map<String, dynamic>.from(p as Map),
-              ),
+              (p) => PaymentRecord.fromJson(p),
             )
             .toList();
         final paymentsFromMirror = <PaymentRecord>[
@@ -1370,11 +1388,9 @@ class SupabaseService {
           ticketIds: _safeJsonToList(b['ticket_ids'])
               .map((e) => e.toString())
               .toList(),
-          sales: _safeJsonToList(b['sales'])
+          sales: _safeJsonToMapList(b['sales'])
               .map(
-                (s) => SaleRecord.fromJson(
-                  Map<String, dynamic>.from(s as Map),
-                ),
+                (s) => SaleRecord.fromJson(s),
               )
               .toList(),
           payments: _mergePaymentsForPull(paymentsFromJson, paymentsFromMirror),
@@ -1438,10 +1454,8 @@ class SupabaseService {
               note: e['note'] as String? ?? '',
               date: e['date'] as String? ?? '',
               category: e['category'] as String? ?? '',
-              notes: _safeJsonToList(e['notes'])
-                  .map((n) => NoteRecord.fromJson(
-                        Map<String, dynamic>.from(n as Map),
-                      ))
+              notes: _safeJsonToMapList(e['notes'])
+                  .map((n) => NoteRecord.fromJson(n))
                   .toList(),
             ),
           )
