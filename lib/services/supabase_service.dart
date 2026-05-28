@@ -274,6 +274,13 @@ class SupabaseService {
     return '';
   }
 
+  static bool _isDuplicateBookingIdError(Object error) {
+    if (error is! PostgrestException) return false;
+    if ((error.code ?? '') != '23505') return false;
+    final detail = '${error.message} ${error.details ?? ''}'.toLowerCase();
+    return detail.contains('booking_id') || detail.contains('bookings');
+  }
+
   static String _nowIsoUtc() => DateTime.now().toUtc().toIso8601String();
 
   static int _updatedAtMicros(String? value) {
@@ -282,6 +289,97 @@ class SupabaseService {
     final parsed = DateTime.tryParse(raw);
     if (parsed == null) return 0;
     return parsed.toUtc().microsecondsSinceEpoch;
+  }
+
+  static List<PaymentRecord> _mergePaymentsForPull(
+    List<PaymentRecord> fromBookingsJson,
+    List<PaymentRecord> fromPaymentsTable,
+  ) {
+    final byId = <String, PaymentRecord>{};
+
+    for (final payment in [...fromBookingsJson, ...fromPaymentsTable]) {
+      final key = payment.id.trim();
+      if (key.isEmpty) continue;
+      final existing = byId[key];
+      if (existing == null) {
+        byId[key] = payment;
+        continue;
+      }
+
+      final existingTs = _updatedAtMicros(existing.updatedAt);
+      final incomingTs = _updatedAtMicros(payment.updatedAt);
+      if (incomingTs >= existingTs) {
+        byId[key] = payment;
+      }
+    }
+
+    final merged = byId.values.toList();
+    merged.sort((a, b) {
+      final aTs = _updatedAtMicros(a.updatedAt);
+      final bTs = _updatedAtMicros(b.updatedAt);
+      if (aTs == bTs) return a.id.compareTo(b.id);
+      return aTs.compareTo(bTs);
+    });
+    return _dedupePayments(merged);
+  }
+
+  static Future<List<Map<String, dynamic>>> _fetchRowsByEventIds(
+    SupabaseClient db,
+    String table,
+    List<String> eventIds,
+  ) async {
+    if (eventIds.isEmpty) return <Map<String, dynamic>>[];
+
+    const chunkSize = 100;
+    final rows = <Map<String, dynamic>>[];
+    for (var i = 0; i < eventIds.length; i += chunkSize) {
+      final end =
+          (i + chunkSize > eventIds.length) ? eventIds.length : i + chunkSize;
+      final chunk = eventIds.sublist(i, end);
+      final chunkRows = List<Map<String, dynamic>>.from(
+        await db.from(table).select().inFilter('event_id', chunk),
+      );
+      rows.addAll(chunkRows);
+    }
+
+    return rows;
+  }
+
+  static Future<List<Map<String, dynamic>>> _fetchPaymentsByBookingRowIds(
+    SupabaseClient db,
+    List<String> bookingRowIds,
+  ) async {
+    if (bookingRowIds.isEmpty) return <Map<String, dynamic>>[];
+
+    const chunkSize = 100;
+    final rows = <Map<String, dynamic>>[];
+    for (var i = 0; i < bookingRowIds.length; i += chunkSize) {
+      final end = (i + chunkSize > bookingRowIds.length)
+          ? bookingRowIds.length
+          : i + chunkSize;
+      final chunk = bookingRowIds.sublist(i, end);
+      final chunkRows = List<Map<String, dynamic>>.from(
+        await db
+            .from(_tablePayments)
+            .select()
+            .inFilter('booking_row_id', chunk),
+      );
+      rows.addAll(chunkRows);
+    }
+
+    return rows;
+  }
+
+  static Map<String, List<Map<String, dynamic>>> _groupRowsByEventId(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final grouped = <String, List<Map<String, dynamic>>>{};
+    for (final row in rows) {
+      final eventId = row['event_id']?.toString() ?? '';
+      if (eventId.isEmpty) continue;
+      grouped.putIfAbsent(eventId, () => <Map<String, dynamic>>[]).add(row);
+    }
+    return grouped;
   }
 
   static String _normalizeSyncSchemaError(Object error) {
@@ -1004,6 +1102,8 @@ class SupabaseService {
         throw StateError('Schema check failed: ${health.issues.join('; ')}');
       }
 
+      var pushSkippedDueToDuplicateBookingId = false;
+
       // If local state is empty, skip push to avoid wiping cloud data.
       // This handles fresh installs / cleared local storage (bootstrap from cloud).
       if (localState.events.isNotEmpty) {
@@ -1026,9 +1126,21 @@ class SupabaseService {
             'load all data before pushing.',
           );
         }
-        await _withHostLookupRetry(() => pushAppState(localState));
+        try {
+          await _withHostLookupRetry(() => pushAppState(localState));
+        } catch (e) {
+          // Some deployed schemas still enforce unique booking_id.
+          // In that case, skip push but continue pull so users can still download data.
+          if (!_isDuplicateBookingIdError(e)) {
+            rethrow;
+          }
+          pushSkippedDueToDuplicateBookingId = true;
+        }
       }
       final cloudState = await _withHostLookupRetry(() => pullAppState());
+      final mergedState = pushSkippedDueToDuplicateBookingId
+          ? _mergeAppState(localState, cloudState)
+          : cloudState;
 
       _syncDiagnostics = SyncDiagnosticsRecord(
         operation: 'sync-merge',
@@ -1036,13 +1148,13 @@ class SupabaseService {
         completedAt: DateTime.now().toUtc().toIso8601String(),
         localEvents: localState.events.length,
         cloudEvents: cloudState.events.length,
-        mergedEvents: cloudState.events.length,
+        mergedEvents: mergedState.events.length,
         conflicts: _recentMergeConflicts.length,
         lastError: '',
         lastErrorCode: '',
       );
       await _tryWriteSyncLog(_syncDiagnostics);
-      return cloudState;
+      return mergedState;
     } catch (e) {
       _syncDiagnostics = SyncDiagnosticsRecord(
         operation: 'sync-merge',
@@ -1082,38 +1194,112 @@ class SupabaseService {
       await db.from(_tableEvents).select(),
     );
 
+    final eventIds = eventRows
+        .map((row) => row['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
+
+    final bookingRows =
+        await _fetchRowsByEventIds(db, _tableBookings, eventIds);
+    final ticketRows = await _fetchRowsByEventIds(db, _tableTickets, eventIds);
+    final memberRows = await _fetchRowsByEventIds(db, _tableMembers, eventIds);
+    final scheduleRows =
+        await _fetchRowsByEventIds(db, _tableSchedule, eventIds);
+    final expenseRows =
+        await _fetchRowsByEventIds(db, _tableExpenses, eventIds);
+    final gameModeRows =
+        await _fetchRowsByEventIds(db, _tableGameModes, eventIds);
+
+    final bookingsByEventId = _groupRowsByEventId(bookingRows);
+    final ticketsByEventId = _groupRowsByEventId(ticketRows);
+    final membersByEventId = _groupRowsByEventId(memberRows);
+    final scheduleByEventId = _groupRowsByEventId(scheduleRows);
+    final expensesByEventId = _groupRowsByEventId(expenseRows);
+    final gameModesByEventId = _groupRowsByEventId(gameModeRows);
+
+    final bookingRowIds = bookingRows
+        .map((b) => b['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
+
+    var paymentRows = <Map<String, dynamic>>[];
+    try {
+      paymentRows = await _fetchRowsByEventIds(db, _tablePayments, eventIds);
+    } catch (_) {
+      paymentRows = <Map<String, dynamic>>[];
+    }
+
+    if (bookingRowIds.isNotEmpty) {
+      try {
+        final fallbackRows =
+            await _fetchPaymentsByBookingRowIds(db, bookingRowIds);
+        final seen = <String>{
+          for (final row in paymentRows)
+            '${row['id']?.toString() ?? ''}|${row['payment_id']?.toString() ?? ''}|${row['booking_row_id']?.toString() ?? ''}'
+        };
+        for (final row in fallbackRows) {
+          final key =
+              '${row['id']?.toString() ?? ''}|${row['payment_id']?.toString() ?? ''}|${row['booking_row_id']?.toString() ?? ''}';
+          if (seen.contains(key)) continue;
+          seen.add(key);
+          paymentRows.add(row);
+        }
+      } catch (_) {
+        // Optional mirror table can be missing or incomplete; keep pull resilient.
+      }
+    }
+
+    final paymentsByBookingRowId = <String, List<PaymentRecord>>{};
+    final paymentsByBookingId = <String, List<PaymentRecord>>{};
+    for (final paymentRow in paymentRows) {
+      final paymentId = paymentRow['payment_id']?.toString() ??
+          paymentRow['id']?.toString() ??
+          '';
+      if (paymentId.trim().isEmpty) continue;
+      final payment = PaymentRecord(
+        id: paymentId,
+        updatedAt: paymentRow['updated_at']?.toString() ?? '',
+        amount: paymentRow['amount']?.toString() ?? '0',
+        method: paymentRow['method']?.toString() ?? '',
+        note: paymentRow['note']?.toString() ?? '',
+        date: paymentRow['date']?.toString() ?? '',
+      );
+
+      final bookingRowId = paymentRow['booking_row_id']?.toString() ?? '';
+      if (bookingRowId.isNotEmpty) {
+        paymentsByBookingRowId
+            .putIfAbsent(bookingRowId, () => <PaymentRecord>[])
+            .add(payment);
+      }
+
+      final bookingId = paymentRow['booking_id']?.toString() ?? '';
+      if (bookingId.isNotEmpty) {
+        paymentsByBookingId
+            .putIfAbsent(bookingId, () => <PaymentRecord>[])
+            .add(payment);
+      }
+    }
+
     final events = <EventRecord>[];
 
     for (final row in eventRows) {
       final eventId = row['id'] as String;
 
-      final List<Map<String, dynamic>> bookingRows =
-          List<Map<String, dynamic>>.from(
-        await db.from(_tableBookings).select().eq('event_id', eventId),
-      );
-      final List<Map<String, dynamic>> ticketRows =
-          List<Map<String, dynamic>>.from(
-        await db.from(_tableTickets).select().eq('event_id', eventId),
-      );
-      final List<Map<String, dynamic>> memberRows =
-          List<Map<String, dynamic>>.from(
-        await db.from(_tableMembers).select().eq('event_id', eventId),
-      );
-      final List<Map<String, dynamic>> scheduleRows =
-          List<Map<String, dynamic>>.from(
-        await db.from(_tableSchedule).select().eq('event_id', eventId),
-      );
-      final List<Map<String, dynamic>> expenseRows =
-          List<Map<String, dynamic>>.from(
-        await db.from(_tableExpenses).select().eq('event_id', eventId),
-      );
-      final List<Map<String, dynamic>> gameModeRows =
-          List<Map<String, dynamic>>.from(
-        await db.from(_tableGameModes).select().eq('event_id', eventId),
-      );
+      final eventBookingRows =
+          bookingsByEventId[eventId] ?? const <Map<String, dynamic>>[];
+      final eventTicketRows =
+          ticketsByEventId[eventId] ?? const <Map<String, dynamic>>[];
+      final eventMemberRows =
+          membersByEventId[eventId] ?? const <Map<String, dynamic>>[];
+      final eventScheduleRows =
+          scheduleByEventId[eventId] ?? const <Map<String, dynamic>>[];
+      final eventExpenseRows =
+          expensesByEventId[eventId] ?? const <Map<String, dynamic>>[];
+      final eventGameModeRows =
+          gameModesByEventId[eventId] ?? const <Map<String, dynamic>>[];
 
-      final gameModes = gameModeRows.isNotEmpty
-          ? gameModeRows
+      final gameModes = eventGameModeRows.isNotEmpty
+          ? eventGameModeRows
               .map(
                 (g) => GameModeRecord.fromJson(
                   <String, dynamic>{
@@ -1143,11 +1329,24 @@ class SupabaseService {
           )
           .toList();
 
-      final bookings = bookingRows.map((b) {
+      final bookings = eventBookingRows.map((b) {
+        final bookingRowId = b['id'] as String? ?? '';
+        final bookingId = b['booking_id'] as String? ?? '';
+        final paymentsFromJson = _safeJsonToList(b['payments'])
+            .map(
+              (p) => PaymentRecord.fromJson(
+                Map<String, dynamic>.from(p as Map),
+              ),
+            )
+            .toList();
+        final paymentsFromMirror = <PaymentRecord>[
+          ...?paymentsByBookingRowId[bookingRowId],
+          ...?paymentsByBookingId[bookingId],
+        ];
         return BookingRecord(
-          id: b['id'] as String? ?? '',
+          id: bookingRowId,
           updatedAt: b['updated_at']?.toString() ?? '',
-          bookingId: b['booking_id'] as String? ?? '',
+          bookingId: bookingId,
           bookingDate: b['booking_date'] as String? ?? '',
           firstName: b['first_name'] as String? ?? '',
           lastName: b['last_name'] as String? ?? '',
@@ -1178,19 +1377,11 @@ class SupabaseService {
                 ),
               )
               .toList(),
-          payments: _dedupePayments(
-            _safeJsonToList(b['payments'])
-                .map(
-                  (p) => PaymentRecord.fromJson(
-                    Map<String, dynamic>.from(p as Map),
-                  ),
-                )
-                .toList(),
-          ),
+          payments: _mergePaymentsForPull(paymentsFromJson, paymentsFromMirror),
         );
       }).toList();
 
-      final tickets = ticketRows
+      final tickets = eventTicketRows
           .map(
             (t) => TicketRecord(
               id: t['id'] as String? ?? '',
@@ -1205,7 +1396,7 @@ class SupabaseService {
           )
           .toList();
 
-      final members = memberRows
+      final members = eventMemberRows
           .map(
             (m) => MemberRecord(
               id: m['id'] as String? ?? '',
@@ -1223,7 +1414,7 @@ class SupabaseService {
           )
           .toList();
 
-      final schedule = scheduleRows
+      final schedule = eventScheduleRows
           .map(
             (s) => ScheduleRecord(
               id: s['id'] as String? ?? '',
@@ -1237,7 +1428,7 @@ class SupabaseService {
           )
           .toList();
 
-      final expenses = expenseRows
+      final expenses = eventExpenseRows
           .map(
             (e) => ExpenseRecord(
               id: e['id'] as String? ?? '',
@@ -1470,6 +1661,7 @@ class SupabaseService {
 
     return BookingRecord(
       id: local.id,
+      updatedAt: _preferString(local.updatedAt, cloud.updatedAt),
       bookingId: _preferString(local.bookingId, cloud.bookingId),
       bookingDate: _preferString(local.bookingDate, cloud.bookingDate),
       firstName: _preferString(local.firstName, cloud.firstName),
@@ -1496,17 +1688,12 @@ class SupabaseService {
       ticketIds: _mergeUniqueStrings(local.ticketIds, cloud.ticketIds),
       sales: _mergeById(local.sales, cloud.sales, (x) => x.id, _mergeSale),
       payments: _dedupePayments(
-        local.payments
-            .map(
-              (p) => PaymentRecord(
-                id: p.id,
-                amount: p.amount,
-                method: p.method,
-                note: p.note,
-                date: p.date,
-              ),
-            )
-            .toList(),
+        _mergeById(
+          local.payments,
+          cloud.payments,
+          (x) => x.id,
+          _mergePayment,
+        ),
       ),
     );
   }
@@ -1514,6 +1701,7 @@ class SupabaseService {
   static TicketRecord _mergeTicket(TicketRecord local, TicketRecord cloud) {
     return TicketRecord(
       id: local.id,
+      updatedAt: _preferString(local.updatedAt, cloud.updatedAt),
       bookingId: _preferString(local.bookingId, cloud.bookingId),
       bookingName: _preferString(local.bookingName, cloud.bookingName),
       ticketName: _preferString(local.ticketName, cloud.ticketName),
@@ -1546,6 +1734,7 @@ class SupabaseService {
 
     return MemberRecord(
       id: local.id,
+      updatedAt: _preferString(local.updatedAt, cloud.updatedAt),
       firstName: _preferString(local.firstName, cloud.firstName),
       lastName: _preferString(local.lastName, cloud.lastName),
       username: _preferString(local.username, cloud.username),
@@ -1562,6 +1751,7 @@ class SupabaseService {
       ScheduleRecord local, ScheduleRecord cloud) {
     return ScheduleRecord(
       id: local.id,
+      updatedAt: _preferString(local.updatedAt, cloud.updatedAt),
       time: _preferString(local.time, cloud.time),
       activity: _preferString(local.activity, cloud.activity),
       location: _preferString(local.location, cloud.location),
@@ -1582,6 +1772,7 @@ class SupabaseService {
 
     return ExpenseRecord(
       id: local.id,
+      updatedAt: _preferString(local.updatedAt, cloud.updatedAt),
       item: _preferString(local.item, cloud.item),
       amount: amount,
       note: _preferString(local.note, cloud.note),
@@ -1602,6 +1793,7 @@ class SupabaseService {
   static PaymentRecord _mergePayment(PaymentRecord local, PaymentRecord cloud) {
     return PaymentRecord(
       id: local.id,
+      updatedAt: _preferString(local.updatedAt, cloud.updatedAt),
       amount: _preferString(local.amount, cloud.amount),
       method: _preferString(local.method, cloud.method),
       note: _preferString(local.note, cloud.note),
@@ -1634,13 +1826,20 @@ class SupabaseService {
     T Function(T localValue, T cloudValue) merge,
   ) {
     final mergedById = <String, T>{};
+    var anonymousIndex = 0;
 
     for (final value in cloud) {
-      mergedById[idOf(value)] = value;
+      final id = idOf(value).trim();
+      final key = id.isEmpty ? '__anon_cloud_${anonymousIndex++}' : id;
+      mergedById[key] = value;
     }
 
     for (final value in local) {
-      final id = idOf(value);
+      final id = idOf(value).trim();
+      if (id.isEmpty) {
+        mergedById['__anon_local_${anonymousIndex++}'] = value;
+        continue;
+      }
       final existing = mergedById[id];
       if (existing == null) {
         mergedById[id] = value;

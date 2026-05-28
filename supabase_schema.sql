@@ -129,6 +129,26 @@ create table if not exists payments (
   updated_at     timestamptz not null default now()
 );
 
+-- Ensure older existing payments tables are upgraded to current shape.
+alter table if exists payments
+  add column if not exists event_id text not null default '';
+alter table if exists payments
+  add column if not exists booking_row_id text not null default '';
+alter table if exists payments
+  add column if not exists booking_id text not null default '';
+alter table if exists payments
+  add column if not exists payment_id text not null default '';
+alter table if exists payments
+  add column if not exists amount text not null default '0';
+alter table if exists payments
+  add column if not exists method text not null default '';
+alter table if exists payments
+  add column if not exists note text not null default '';
+alter table if exists payments
+  add column if not exists date text not null default '';
+alter table if exists payments
+  add column if not exists updated_at timestamptz not null default now();
+
 -- ── sync_log ────────────────────────────────────────────────────────────────
 create table if not exists sync_log (
   id              bigserial primary key,
@@ -160,6 +180,45 @@ create index if not exists idx_schedule_event_id on schedule(event_id);
 create index if not exists idx_expenses_event_id on expenses(event_id);
 create index if not exists idx_game_modes_event_id on game_modes(event_id);
 create index if not exists idx_sync_log_created_at on sync_log(created_at desc);
+create index if not exists idx_payments_booking_row_id on payments(booking_row_id);
+create index if not exists idx_payments_booking_id on payments(booking_id);
+
+do $$
+declare
+  constraint_name text;
+  index_name text;
+begin
+  -- booking_id can legitimately repeat across imported attendee rows.
+  -- Drop accidental uniqueness constraints/indexes that cause 23505 on sync.
+  for constraint_name in
+    select tc.constraint_name
+    from information_schema.table_constraints tc
+    join information_schema.constraint_column_usage ccu
+      on ccu.constraint_schema = tc.constraint_schema
+     and ccu.constraint_name = tc.constraint_name
+    where tc.table_schema = 'public'
+      and tc.table_name = 'bookings'
+      and tc.constraint_type = 'UNIQUE'
+      and ccu.column_name = 'booking_id'
+  loop
+    execute format(
+      'alter table public.bookings drop constraint if exists %I',
+      constraint_name
+    );
+  end loop;
+
+  for index_name in
+    select indexname
+    from pg_indexes
+    where schemaname = 'public'
+      and tablename = 'bookings'
+      and indexdef ilike '%unique%'
+      and indexdef ilike '%(booking_id)%'
+  loop
+    execute format('drop index if exists public.%I', index_name);
+  end loop;
+end
+$$;
 
 do $$
 begin
