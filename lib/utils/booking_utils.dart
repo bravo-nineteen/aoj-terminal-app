@@ -80,7 +80,7 @@ class BookingUtils {
       if (!hasTransactionId) continue;
 
       final method = booking.paymentMethod.trim().toLowerCase();
-      if (method.isEmpty || method == 'imported') {
+      if (method != 'credit card') {
         booking.paymentMethod = 'Credit Card';
         changed = true;
       }
@@ -89,10 +89,8 @@ class BookingUtils {
         final paymentMethod = payment.method.trim().toLowerCase();
         if (paymentMethod == 'refund') continue;
         if (paymentMethod == 'credit card') continue;
-        if (paymentMethod == 'imported' || paymentMethod.isEmpty) {
-          payment.method = 'Credit Card';
-          changed = true;
-        }
+        payment.method = 'Credit Card';
+        changed = true;
       }
     }
 
