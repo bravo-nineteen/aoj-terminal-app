@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/aoj_models.dart';
+import 'debug_logger.dart';
 import 'messages_service.dart';
 
 const String _kFallbackSupabaseUrl = 'https://uvixlrhcjojezhqmgnxk.supabase.co';
@@ -1469,6 +1470,7 @@ class SupabaseService {
     }
 
     final events = <EventRecord>[];
+    var synthesizedImportedPaymentCount = 0;
 
     for (final row in eventRows) {
       final eventId = row['id']?.toString() ?? '';
@@ -1519,6 +1521,11 @@ class SupabaseService {
       final bookings = eventBookingRows.map((b) {
         final bookingRowId = b['id'] as String? ?? '';
         final bookingId = b['booking_id'] as String? ?? '';
+        final bookingUpdatedAt = b['updated_at']?.toString() ?? '';
+        final bookingDate = b['booking_date'] as String? ?? '';
+        final totalPaid = b['total_paid'] as String? ?? '0';
+        final transactionId = b['transaction_id'] as String? ?? '';
+        final paymentMethod = b['payment_method'] as String? ?? '';
         final paymentsFromJson = _safeJsonToMapList(b['payments'])
             .map(
               (p) => PaymentRecord.fromJson(p),
@@ -1528,20 +1535,37 @@ class SupabaseService {
           ...?paymentsByBookingRowId[bookingRowId],
           ...?paymentsByBookingId[bookingId],
         ];
+        final mergedPayments = _mergePaymentsForPull(
+          paymentsFromJson,
+          paymentsFromMirror,
+        );
+        final effectivePayments = _ensureImportedPaymentForPull(
+          payments: mergedPayments,
+          bookingRowId: bookingRowId,
+          bookingId: bookingId,
+          bookingDate: bookingDate,
+          bookingUpdatedAt: bookingUpdatedAt,
+          totalPaid: totalPaid,
+          paymentMethod: paymentMethod,
+          transactionId: transactionId,
+        );
+        if (mergedPayments.isEmpty && effectivePayments.isNotEmpty) {
+          synthesizedImportedPaymentCount++;
+        }
         return BookingRecord(
           id: bookingRowId,
-          updatedAt: b['updated_at']?.toString() ?? '',
+          updatedAt: bookingUpdatedAt,
           bookingId: bookingId,
-          bookingDate: b['booking_date'] as String? ?? '',
+          bookingDate: bookingDate,
           firstName: b['first_name'] as String? ?? '',
           lastName: b['last_name'] as String? ?? '',
           email: b['email'] as String? ?? '',
           phone: b['phone'] as String? ?? '',
           event: b['event'] as String? ?? '',
           total: b['total'] as String? ?? '0',
-          totalPaid: b['total_paid'] as String? ?? '0',
-          transactionId: b['transaction_id'] as String? ?? '',
-          paymentMethod: b['payment_method'] as String? ?? '',
+          totalPaid: totalPaid,
+          transactionId: transactionId,
+          paymentMethod: paymentMethod,
           paymentStatus: b['payment_status'] as String? ?? '',
           checkInStatus: b['check_in_status'] as String? ?? '',
           notes: b['notes'] as String? ?? '',
@@ -1560,7 +1584,7 @@ class SupabaseService {
                 (s) => SaleRecord.fromJson(s),
               )
               .toList(),
-          payments: _mergePaymentsForPull(paymentsFromJson, paymentsFromMirror),
+          payments: effectivePayments,
         );
       }).toList();
 
@@ -1651,6 +1675,12 @@ class SupabaseService {
           expenses: expenses,
           accountingNotes: accountingNotes,
         ),
+      );
+    }
+
+    if (synthesizedImportedPaymentCount > 0) {
+      DebugLogger.instance.info(
+        'Pull sync: synthesized $synthesizedImportedPaymentCount missing payment records from booking totals.',
       );
     }
 
@@ -2107,6 +2137,56 @@ class SupabaseService {
     }
 
     return deduped;
+  }
+
+  static List<PaymentRecord> _ensureImportedPaymentForPull({
+    required List<PaymentRecord> payments,
+    required String bookingRowId,
+    required String bookingId,
+    required String bookingDate,
+    required String bookingUpdatedAt,
+    required String totalPaid,
+    required String paymentMethod,
+    required String transactionId,
+  }) {
+    if (payments.isNotEmpty) return payments;
+
+    final paidAmount = _parseMoneyAmount(totalPaid);
+    if (paidAmount <= 0) return payments;
+
+    final resolvedMethod = transactionId.trim().isNotEmpty
+        ? 'Credit Card'
+        : (paymentMethod.trim().isEmpty ? 'Imported' : paymentMethod.trim());
+    final paymentIdBase = bookingRowId.trim().isNotEmpty
+        ? bookingRowId.trim()
+        : bookingId.trim();
+    final paymentDate = bookingDate.trim().isNotEmpty
+        ? bookingDate
+        : bookingUpdatedAt;
+
+    return <PaymentRecord>[
+      PaymentRecord(
+        id: 'imported_pull_$paymentIdBase',
+        updatedAt: bookingUpdatedAt,
+        amount: totalPaid.trim().isEmpty
+            ? paidAmount.toStringAsFixed(2)
+            : totalPaid.trim(),
+        method: resolvedMethod,
+        note: 'Imported from booking record',
+        date: paymentDate,
+      ),
+    ];
+  }
+
+  static double _parseMoneyAmount(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return 0;
+
+    final direct = double.tryParse(trimmed);
+    if (direct != null) return direct;
+
+    final normalized = trimmed.replaceAll(RegExp(r'[^\\d.\\-]'), '');
+    return double.tryParse(normalized) ?? 0;
   }
 
   static List<String> _mergeUniqueStrings(

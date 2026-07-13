@@ -131,6 +131,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
   int nextZ = 10;
   int? selectedBookingIndex;
   int? selectedMemberIndex;
+  final Set<String> _selectedBookingGroupKeys = <String>{};
   String bookingSearch = '';
   String bookingPaymentFilter = 'All Payments';
   String bookingTicketTypeFilter = 'All Ticket Types';
@@ -766,6 +767,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     setState(() {
       appState.activeEventId = eventId;
       selectedBookingIndex = 0;
+      _selectedBookingGroupKeys.clear();
       selectedMemberIndex = activeEvent?.members.isNotEmpty == true ? 0 : null;
       systemStatus = 'ACTIVE EVENT CHANGED';
     });
@@ -855,6 +857,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
 
     setState(() {
       selectedBookingIndex = event.bookings.isNotEmpty ? 0 : null;
+      _selectedBookingGroupKeys.clear();
       selectedMemberIndex = event.members.isNotEmpty ? 0 : null;
       systemStatus = 'WORKBOOK IMPORTED: ${result.totalImported} ITEMS';
     });
@@ -871,6 +874,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     final count = event.bookings.length;
     setState(() {
       selectedBookingIndex = 0;
+      _selectedBookingGroupKeys.clear();
       systemStatus = 'BOOKINGS IMPORTED: $count';
     });
     if (mounted) _showSyncMessage('Bookings imported: $count rows.');
@@ -1667,6 +1671,22 @@ class _AOJDesktopState extends State<AOJDesktop> {
     }).toList();
   }
 
+  List<BookingGroup> _groupsForKeys(Set<String> keys) {
+    final event = activeEvent;
+    if (event == null || keys.isEmpty) return const <BookingGroup>[];
+    final groups = _groupedBookingsForEventCached(event);
+    return groups.where((g) => keys.contains(g.key)).toList();
+  }
+
+  Future<void> _setBookingSelection(Set<String> keys) async {
+    if (!mounted) return;
+    setState(() {
+      _selectedBookingGroupKeys
+        ..clear()
+        ..addAll(keys);
+    });
+  }
+
   BookingGroup? _findBookingGroupByPrimaryId(String primaryId) {
     final event = activeEvent;
     if (event == null) return null;
@@ -1771,6 +1791,132 @@ class _AOJDesktopState extends State<AOJDesktop> {
     });
     _showSyncMessage('$count bookings checked in.');
     await _saveLocalState();
+  }
+
+  Future<void> _bulkCheckInBookings(Set<String> groupKeys) async {
+    final event = activeEvent;
+    if (event == null || groupKeys.isEmpty) return;
+    final groups = _groupsForKeys(groupKeys);
+    if (groups.isEmpty) return;
+
+    var count = 0;
+    for (final group in groups) {
+      for (final row in group.rows) {
+        if (row.checkInStatus == 'Cancelled' || row.checkInStatus == 'No Show') {
+          continue;
+        }
+        if (row.checkInStatus != 'Checked In') {
+          row.checkInStatus = 'Checked In';
+          count++;
+        }
+      }
+    }
+
+    setState(() {
+      _selectedBookingGroupKeys.removeWhere(groupKeys.contains);
+      systemStatus = 'BULK CHECK-IN COMPLETE ($count)';
+    });
+    _showSyncMessage('$count bookings checked in (bulk).');
+    await _saveLocalState();
+  }
+
+  Future<void> _bulkDeleteBookings(Set<String> groupKeys) async {
+    final event = activeEvent;
+    if (event == null || groupKeys.isEmpty) return;
+    final groups = _groupsForKeys(groupKeys);
+    if (groups.isEmpty) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete Selected Bookings'),
+          content: Text(
+            'Delete ${groups.length} selected booking groups? This also removes linked tickets.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    final bookingIds = <String>{};
+    final ticketIds = <String>{};
+    for (final group in groups) {
+      bookingIds.addAll(group.rows.map((r) => r.id));
+      ticketIds.addAll(group.tickets.map((t) => t.id));
+    }
+
+    setState(() {
+      event.bookings.removeWhere((b) => bookingIds.contains(b.id));
+      event.tickets.removeWhere((t) => ticketIds.contains(t.id));
+      _selectedBookingGroupKeys.removeWhere(groupKeys.contains);
+      selectedBookingIndex = 0;
+      systemStatus = 'BOOKINGS DELETED (${groups.length})';
+    });
+
+    await _saveLocalState();
+  }
+
+  Future<void> _syncPullSelectedEvents(List<String> eventIds) async {
+    final normalizedIds = eventIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (normalizedIds.isEmpty) return;
+
+    await _flushPendingLocalSave(updateStatus: false);
+    setState(() => syncStatus = 'SYNCING SELECTED EVENTS...');
+    _showSyncMessage(
+      'Sync started: downloading ${normalizedIds.length} selected events from Supabase...',
+    );
+
+    try {
+      final merged = await SupabaseService.syncMergeAppState(
+        appState,
+        eventIds: normalizedIds,
+      ).timeout(const Duration(seconds: 30));
+      _normalizePaymentDataInState(merged);
+      await AppStateService.save(merged);
+
+      if (mounted) {
+        setState(() {
+          appState = merged;
+          selectedBookingIndex = 0;
+          _selectedBookingGroupKeys.clear();
+          selectedMemberIndex =
+              activeEvent?.members.isNotEmpty == true ? 0 : null;
+          syncStatus = 'SYNC OK';
+          systemStatus = 'SELECTED EVENTS DOWNLOADED';
+        });
+      }
+
+      final summary = SupabaseService.lastSyncSummary;
+      _showSyncMessage(
+        summary.isEmpty
+            ? 'Selected event download complete.'
+            : 'Selected event download complete. $summary',
+      );
+    } catch (e) {
+      final errorText = _formatSyncError(e);
+      if (mounted) {
+        setState(() {
+          syncStatus = 'SYNC FAILED: $errorText';
+          systemStatus = 'SYNC ERROR';
+        });
+      }
+      _showSyncMessage('Selected event download failed: $errorText');
+    }
   }
 
   Future<void> _openBookingEditorWindow(BookingGroup group) async {
@@ -2009,6 +2155,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
     setState(() {
       event.bookings.removeWhere((b) => bookingIds.contains(b.id));
       event.tickets.removeWhere((t) => ticketIds.contains(t.id));
+      _selectedBookingGroupKeys.remove(group.key);
       selectedBookingIndex = 0;
       systemStatus = 'BOOKING DELETED';
     });
@@ -2108,6 +2255,7 @@ class _AOJDesktopState extends State<AOJDesktop> {
       appState.activeEventId =
           appState.events.isNotEmpty ? appState.events.first.id : null;
       selectedBookingIndex = 0;
+      _selectedBookingGroupKeys.clear();
       selectedMemberIndex = activeEvent?.members.isNotEmpty == true ? 0 : null;
       systemStatus = 'EVENT DELETED';
     });

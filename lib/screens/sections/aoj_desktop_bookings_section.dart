@@ -24,18 +24,21 @@ extension _AojDesktopBookingsSection on _AOJDesktopState {
         _refresh(() {
           bookingSearch = v;
           selectedBookingIndex = 0;
+          _selectedBookingGroupKeys.clear();
         });
       },
       onPaymentFilterChanged: (value) {
         _refresh(() {
           bookingPaymentFilter = value;
           selectedBookingIndex = 0;
+          _selectedBookingGroupKeys.clear();
         });
       },
       onTicketTypeFilterChanged: (value) {
         _refresh(() {
           bookingTicketTypeFilter = value;
           selectedBookingIndex = 0;
+          _selectedBookingGroupKeys.clear();
         });
       },
       onSelectBooking: (index) {
@@ -45,6 +48,10 @@ extension _AojDesktopBookingsSection on _AOJDesktopState {
       },
       onQuickSetCheckInStatus: _quickSetCheckInStatus,
       onCheckInAll: _checkInAllBookings,
+      selectedBookingGroupKeys: _selectedBookingGroupKeys,
+      onSelectionChanged: _setBookingSelection,
+      onBulkCheckInBookings: _bulkCheckInBookings,
+      onBulkDeleteBookings: _bulkDeleteBookings,
       onOpenBookingEditor: _openBookingEditorWindow,
       onAddManualBooking: _showAddManualBookingDialog,
       onAddPayment: _showAddPaymentDialog,

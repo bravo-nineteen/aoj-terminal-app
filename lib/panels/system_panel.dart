@@ -25,6 +25,7 @@ class SystemPanel extends StatefulWidget {
   final Future<void> Function() onImportFieldMap;
   final Future<void> Function() onSyncPush;
   final Future<void> Function() onSyncPull;
+  final Future<void> Function(List<String>) onSyncPullSelectedEvents;
   final Future<void> Function(bool, List<String>) onUpdateSyncScope;
   final SyncDiagnosticsRecord syncDiagnostics;
   final SchemaHealthRecord schemaHealth;
@@ -53,6 +54,7 @@ class SystemPanel extends StatefulWidget {
     required this.onImportFieldMap,
     required this.onSyncPush,
     required this.onSyncPull,
+    required this.onSyncPullSelectedEvents,
     required this.onUpdateSyncScope,
     required this.syncDiagnostics,
     required this.schemaHealth,
@@ -340,6 +342,119 @@ class _SystemPanelState extends State<SystemPanel> {
     );
   }
 
+  Future<void> _showEventDownloadDialog() async {
+    final selectedEventIds = <String>{};
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Download Selected Events'),
+              content: SizedBox(
+                width: 520,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Choose the local event IDs to sync from Supabase now.',
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton(
+                          onPressed: () {
+                            setDialogState(() {
+                              selectedEventIds
+                                ..clear()
+                                ..addAll(widget.appState.events.map((e) => e.id));
+                            });
+                          },
+                          child: const Text('SELECT ALL'),
+                        ),
+                        OutlinedButton(
+                          onPressed: widget.activeEvent == null
+                              ? null
+                              : () {
+                                  setDialogState(() {
+                                    selectedEventIds.add(widget.activeEvent!.id);
+                                  });
+                                },
+                          child: const Text('SELECT ACTIVE'),
+                        ),
+                        OutlinedButton(
+                          onPressed: () {
+                            setDialogState(selectedEventIds.clear);
+                          },
+                          child: const Text('CLEAR'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: widget.appState.events.map((event) {
+                          final checked = selectedEventIds.contains(event.id);
+                          final subtitle = [event.date.trim(), event.venue.trim()]
+                              .where((value) => value.isNotEmpty)
+                              .join('  •  ');
+                          return CheckboxListTile(
+                            dense: true,
+                            value: checked,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            title: Text(
+                              event.name.trim().isEmpty
+                                  ? event.id
+                                  : event.name.trim(),
+                            ),
+                            subtitle: subtitle.isEmpty ? null : Text(subtitle),
+                            onChanged: (value) {
+                              setDialogState(() {
+                                if (value == true) {
+                                  selectedEventIds.add(event.id);
+                                } else {
+                                  selectedEventIds.remove(event.id);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: selectedEventIds.isEmpty
+                      ? null
+                      : () async {
+                          await widget.onSyncPullSelectedEvents(
+                            selectedEventIds.toList()..sort(),
+                          );
+                          if (context.mounted) {
+                            Navigator.of(context).pop();
+                          }
+                        },
+                  child: const Text('Download'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasActiveEvent = widget.activeEvent != null;
@@ -431,6 +546,10 @@ class _SystemPanelState extends State<SystemPanel> {
               ElevatedButton(
                 onPressed: widget.onSyncPull,
                 child: const Text('DOWNLOAD FROM SERVER'),
+              ),
+              ElevatedButton(
+                onPressed: _showEventDownloadDialog,
+                child: const Text('EVENT SYNC'),
               ),
               OutlinedButton(
                 onPressed: _showSyncScopeDialog,
@@ -541,6 +660,10 @@ class _SystemPanelState extends State<SystemPanel> {
                             ActionLine(
                               label: 'Download from Server',
                               onTap: widget.onSyncPull,
+                            ),
+                            ActionLine(
+                              label: 'Event Sync (Choose Events)',
+                              onTap: _showEventDownloadDialog,
                             ),
                             InfoLine('Started', _compactTimestamp(widget.syncDiagnostics.startedAt)),
                             InfoLine('Completed', _compactTimestamp(widget.syncDiagnostics.completedAt)),
@@ -678,6 +801,10 @@ class _SystemPanelState extends State<SystemPanel> {
                               ActionLine(
                                 label: 'Download from Server',
                                 onTap: widget.onSyncPull,
+                              ),
+                              ActionLine(
+                                label: 'Event Sync (Choose Events)',
+                                onTap: _showEventDownloadDialog,
                               ),
                                 InfoLine('Started', _compactTimestamp(widget.syncDiagnostics.startedAt)),
                                 InfoLine('Completed', _compactTimestamp(widget.syncDiagnostics.completedAt)),

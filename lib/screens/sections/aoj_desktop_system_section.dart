@@ -21,6 +21,7 @@ extension _AojDesktopSystemSection on _AOJDesktopState {
       onImportFieldMap: _importFieldMap,
       onSyncPush: _syncPush,
       onSyncPull: _syncPull,
+      onSyncPullSelectedEvents: _syncPullSelectedEvents,
       onUpdateSyncScope: _updateSyncScope,
       syncDiagnostics: SupabaseService.syncDiagnostics,
       schemaHealth: SupabaseService.schemaHealth,

@@ -23,6 +23,10 @@ class BookingsPanel extends StatefulWidget {
   final ValueChanged<int> onSelectBooking;
   final Future<void> Function(BookingGroup, String) onQuickSetCheckInStatus;
   final Future<void> Function() onCheckInAll;
+  final Set<String> selectedBookingGroupKeys;
+  final Future<void> Function(Set<String>) onSelectionChanged;
+  final Future<void> Function(Set<String>) onBulkCheckInBookings;
+  final Future<void> Function(Set<String>) onBulkDeleteBookings;
   final Future<void> Function(BookingGroup) onOpenBookingEditor;
   final Future<void> Function() onAddManualBooking;
   final Future<void> Function(BookingGroup)? onAddPayment;
@@ -46,6 +50,10 @@ class BookingsPanel extends StatefulWidget {
     required this.onSelectBooking,
     required this.onQuickSetCheckInStatus,
     required this.onCheckInAll,
+    required this.selectedBookingGroupKeys,
+    required this.onSelectionChanged,
+    required this.onBulkCheckInBookings,
+    required this.onBulkDeleteBookings,
     required this.onOpenBookingEditor,
     required this.onAddManualBooking,
     this.onAddPayment,
@@ -235,6 +243,38 @@ class _BookingsPanelState extends State<BookingsPanel> {
     return options;
   }
 
+  Set<String> _visibleSelectedKeys() {
+    final visibleKeys = widget.groups.map((g) => g.key).toSet();
+    return widget.selectedBookingGroupKeys
+        .where(visibleKeys.contains)
+        .toSet();
+  }
+
+  Future<void> _toggleGroupSelection(String key, bool selected) async {
+    final next = Set<String>.from(widget.selectedBookingGroupKeys);
+    if (selected) {
+      next.add(key);
+    } else {
+      next.remove(key);
+    }
+    await widget.onSelectionChanged(next);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _selectAllVisibleGroups() async {
+    final next = Set<String>.from(widget.selectedBookingGroupKeys)
+      ..addAll(widget.groups.map((g) => g.key));
+    await widget.onSelectionChanged(next);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _clearVisibleSelection() async {
+    final next = Set<String>.from(widget.selectedBookingGroupKeys)
+      ..removeWhere(widget.groups.map((g) => g.key).toSet().contains);
+    await widget.onSelectionChanged(next);
+    if (mounted) setState(() {});
+  }
+
   Widget _buildStatsBar(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final groups = widget.groups;
@@ -345,6 +385,8 @@ class _BookingsPanelState extends State<BookingsPanel> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selectedVisibleKeys = _visibleSelectedKeys();
+    final selectedCount = selectedVisibleKeys.length;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Column(
@@ -525,6 +567,65 @@ class _BookingsPanelState extends State<BookingsPanel> {
                   ),
                 ),
               ),
+              OutlinedButton.icon(
+                onPressed:
+                    widget.event == null ? null : _selectAllVisibleGroups,
+                icon: const Icon(Icons.select_all_outlined, size: 16),
+                label: const Text('SELECT ALL'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 10,
+                  ),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: widget.event == null || selectedCount == 0
+                    ? null
+                    : _clearVisibleSelection,
+                icon: const Icon(Icons.deselect_outlined, size: 16),
+                label: const Text('CLEAR SELECTED'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 10,
+                  ),
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: widget.event == null || selectedCount == 0
+                    ? null
+                    : () async {
+                        await widget.onBulkCheckInBookings(selectedVisibleKeys);
+                        if (mounted) setState(() {});
+                      },
+                icon: const Icon(Icons.how_to_reg_outlined, size: 16),
+                label: Text('CHECK IN SELECTED ($selectedCount)'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 10,
+                  ),
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: widget.event == null || selectedCount == 0
+                    ? null
+                    : () async {
+                        await widget.onBulkDeleteBookings(selectedVisibleKeys);
+                        if (mounted) setState(() {});
+                      },
+                icon: const Icon(Icons.delete_outline, size: 16),
+                label: Text('DELETE SELECTED ($selectedCount)'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.withValues(alpha: 0.8),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 10,
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 6),
@@ -573,6 +674,8 @@ class _BookingsPanelState extends State<BookingsPanel> {
                           final balance = BookingUtils.balance(group, widget.event);
                           final hasOutstanding = balance > 0;
                           final lunchNames = _lunchNamesForGroup(group);
+                            final isSelected =
+                              widget.selectedBookingGroupKeys.contains(group.key);
 
                           if (_checkInMode) {
                             // ── Check-in mode: large card ──
@@ -595,6 +698,15 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                     horizontal: 14, vertical: 10),
                                 child: Row(
                                   children: [
+                                    Checkbox(
+                                      value: isSelected,
+                                      onChanged: (value) async {
+                                        await _toggleGroupSelection(
+                                          group.key,
+                                          value == true,
+                                        );
+                                      },
+                                    ),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
@@ -733,6 +845,15 @@ class _BookingsPanelState extends State<BookingsPanel> {
                                 ),
                                 child: Row(
                                   children: [
+                                    Checkbox(
+                                      value: isSelected,
+                                      onChanged: (value) async {
+                                        await _toggleGroupSelection(
+                                          group.key,
+                                          value == true,
+                                        );
+                                      },
+                                    ),
                                     Expanded(
                                       flex: 5,
                                       child: Column(
