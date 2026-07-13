@@ -25,10 +25,13 @@ class SystemPanel extends StatefulWidget {
   final Future<void> Function() onImportFieldMap;
   final Future<void> Function() onSyncPush;
   final Future<void> Function() onSyncPull;
+  final Future<void> Function(bool, List<String>) onUpdateSyncScope;
   final SyncDiagnosticsRecord syncDiagnostics;
   final SchemaHealthRecord schemaHealth;
   final List<MergeConflictRecord> recentConflicts;
   final Future<void> Function() onRefreshSchemaHealth;
+  final bool syncOnlySelectedEvents;
+  final List<String> syncedEventIds;
 
   const SystemPanel({
     super.key,
@@ -50,10 +53,13 @@ class SystemPanel extends StatefulWidget {
     required this.onImportFieldMap,
     required this.onSyncPush,
     required this.onSyncPull,
+    required this.onUpdateSyncScope,
     required this.syncDiagnostics,
     required this.schemaHealth,
     required this.recentConflicts,
     required this.onRefreshSchemaHealth,
+    required this.syncOnlySelectedEvents,
+    required this.syncedEventIds,
   });
 
   @override
@@ -199,6 +205,141 @@ class _SystemPanelState extends State<SystemPanel> {
     );
   }
 
+  String _syncScopeSummary() {
+    if (!widget.syncOnlySelectedEvents) {
+      return 'All events';
+    }
+    final selectedCount = widget.syncedEventIds
+        .where((id) => id.trim().isNotEmpty)
+        .toSet()
+        .length;
+    if (selectedCount == 0) {
+      return 'Selected events only (none selected)';
+    }
+    return 'Selected events only ($selectedCount selected)';
+  }
+
+  Future<void> _showSyncScopeDialog() async {
+    var syncOnlySelectedEvents = widget.syncOnlySelectedEvents;
+    final selectedEventIds = widget.syncedEventIds.toSet();
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Sync Scope'),
+              content: SizedBox(
+                width: 520,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SwitchListTile(
+                      value: syncOnlySelectedEvents,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Only sync selected events'),
+                      subtitle: const Text(
+                        'Unselected events stay local and are not pulled from or pushed to Supabase.',
+                      ),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          syncOnlySelectedEvents = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton(
+                          onPressed: () {
+                            setDialogState(() {
+                              selectedEventIds
+                                ..clear()
+                                ..addAll(widget.appState.events.map((e) => e.id));
+                            });
+                          },
+                          child: const Text('SELECT ALL'),
+                        ),
+                        OutlinedButton(
+                          onPressed: widget.activeEvent == null
+                              ? null
+                              : () {
+                                  setDialogState(() {
+                                    selectedEventIds.add(widget.activeEvent!.id);
+                                  });
+                                },
+                          child: const Text('SELECT ACTIVE'),
+                        ),
+                        OutlinedButton(
+                          onPressed: () {
+                            setDialogState(selectedEventIds.clear);
+                          },
+                          child: const Text('CLEAR'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Flexible(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: widget.appState.events.map((event) {
+                          final checked = selectedEventIds.contains(event.id);
+                          final subtitle = [event.date.trim(), event.venue.trim()]
+                              .where((value) => value.isNotEmpty)
+                              .join('  •  ');
+                          return CheckboxListTile(
+                            dense: true,
+                            value: checked,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            title: Text(event.name.trim().isEmpty
+                                ? event.id
+                                : event.name.trim()),
+                            subtitle: subtitle.isEmpty ? null : Text(subtitle),
+                            onChanged: (value) {
+                              setDialogState(() {
+                                if (value == true) {
+                                  selectedEventIds.add(event.id);
+                                } else {
+                                  selectedEventIds.remove(event.id);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    await widget.onUpdateSyncScope(
+                      syncOnlySelectedEvents,
+                      selectedEventIds.toList()..sort(),
+                    );
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasActiveEvent = widget.activeEvent != null;
@@ -290,6 +431,20 @@ class _SystemPanelState extends State<SystemPanel> {
               ElevatedButton(
                 onPressed: widget.onSyncPull,
                 child: const Text('DOWNLOAD FROM SERVER'),
+              ),
+              OutlinedButton(
+                onPressed: _showSyncScopeDialog,
+                child: const Text('SYNC SCOPE'),
+              ),
+              Expanded(
+                child: Text(
+                  _syncScopeSummary(),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: widget.accent,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               const Spacer(),
             ],

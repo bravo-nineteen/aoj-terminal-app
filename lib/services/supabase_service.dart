@@ -20,16 +20,36 @@ class SupabaseService {
   static const String _kExpectedSchemaVersion = '2026-04-24';
 
   static const String _tableAppConfig = 'app_config';
-  static const String _tableEvents = 'events';
-  static const String _tableBookings = 'bookings';
   static const String _tablePayments = 'payments';
-  static const String _tableTickets = 'tickets';
   static const String _tableMembers = 'members';
   static const String _tableSchedule = 'schedule';
   static const String _tableExpenses = 'expenses';
   static const String _tableGameModes = 'game_modes';
   static const String _tableDeletedRecords = 'deleted_records';
   static const String _tableSyncLog = 'sync_log';
+  static const List<String> _eventTableCandidates = <String>[
+    'events_rows',
+    'events',
+  ];
+  static const List<String> _bookingTableCandidates = <String>[
+    'bookings_rows',
+    'booking_rows',
+    'bookings',
+  ];
+  static const List<String> _ticketTableCandidates = <String>[
+    'tickets_rows',
+    'tickets',
+  ];
+  static String _tableEvents = _eventTableCandidates.first;
+  static String _tableBookings = _bookingTableCandidates.first;
+  static String _tableTickets = _ticketTableCandidates.first;
+  static final Map<String, bool> _tableAvailability = <String, bool>{};
+  static bool _tableMappingsReady = false;
+  static bool _hasAppConfigTable = false;
+  static bool _hasMembersTable = false;
+  static bool _hasScheduleTable = false;
+  static bool _hasExpensesTable = false;
+  static bool _hasGameModesTable = false;
 
   static SyncDiagnosticsRecord _syncDiagnostics = SyncDiagnosticsRecord.empty();
   static SchemaHealthRecord _schemaHealth =
@@ -49,7 +69,7 @@ class SupabaseService {
   static String get lastSyncSummary {
     if (_lastSyncTableStats.isEmpty) return '';
 
-    const orderedTables = <String>[
+    final orderedTables = <String>[
       _tableEvents,
       _tableBookings,
       _tablePayments,
@@ -209,6 +229,91 @@ class SupabaseService {
   }
 
   static SupabaseClient get _db => Supabase.instance.client;
+
+  static Set<String>? _normalizeSyncScope(Set<String>? eventIds) {
+    if (eventIds == null) return null;
+    final normalized = eventIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    return normalized;
+  }
+
+  static List<EventRecord> _filterEventsForScope(
+    List<EventRecord> events,
+    Set<String>? eventIds,
+  ) {
+    if (eventIds == null) return List<EventRecord>.from(events);
+    return events.where((event) => eventIds.contains(event.id)).toList();
+  }
+
+  static Future<bool> _tableExists(
+    String table, {
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && _tableAvailability.containsKey(table)) {
+      return _tableAvailability[table] ?? false;
+    }
+    try {
+      await _db.from(table).select().limit(1);
+      _tableAvailability[table] = true;
+      return true;
+    } on PostgrestException catch (e) {
+      if (e.code == 'PGRST205') {
+        _tableAvailability[table] = false;
+        return false;
+      }
+      if (e.code == '42501') {
+        _tableAvailability[table] = true;
+        return true;
+      }
+      _tableAvailability[table] = true;
+      return true;
+    } catch (_) {
+      _tableAvailability[table] = true;
+      return true;
+    }
+  }
+
+  static Future<String> _resolveTableName(
+    List<String> candidates, {
+    bool forceRefresh = false,
+  }) async {
+    for (final candidate in candidates) {
+      if (await _tableExists(candidate, forceRefresh: forceRefresh)) {
+        return candidate;
+      }
+    }
+    return candidates.first;
+  }
+
+  static Future<void> _ensureTableMappings({bool forceRefresh = false}) async {
+    if (_tableMappingsReady && !forceRefresh) return;
+
+    _tableEvents = await _resolveTableName(
+      _eventTableCandidates,
+      forceRefresh: forceRefresh,
+    );
+    _tableBookings = await _resolveTableName(
+      _bookingTableCandidates,
+      forceRefresh: forceRefresh,
+    );
+    _tableTickets = await _resolveTableName(
+      _ticketTableCandidates,
+      forceRefresh: forceRefresh,
+    );
+    _hasAppConfigTable =
+        await _tableExists(_tableAppConfig, forceRefresh: forceRefresh);
+    _hasMembersTable =
+        await _tableExists(_tableMembers, forceRefresh: forceRefresh);
+    _hasScheduleTable =
+        await _tableExists(_tableSchedule, forceRefresh: forceRefresh);
+    _hasExpensesTable =
+        await _tableExists(_tableExpenses, forceRefresh: forceRefresh);
+    _hasGameModesTable =
+        await _tableExists(_tableGameModes, forceRefresh: forceRefresh);
+    _tableMappingsReady = true;
+  }
 
   /// Safely convert a field that might be a JSON string or already a list.
   /// If the value is a string, decode it as JSON. Otherwise, treat it as a list.
@@ -441,6 +546,8 @@ class SupabaseService {
   }
 
   static Future<SchemaHealthRecord> checkSchemaHealth() async {
+    await _ensureTableMappings(forceRefresh: true);
+
     final issues = <String>[];
     String actualVersion = '';
 
@@ -460,14 +567,14 @@ class SupabaseService {
       }
     }
 
-    await checkTable(_tableAppConfig);
     await checkTable(_tableEvents);
     await checkTable(_tableBookings);
     await checkTable(_tableTickets);
-    await checkTable(_tableMembers);
-    await checkTable(_tableSchedule);
-    await checkTable(_tableExpenses);
-    await checkTable(_tableGameModes);
+    await checkTable(_tablePayments);
+    if (_hasMembersTable) await checkTable(_tableMembers);
+    if (_hasScheduleTable) await checkTable(_tableSchedule);
+    if (_hasExpensesTable) await checkTable(_tableExpenses);
+    if (_hasGameModesTable) await checkTable(_tableGameModes);
     // deleted_records and messages are optional — missing tables are noted but do not block sync
     try {
       await _db.from(_tableDeletedRecords).select().limit(1);
@@ -476,22 +583,24 @@ class SupabaseService {
       await _db.from('messages').select().limit(1);
     } catch (_) {}
 
-    try {
-      final row = await _db
-          .from(_tableAppConfig)
-          .select('value')
-          .eq('key', 'schema_version')
-          .maybeSingle();
-      actualVersion = (row?['value'] as String?) ?? '';
-      if (actualVersion.isEmpty) {
-        issues.add('Missing app_config.schema_version');
-      } else if (actualVersion != _kExpectedSchemaVersion) {
-        issues.add(
-          'Schema version mismatch: expected $_kExpectedSchemaVersion, got $actualVersion',
-        );
+    if (_hasAppConfigTable) {
+      await checkTable(_tableAppConfig);
+      try {
+        final row = await _db
+            .from(_tableAppConfig)
+            .select('value')
+            .eq('key', 'schema_version')
+            .maybeSingle();
+        actualVersion = (row?['value'] as String?) ?? '';
+        if (actualVersion.isNotEmpty &&
+            actualVersion != _kExpectedSchemaVersion) {
+          issues.add(
+            'Schema version mismatch: expected $_kExpectedSchemaVersion, got $actualVersion',
+          );
+        }
+      } catch (e) {
+        issues.add('Schema version check failed: $e');
       }
-    } catch (e) {
-      issues.add('Schema version check failed: $e');
     }
 
     _schemaHealth = SchemaHealthRecord(
@@ -511,12 +620,19 @@ class SupabaseService {
   ///
   /// Local state is authoritative for sync and remote rows missing locally are
   /// pruned to keep later syncs fully up to date.
-  static Future<void> pushAppState(AppStateData appState) async {
+  static Future<void> pushAppState(
+    AppStateData appState, {
+    Set<String>? eventIds,
+  }) async {
+    await _ensureTableMappings();
+
     final db = _db;
     _resetSyncSummaryCounters();
+    final syncScope = _normalizeSyncScope(eventIds);
+    final eventsToSync = _filterEventsForScope(appState.events, syncScope);
 
     // ── events ──────────────────────────────────────────────────────────────
-    final eventRows = appState.events
+    final eventRows = eventsToSync
         .map(
           (e) => <String, dynamic>{
             'id': e.id,
@@ -572,23 +688,25 @@ class SupabaseService {
       await db.from(_tableEvents).upsert(eventRowsToUpsert);
     }
     _recordSyncSummaryCount(_tableEvents, uploaded: eventRowsToUpsert.length);
-    await _pruneDeletedEvents(db, appState.events);
+    await _pruneDeletedEvents(db, eventsToSync, scopedEventIds: syncScope);
 
     // ── Save active event id ─────────────────────────────────────────────────
-    await db.from(_tableAppConfig).upsert(<String, dynamic>{
-      'key': 'active_event_id',
-      'value': appState.activeEventId ?? '',
-    });
+    if (_hasAppConfigTable && syncScope == null) {
+      await db.from(_tableAppConfig).upsert(<String, dynamic>{
+        'key': 'active_event_id',
+        'value': appState.activeEventId ?? '',
+      });
+    }
 
     // ── Per-event sub-tables ─────────────────────────────────────────────────
-    for (final event in appState.events) {
+    for (final event in eventsToSync) {
       await _pushBookings(db, event);
       await _pushPaymentsMirror(db, event);
       await _pushTickets(db, event);
-      await _pushMembers(db, event);
-      await _pushSchedule(db, event);
-      await _pushExpenses(db, event);
-      await _pushGameModes(db, event);
+      if (_hasMembersTable) await _pushMembers(db, event);
+      if (_hasScheduleTable) await _pushSchedule(db, event);
+      if (_hasExpensesTable) await _pushExpenses(db, event);
+      if (_hasGameModesTable) await _pushGameModes(db, event);
     }
   }
 
@@ -624,6 +742,9 @@ class SupabaseService {
   static Future<void> _pruneDeletedEvents(
     SupabaseClient db,
     List<EventRecord> localEvents,
+    {
+    Set<String>? scopedEventIds,
+    }
   ) async {
     // Never prune when local has no events — treat as "nothing to delete" not "delete all".
     if (localEvents.isEmpty) return;
@@ -633,9 +754,14 @@ class SupabaseService {
         .map((e) => _updatedAtMicros(e.updatedAt))
         .fold<int>(0, (maxTs, ts) => ts > maxTs ? ts : maxTs);
 
-    final existingRows = _coerceRowList(
-      await db.from(_tableEvents).select('id, updated_at'),
-    );
+    final existingRows = scopedEventIds == null
+        ? _coerceRowList(await db.from(_tableEvents).select('id, updated_at'))
+        : _coerceRowList(
+            await db
+                .from(_tableEvents)
+                .select('id, updated_at')
+                .inFilter('id', scopedEventIds.toList()),
+          );
     final existingRowsById = <String, Map<String, dynamic>>{};
     for (final row in existingRows) {
       final id = row['id']?.toString() ?? '';
@@ -1105,12 +1231,20 @@ class SupabaseService {
   }
 
   /// Pulls, merges, and pushes so each device converges to one merged state.
-  static Future<AppStateData> syncMergeAppState(AppStateData localState) async {
+  static Future<AppStateData> syncMergeAppState(
+    AppStateData localState, {
+    Set<String>? eventIds,
+  }) async {
+    await _ensureTableMappings();
+
+    final syncScope = _normalizeSyncScope(eventIds);
+    final scopedLocalEvents = _filterEventsForScope(localState.events, syncScope);
+
     _syncDiagnostics = SyncDiagnosticsRecord(
       operation: 'sync-merge',
       startedAt: DateTime.now().toUtc().toIso8601String(),
       completedAt: '',
-      localEvents: localState.events.length,
+      localEvents: scopedLocalEvents.length,
       cloudEvents: 0,
       mergedEvents: 0,
       conflicts: _recentMergeConflicts.length,
@@ -1128,16 +1262,22 @@ class SupabaseService {
 
       // If local state is empty, skip push to avoid wiping cloud data.
       // This handles fresh installs / cleared local storage (bootstrap from cloud).
-      if (localState.events.isNotEmpty) {
+      if (scopedLocalEvents.isNotEmpty) {
         // Pre-flight safety check: count total local bookings vs cloud bookings.
         // If local has far fewer bookings than cloud, local is likely partially loaded.
         // Abort the push to prevent data loss.
-        final cloudBookingCountRows = _coerceRowList(
-          await _db.from(_tableBookings).select('id'),
-        );
+        final cloudBookingCountRows = syncScope == null
+            ? _coerceRowList(await _db.from(_tableBookings).select('id'))
+            : await _fetchRowsByEventIds(
+                _db,
+                _tableBookings,
+                syncScope.toList(),
+              );
         final cloudBookingCount = cloudBookingCountRows.length;
-        final localBookingCount =
-            localState.events.fold<int>(0, (sum, e) => sum + e.bookings.length);
+        final localBookingCount = scopedLocalEvents.fold<int>(
+          0,
+          (sum, event) => sum + event.bookings.length,
+        );
         // Allow push only if local has at least 50% of cloud bookings, or cloud is empty.
         final tooFewLocal = cloudBookingCount > 0 &&
             localBookingCount < (cloudBookingCount * 0.5).ceil();
@@ -1149,7 +1289,9 @@ class SupabaseService {
           );
         }
         try {
-          await _withHostLookupRetry(() => pushAppState(localState));
+          await _withHostLookupRetry(
+            () => pushAppState(localState, eventIds: syncScope),
+          );
         } catch (e) {
           // Some deployed schemas still enforce unique booking_id.
           // In that case, skip push but continue pull so users can still download data.
@@ -1159,18 +1301,22 @@ class SupabaseService {
           pushSkippedDueToDuplicateBookingId = true;
         }
       }
-      final cloudState = await _withHostLookupRetry(() => pullAppState());
+      final cloudState = await _withHostLookupRetry(
+        () => pullAppState(eventIds: syncScope),
+      );
       final mergedState = pushSkippedDueToDuplicateBookingId
-          ? _mergeAppState(localState, cloudState)
-          : cloudState;
+          ? _mergeAppState(localState, cloudState, scopedEventIds: syncScope)
+          : _mergeScopedCloudState(localState, cloudState, syncScope);
 
       _syncDiagnostics = SyncDiagnosticsRecord(
         operation: 'sync-merge',
         startedAt: _syncDiagnostics.startedAt,
         completedAt: DateTime.now().toUtc().toIso8601String(),
-        localEvents: localState.events.length,
+        localEvents: scopedLocalEvents.length,
         cloudEvents: cloudState.events.length,
-        mergedEvents: mergedState.events.length,
+        mergedEvents: syncScope == null
+            ? mergedState.events.length
+            : _filterEventsForScope(mergedState.events, syncScope).length,
         conflicts: _recentMergeConflicts.length,
         lastError: '',
         lastErrorCode: '',
@@ -1182,7 +1328,7 @@ class SupabaseService {
         operation: 'sync-merge',
         startedAt: _syncDiagnostics.startedAt,
         completedAt: DateTime.now().toUtc().toIso8601String(),
-        localEvents: localState.events.length,
+        localEvents: scopedLocalEvents.length,
         cloudEvents: _syncDiagnostics.cloudEvents,
         mergedEvents: _syncDiagnostics.mergedEvents,
         conflicts: _recentMergeConflicts.length,
@@ -1197,39 +1343,56 @@ class SupabaseService {
   // ─── Pull ─────────────────────────────────────────────────────────────────
 
   /// Pulls the full app state from Supabase and returns an [AppStateData].
-  static Future<AppStateData> pullAppState() async {
+  static Future<AppStateData> pullAppState({Set<String>? eventIds}) async {
+    await _ensureTableMappings();
+
     final db = _db;
+    final syncScope = _normalizeSyncScope(eventIds);
+    if (syncScope != null && syncScope.isEmpty) {
+      return AppStateData(events: <EventRecord>[], activeEventId: null);
+    }
 
     // Active event id
-    final configRow = await db
-        .from(_tableAppConfig)
-        .select()
-        .eq('key', 'active_event_id')
-        .maybeSingle();
-    final rawActiveId = configRow?['value'] as String?;
+    String? rawActiveId;
+    if (_hasAppConfigTable && syncScope == null) {
+      final configRow = await db
+          .from(_tableAppConfig)
+          .select()
+          .eq('key', 'active_event_id')
+          .maybeSingle();
+      rawActiveId = configRow?['value'] as String?;
+    }
     final activeEventId =
         (rawActiveId == null || rawActiveId.isEmpty) ? null : rawActiveId;
 
     // Events
-    final List<Map<String, dynamic>> eventRows = _coerceRowList(
-      await db.from(_tableEvents).select(),
-    );
+    final List<Map<String, dynamic>> eventRows = syncScope == null
+        ? _coerceRowList(await db.from(_tableEvents).select())
+        : _coerceRowList(
+            await db.from(_tableEvents).select().inFilter('id', syncScope.toList()),
+          );
 
-    final eventIds = eventRows
+    final fetchedEventIds = eventRows
         .map((row) => row['id']?.toString() ?? '')
         .where((id) => id.isNotEmpty)
         .toList();
 
     final bookingRows =
-        await _fetchRowsByEventIds(db, _tableBookings, eventIds);
-    final ticketRows = await _fetchRowsByEventIds(db, _tableTickets, eventIds);
-    final memberRows = await _fetchRowsByEventIds(db, _tableMembers, eventIds);
-    final scheduleRows =
-        await _fetchRowsByEventIds(db, _tableSchedule, eventIds);
-    final expenseRows =
-        await _fetchRowsByEventIds(db, _tableExpenses, eventIds);
-    final gameModeRows =
-        await _fetchRowsByEventIds(db, _tableGameModes, eventIds);
+        await _fetchRowsByEventIds(db, _tableBookings, fetchedEventIds);
+    final ticketRows =
+        await _fetchRowsByEventIds(db, _tableTickets, fetchedEventIds);
+    final memberRows = _hasMembersTable
+        ? await _fetchRowsByEventIds(db, _tableMembers, fetchedEventIds)
+        : <Map<String, dynamic>>[];
+    final scheduleRows = _hasScheduleTable
+        ? await _fetchRowsByEventIds(db, _tableSchedule, fetchedEventIds)
+        : <Map<String, dynamic>>[];
+    final expenseRows = _hasExpensesTable
+        ? await _fetchRowsByEventIds(db, _tableExpenses, fetchedEventIds)
+        : <Map<String, dynamic>>[];
+    final gameModeRows = _hasGameModesTable
+        ? await _fetchRowsByEventIds(db, _tableGameModes, fetchedEventIds)
+        : <Map<String, dynamic>>[];
 
     final bookingsByEventId = _groupRowsByEventId(bookingRows);
     final ticketsByEventId = _groupRowsByEventId(ticketRows);
@@ -1245,7 +1408,11 @@ class SupabaseService {
 
     var paymentRows = <Map<String, dynamic>>[];
     try {
-      paymentRows = await _fetchRowsByEventIds(db, _tablePayments, eventIds);
+      paymentRows = await _fetchRowsByEventIds(
+        db,
+        _tablePayments,
+        fetchedEventIds,
+      );
     } catch (_) {
       paymentRows = <Map<String, dynamic>>[];
     }
@@ -1487,20 +1654,30 @@ class SupabaseService {
       );
     }
 
-    return AppStateData(events: events, activeEventId: activeEventId);
+    return AppStateData(
+      events: events,
+      activeEventId: activeEventId,
+    );
   }
 
   static AppStateData _mergeAppState(
     AppStateData local,
     AppStateData cloud,
+    {
+    Set<String>? scopedEventIds,
+    }
   ) {
+    final syncScope = _normalizeSyncScope(scopedEventIds);
+    final baseLocalEvents = syncScope == null
+        ? local.events
+        : _filterEventsForScope(local.events, syncScope);
     final mergedEventsById = <String, EventRecord>{};
 
     for (final event in cloud.events) {
       mergedEventsById[event.id] = event;
     }
 
-    for (final localEvent in local.events) {
+    for (final localEvent in baseLocalEvents) {
       final cloudEvent = mergedEventsById[localEvent.id];
       if (cloudEvent == null) {
         mergedEventsById[localEvent.id] = localEvent;
@@ -1511,11 +1688,49 @@ class SupabaseService {
     }
 
     final mergedEvents = mergedEventsById.values.toList();
+    return _composeMergedState(local, cloud, mergedEvents, syncScope);
+  }
+
+  static AppStateData _mergeScopedCloudState(
+    AppStateData local,
+    AppStateData cloud,
+    Set<String>? scopedEventIds,
+  ) {
+    final syncScope = _normalizeSyncScope(scopedEventIds);
+    if (syncScope == null) {
+      return AppStateData(
+        events: cloud.events,
+        activeEventId: cloud.activeEventId,
+        syncOnlySelectedEvents: local.syncOnlySelectedEvents,
+        syncedEventIds: List<String>.from(local.syncedEventIds),
+      );
+    }
+    return _composeMergedState(local, cloud, cloud.events, syncScope);
+  }
+
+  static AppStateData _composeMergedState(
+    AppStateData local,
+    AppStateData cloud,
+    List<EventRecord> scopedMergedEvents,
+    Set<String>? scopedEventIds,
+  ) {
+    final syncScope = _normalizeSyncScope(scopedEventIds);
+    final preservedLocalEvents = syncScope == null
+        ? <EventRecord>[]
+        : local.events
+            .where((event) => !syncScope.contains(event.id))
+            .toList();
+    final mergedEvents = <EventRecord>[
+      ...preservedLocalEvents,
+      ...scopedMergedEvents,
+    ];
     final activeEventId = _resolveActiveEventId(local, cloud, mergedEvents);
 
     return AppStateData(
       events: mergedEvents,
       activeEventId: activeEventId,
+      syncOnlySelectedEvents: local.syncOnlySelectedEvents,
+      syncedEventIds: List<String>.from(local.syncedEventIds),
     );
   }
 

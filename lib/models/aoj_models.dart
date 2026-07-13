@@ -49,15 +49,21 @@ class DesktopWindowData {
 class AppStateData {
   List<EventRecord> events;
   String? activeEventId;
+  bool syncOnlySelectedEvents;
+  List<String> syncedEventIds;
 
   AppStateData({
     required this.events,
     required this.activeEventId,
-  });
+    this.syncOnlySelectedEvents = false,
+    List<String>? syncedEventIds,
+  }) : syncedEventIds = syncedEventIds ?? <String>[];
 
   Map<String, dynamic> toJson() => {
         'events': events.map((e) => e.toJson()).toList(),
         'activeEventId': activeEventId,
+        'syncOnlySelectedEvents': syncOnlySelectedEvents,
+        'syncedEventIds': syncedEventIds,
       };
 
   factory AppStateData.fromJson(Map<String, dynamic> json) {
@@ -66,6 +72,11 @@ class AppStateData {
           .map((e) => EventRecord.fromJson(Map<String, dynamic>.from(e)))
           .toList(),
       activeEventId: json['activeEventId']?.toString(),
+      syncOnlySelectedEvents: json['syncOnlySelectedEvents'] == true,
+      syncedEventIds: (json['syncedEventIds'] as List<dynamic>? ?? [])
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList(),
     );
   }
 }

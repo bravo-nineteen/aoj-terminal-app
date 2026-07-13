@@ -552,8 +552,12 @@ class _AOJDesktopState extends State<AOJDesktop> {
     setState(() => syncStatus = 'SYNCING TO CLOUD...');
     _showSyncMessage('Sync started: pushing local snapshot to Supabase...');
     try {
-      final merged = await SupabaseService.syncMergeAppState(appState)
-          .timeout(const Duration(seconds: 30));
+      final merged = await SupabaseService.syncMergeAppState(
+        appState,
+        eventIds: appState.syncOnlySelectedEvents
+            ? appState.syncedEventIds.toSet()
+            : null,
+      ).timeout(const Duration(seconds: 30));
       _normalizePaymentDataInState(merged);
       await AppStateService.save(merged);
       if (mounted) {
@@ -587,8 +591,12 @@ class _AOJDesktopState extends State<AOJDesktop> {
     _showSyncMessage(
         'Sync started: reconciling local snapshot with Supabase...');
     try {
-      final merged = await SupabaseService.syncMergeAppState(appState)
-          .timeout(const Duration(seconds: 30));
+      final merged = await SupabaseService.syncMergeAppState(
+        appState,
+        eventIds: appState.syncOnlySelectedEvents
+            ? appState.syncedEventIds.toSet()
+            : null,
+      ).timeout(const Duration(seconds: 30));
       _normalizePaymentDataInState(merged);
       await AppStateService.save(merged);
       if (mounted) {
@@ -636,6 +644,24 @@ class _AOJDesktopState extends State<AOJDesktop> {
       }
     }
     return changed;
+  }
+
+  Future<void> _updateSyncScope(
+    bool syncOnlySelectedEvents,
+    List<String> syncedEventIds,
+  ) async {
+    final normalizedIds = syncedEventIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    setState(() {
+      appState.syncOnlySelectedEvents = syncOnlySelectedEvents;
+      appState.syncedEventIds = normalizedIds;
+      systemStatus = 'SYNC SCOPE UPDATED';
+    });
+    await AppStateService.save(appState);
   }
 
   void _openWindow(String id) {
